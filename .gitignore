@@ -1,0 +1,32 @@
+# secrets
+.env
+.env.*
+!.env.example
+deploy/supabase/.env
+deploy/supabase/volumes/db/data/
+deploy/supabase/volumes/storage/
+
+# real data — never commit real TMSI prices
+data/
+*.xlsx
+*.xlsm
+*.csv
+!supabase/seed/*.csv
+
+# node / next
+node_modules/
+.next/
+out/
+dist/
+*.log
+npm-debug.log*
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# scratch
+tmp/
+*.bak

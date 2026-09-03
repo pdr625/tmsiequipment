@@ -1,0 +1,111 @@
+TMSI EQUIPMENT PRICE LISTING — PROPRIETARY SOFTWARE LICENSE
+
+Copyright (c) 2026 Pedro Alexandre. All rights reserved.
+
+This software, including its source code, object code, database schemas,
+migrations, configuration files, documentation, user-interface designs,
+pricing logic and all accompanying materials (collectively, the "Software"),
+is the exclusive property of Pedro Alexandre (the "Owner") and is protected
+by copyright law and international treaties, including the Code de la
+propriété intellectuelle (France), Directive 2009/24/EC and the Berne
+Convention.
+
+THIS IS NOT OPEN-SOURCE SOFTWARE. NO LICENSE IS GRANTED BY THE MERE
+AVAILABILITY OF THIS REPOSITORY.
+
+1. NO RIGHTS WITHOUT EXPRESS WRITTEN AUTHORISATION
+   Except as expressly authorised in writing and signed by the Owner, no
+   person or entity may, in whole or in part, directly or indirectly:
+   (a) use, execute, run, deploy, host, install or access the Software;
+   (b) copy, reproduce, download, clone, fork, mirror or store the Software;
+   (c) modify, adapt, translate, port or create derivative works of the
+       Software;
+   (d) distribute, publish, sell, rent, lease, lend, sublicense, transfer
+       or otherwise make the Software available to any third party;
+   (e) reverse engineer, decompile, disassemble or otherwise attempt to
+       derive the source code, structure, algorithms or pricing rules of
+       any part of the Software that is not already provided in source
+       form;
+   (f) use the Software, its schema, its pricing engine or its documentation
+       as a reference, template or training material for any product,
+       service, dataset or machine-learning model;
+   (g) remove, alter or obscure any copyright, licence or proprietary
+       notice contained in the Software.
+
+   Any act listed above that is performed without the Owner's prior express
+   written authorisation is unauthorised, constitutes an infringement of the
+   Owner's rights and may give rise to civil and criminal liability.
+
+2. AUTHORISED USE
+   Authorised use is limited strictly to the persons, entities, purposes,
+   environments and duration expressly named in a written authorisation
+   issued by the Owner (an "Authorisation"). An Authorisation is personal,
+   non-exclusive, non-transferable and non-sublicensable, may be revoked by
+   the Owner at any time, and confers no ownership interest. Anything not
+   expressly permitted in an Authorisation is prohibited.
+
+   Where an Authorisation permits a company to operate the Software for its
+   internal business, that permission extends only to that company's own
+   employees acting within their duties, and never to affiliates,
+   contractors, customers or other third parties unless the Authorisation
+   says so expressly.
+
+3. CONFIDENTIALITY
+   The Software, its structure, pricing logic and any non-public data it
+   processes are confidential information of the Owner and, as applicable,
+   of the authorised operating company. Any person having access to the
+   Software shall keep it confidential and shall not disclose it to anyone
+   who is not themselves authorised.
+
+4. OWNERSHIP
+   Title to and ownership of the Software, and of all intellectual property
+   rights therein, remain at all times with the Owner. Any modifications,
+   improvements or derivative works, whoever makes them, vest in the Owner
+   unless otherwise agreed in a signed writing.
+
+5. TERMINATION
+   Any Authorisation terminates automatically and immediately upon any
+   breach of this Licence. Upon termination the authorised party shall
+   cease all use of the Software and destroy all copies in its possession
+   or control, and shall confirm having done so in writing on request.
+
+6. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, ACCURACY OF PRICING RESULTS AND
+   NON-INFRINGEMENT. The Owner does not warrant that the Software is
+   error-free or that its output is suitable for any commercial decision.
+
+7. LIMITATION OF LIABILITY
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE OWNER SHALL NOT BE LIABLE
+   FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL OR
+   EXEMPLARY DAMAGES, INCLUDING LOSS OF PROFITS, DATA OR BUSINESS, ARISING
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE, EVEN IF ADVISED OF
+   THE POSSIBILITY OF SUCH DAMAGES.
+
+8. REMEDIES
+   The Owner reserves the right to seek all remedies available at law and
+   in equity for any breach of this Licence, including injunctive relief,
+   damages and recovery of legal costs, without prejudice to any other
+   rights.
+
+9. GOVERNING LAW AND JURISDICTION
+   This Licence is governed by the laws of France. Any dispute arising out
+   of or in connection with this Licence or the Software shall be submitted
+   to the exclusive jurisdiction of the competent courts of France, without
+   prejudice to the Owner's right to seek injunctive relief in any
+   jurisdiction.
+
+10. SEVERABILITY
+   If any provision of this Licence is held invalid or unenforceable, the
+   remaining provisions remain in full force and effect, and the invalid
+   provision shall be replaced by a valid one that most closely reflects
+   its intent.
+
+11. CONTACT
+   Requests for authorisation must be addressed in writing to the Owner:
+   Pedro Alexandre — pedroalexandre625@gmail.com
+
+By accessing, copying or using the Software in any way you acknowledge that
+you have read this Licence and agree to be bound by it. If you do not have
+an Authorisation, you must not access, copy or use the Software.
