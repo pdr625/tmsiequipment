@@ -15,7 +15,7 @@ Specification: [`docs/TMSI_PriceManager_Estrutura_v2.md`](docs/TMSI_PriceManager
 ## Architecture
 
 ```
-Browser ──HTTPS──▶ reverse proxy (tmisequipment.duckdns.org)
+Browser ──HTTPS──▶ reverse proxy (tmsiequipment.duckdns.org)
                       ├── /            → app        (Next.js, container "tmsi-app")
                       └── /supabase/*  → Kong       (Supabase self-hosted gateway)
                                             ├── GoTrue   (auth, email/password, JWT)
