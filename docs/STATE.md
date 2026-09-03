@@ -127,6 +127,28 @@ Itens do handover §5 (sequência de trabalho):
   `docker exec -i supabase-db`, o host não tem `pg_restore`) → 619 TOC entries, schema `tmsi`
   presente.
 
+## 8. Auditoria dos dois segredos ecoados (pergunta do Pedro, 2026-09-03)
+
+Pergunta: quais variáveis exactamente ficaram visíveis nos dois incidentes de segredo ecoado da
+sessão, e se `JWT_SECRET`/`ANON_KEY`/`SERVICE_ROLE_KEY` apareceram (nesse caso, rodar).
+
+**Resposta, por reconstrução linha-a-linha de ambos os incidentes:**
+- **Incidente 1** (`docker compose config`, filtro `grep -v` incompleto): a única variável cuja
+  *valor* ficou visível foi `POSTGRES_PASSWORD`, através do seu alias interno `PGPASSWORD` no
+  bloco `environment` do serviço `db` — esse nome não estava na lista do filtro (que cobria
+  `POSTGRES_PASSWORD`, `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY`, `PGRST_JWT_SECRET`,
+  `GOTRUE_JWT_SECRET`, `GOTRUE_DB_DATABASE_URL`, `PGRST_DB_URI`, e esses **funcionaram** — nenhum
+  deles apareceu no output impresso).
+- **Incidente 2** (log de crash do GoTrue, erro de parsing de URI): a string exposta foi
+  `postgres://supabase_auth_admin:<POSTGRES_PASSWORD>@db:5432/postgres` — a
+  `GOTRUE_DB_DATABASE_URL` resolvida, que só contém `POSTGRES_PASSWORD`. `GOTRUE_JWT_SECRET` não
+  faz parte desta connection string e não apareceu.
+- **Conclusão:** `JWT_SECRET` (nem `GOTRUE_JWT_SECRET`/`PGRST_JWT_SECRET`), `ANON_KEY` e
+  `SERVICE_ROLE_KEY` **nunca apareceram** em nenhum dos dois incidentes. Só `POSTGRES_PASSWORD`
+  ficou exposta — e já tinha sido rodada duas vezes (uma por incidente) antes de qualquer serviço
+  a usar em produção. **Não foi feita rotação de `JWT_SECRET`/`ANON_KEY`/`SERVICE_ROLE_KEY`** —
+  não havia motivo, e por isso os JWT emitidos antes desta nota continuam válidos.
+
 ## 5. Recuperação
 
 - **Segredos:** vivem em `deploy/supabase/.env`, `chmod 600`, **só no VPS, nunca no git**
