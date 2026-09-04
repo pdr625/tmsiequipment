@@ -63,6 +63,19 @@ services:
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
       GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: ${ENABLE_ANONYMOUS_USERS}
       GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM}
+      # Default (unset) is GoTrue's own "/verify", which only works when
+      # GoTrue is reachable at the domain root. Our nginx only proxies
+      # /auth/v1/ to it (no Kong stripping this at a different layer), so
+      # email links built from the bare default 404 through our own
+      # location /. Matches the official supabase/supabase self-hosted
+      # .env.example, which sets all four to this for the same reason —
+      # our lean stack omitted them and silently inherited the wrong
+      # default. Never exercised before this session (E0 only proved the
+      # recovery email arrived, not that its link worked).
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: ${GOTRUE_MAILER_URLPATHS_CONFIRMATION}
+      GOTRUE_MAILER_URLPATHS_INVITE: ${GOTRUE_MAILER_URLPATHS_INVITE}
+      GOTRUE_MAILER_URLPATHS_RECOVERY: ${GOTRUE_MAILER_URLPATHS_RECOVERY}
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE}
       GOTRUE_SMTP_HOST: ${GOTRUE_SMTP_HOST}
       GOTRUE_SMTP_PORT: ${GOTRUE_SMTP_PORT}
       GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL}
