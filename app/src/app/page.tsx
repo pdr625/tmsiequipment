@@ -48,6 +48,14 @@ export default async function HomePage() {
             Pricing configuration
           </Link>
         )}
+        {readCosts && (
+          <Link
+            href="/dashboard"
+            className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+          >
+            Dashboard
+          </Link>
+        )}
         <Link
           href="/overrides"
           className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"

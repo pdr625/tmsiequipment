@@ -6,3 +6,61 @@
  */
 
 @import 'tailwindcss';
+
+/* Dashboard chart tokens (E3-i8) — local block, only used under
+ * .dashboard-charts. CVD-safe categorical palette, exact hexes and fixed
+ * order from the i8 prompt §2.3, not chosen freely. Series 3/4 read below
+ * 3:1 contrast on the light surface (prompt §2.4) — the consequence is
+ * mandatory direct bar labels + a table fallback in bar-chart.tsx, never
+ * a text-on-fill treatment that would rely on this contrast.
+ * --state-warn-* is a separate mini-palette (prompt §2.7, "review" tile,
+ * stale-exchange-rate badge) — a red, deliberately not reused from the
+ * four categorical hexes above, always paired with icon + text, never
+ * color alone.
+ * Both `[data-theme]` and `prefers-color-scheme` are wired (prompt
+ * §2.3): this app has no theme toggle today, so in practice only the
+ * media query fires, but an explicit `data-theme` on a future toggle
+ * wins in both directions without this block changing. */
+.dashboard-charts {
+  --chart-surface: #fcfcfb;
+  --chart-text: #1a1a19;
+  --chart-text-muted: #6b6a63;
+  --chart-border: #e4e2dd;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --state-warn-bg: #fdeceb;
+  --state-warn-text: #8a1710;
+  --state-warn-border: #c4281e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .dashboard-charts {
+    --chart-surface: #1a1a19;
+    --chart-text: #fcfcfb;
+    --chart-text-muted: #a9a79f;
+    --chart-border: #333230;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --state-warn-bg: #3a1512;
+    --state-warn-text: #f2a89e;
+    --state-warn-border: #e2564a;
+  }
+}
+
+:root[data-theme='dark'] .dashboard-charts {
+  --chart-surface: #1a1a19;
+  --chart-text: #fcfcfb;
+  --chart-text-muted: #a9a79f;
+  --chart-border: #333230;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --state-warn-bg: #3a1512;
+  --state-warn-text: #f2a89e;
+  --state-warn-border: #e2564a;
+}

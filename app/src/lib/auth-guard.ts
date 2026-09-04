@@ -90,6 +90,20 @@ export async function canManageAnyPriceOverride(): Promise<boolean> {
   return admin === true || finance === true || branchManager === true || logistics === true;
 }
 
+// Dashboard access (E3-i8 prompt): can_read_costs() only — admin is
+// already the first disjunct of that function's own definition, so
+// naming it separately would be redundant, not a wider gate. logistics
+// is deliberately excluded even though it reads some cost-adjacent
+// config elsewhere (transport/customs) — the dashboard is Finance's
+// margin-review instrument, not extended to every read-adjacent role
+// by default (i8 prompt, restriction 1). Widening this to other roles
+// is a future decision of the Pedro's, not assumed here.
+export async function canReadDashboard(): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.schema('tmsi').rpc('can_read_costs');
+  return data === true;
+}
+
 // Mirrors audit_read on tmsi.audit_log (0001 §8: admin/finance/viewer/
 // branch_manager — notably NOT product_manager or logistics, even though
 // both can write products/overrides).
