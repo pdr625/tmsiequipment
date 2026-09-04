@@ -7,6 +7,62 @@ Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 de saída de cada etapa: `docs/ROADMAP.md`. E0 (infra backend, este ficheiro na íntegra abaixo)
 está fechada.
 
+## E1 — Scaffold frontend + CI→GHCR (2026-09-04)
+
+**Não fechada.** Critério de saída = CI verde + imagem no GHCR, confirmado pelo Pedro (passo
+manual, secção 6 do prompt). Todo o trabalho desta etapa foi escrita de ficheiros + git — **nenhum
+comando `npm`/`npx`/`node` correu no VPS**, confirmado.
+
+**Ficheiros entregues:**
+- `docs/ROADMAP.md` — folha de rota (aplicada verbatim do prompt E1).
+- `app/` — scaffold Next.js: `package.json`, `next.config.mjs` (`output: 'standalone'`),
+  `tsconfig.json`, `postcss.config.mjs`, `tailwind.config.ts`, `.env.example` (só nomes),
+  `src/app/{globals.css,layout.tsx,page.tsx}`, `src/app/api/health/route.ts`,
+  `src/lib/{supabase-client.ts,supabase-server.ts}`, `Dockerfile`, `.dockerignore`.
+- `.github/workflows/ci.yml` — build + push para GHCR em push a `main` (paths `app/**`) ou
+  `workflow_dispatch`.
+
+**Desvio do prompt, documentado:** o prompt pedia `src/lib/supabase.ts` (um único ficheiro,
+browser + server). Ficou **dois ficheiros** (`supabase-client.ts` / `supabase-server.ts`) —
+`supabase-server.ts` importa `next/headers`, que é server-only; se estivesse no mesmo módulo do
+factory de browser, qualquer Client Component que importasse este último arrastaria
+`next/headers` para o bundle do cliente, o que o Next.js rejeita no build. Confirmado contra a
+documentação/tipos reais do pacote (`@supabase/ssr@0.12.5`), não assumido de memória.
+
+**Versões pinadas (verificadas no registo, não de memória):**
+
+| Pacote | Versão | Fonte |
+|---|---|---|
+| `next` | 16.3.4 | npm dist-tags.latest |
+| `react` / `react-dom` | 19.2.8 | npm dist-tags.latest |
+| `typescript` | 7.0.2 | npm dist-tags.latest |
+| `tailwindcss` | 4.3.3 | npm dist-tags.latest |
+| `@tailwindcss/postcss` | 4.3.3 | necessário para o plugin PostCSS do Tailwind v4 (não pedido explicitamente no prompt, mas exigido pela versão de `tailwindcss` escolhida) |
+| `@types/node` | 24.13.3 | **não** é o dist-tag `latest` do pacote (que aponta para a série 26.x) — pinado à série 24.x porque é a linha LTS actual do Node ("Krypton"); a 26 ainda não é LTS |
+| `@types/react` | 19.2.18 | npm dist-tags.latest |
+| `@supabase/supabase-js` | 2.115.0 | npm dist-tags.latest |
+| `@supabase/ssr` | 0.12.5 | npm dist-tags.latest |
+| Imagem base Docker | `node:24.20.0-alpine` | Docker Hub, tag exacta mais recente da série 24 (LTS) |
+
+**Pendência registada (ROADMAP E5):** sem lockfile — `npm install` no Dockerfile em vez de
+`npm ci`, porque não há como gerar/commitar um `package-lock.json` sem correr `npm` no VPS
+(proibido nesta etapa). Decisão de pinagem definitiva (gerar o lockfile numa sessão futura,
+provavelmente ao lado do primeiro `npm install` real em CI) fica para a E5.
+
+**Decisão de arquitectura documentada no `Dockerfile`:** `NEXT_PUBLIC_SUPABASE_URL` e
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` entram como `ARG` de build no CI, não como env de runtime no
+deploy — o Next.js insere `NEXT_PUBLIC_*` no bundle do cliente **durante o build**, não à
+arrancada do container, mesmo com `output: 'standalone'`. `NEXT_PUBLIC_SUPABASE_URL` vai como
+literal no workflow (não é sensível — é o domínio público); `NEXT_PUBLIC_SUPABASE_ANON_KEY` vem
+de um **novo segredo do repositório GitHub** que o Pedro ainda tem de criar (`Settings → Secrets
+and variables → Actions → New repository secret`, nome `NEXT_PUBLIC_SUPABASE_ANON_KEY`, valor =
+o `ANON_KEY` gerado na E0, `deploy/supabase/.env` no VPS) — sem ele o CI continua verde mas a
+imagem fica com o valor vazio embutido no bundle do cliente.
+
+**CI por confirmar pelo Pedro:** GitHub → Actions (workflow verde?) e Packages (imagem
+`tmsi-app` visível?). Sem alteração de estado do VPS nesta etapa (containers/nginx/postfix
+intocados) → **sem delta no dossier**.
+
 ## 1. Identidade
 
 - **App:** TMSI Equipment Price Listing
