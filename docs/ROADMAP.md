@@ -14,7 +14,7 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth real ✅, i2 preços ⏳ | em curso |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 a decidir | em curso |
 | E4 | Migração 0002 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
 | E5 | Operações e endurecimento | por iniciar |
 | E6 | Validação do piloto + preparação da migração para a empresa | por iniciar |
@@ -83,13 +83,23 @@ template de recovery próprio (servido pela nossa app, obtido pelo GoTrue via
 `RECOVERY` — `CONFIRMATION`/`INVITE`/`EMAIL_CHANGE` ficam com o template por omissão do GoTrue,
 por agora aceitável (`DISABLE_SIGNUP=true`, quase não exercidos neste piloto).
 
-### i2 — Listagem de preços por role/filial — ⏳ PRÓXIMA
-`v_selling_prices` (sales/agent) vs `v_branch_prices` (roles de custo); filtros por filial,
-categoria, estado, moeda (`app/README.md` ecrã 2). Critério de saída: ecrã exercido com
-utilizadores de roles diferentes, incluindo o ramo negado (RLS a bloquear o que não devia ver).
+### i2 — Listagem de preços por role/filial — ✅ FECHADA 04/09/2026
+Rota `/prices`: escolha de vista (`v_branch_prices` vs `v_selling_prices`) decidida por RPC a
+`tmsi.can_read_costs()`, não replicada em TypeScript — a segurança real continua a ser RLS +
+`security definer`. Filtro por filial via query param. Dois utilizadores de teste fictícios
+(`sales.sa@example.test`, `agent.apac@example.test`, domínio `.test` IANA-reservado). As 6
+provas comportamentais confirmadas (3 no browser pelo Pedro, 3 via API pelo agente antes do
+deploy). Detalhe completo, incluindo o achado sobre como `v_branch_prices` realmente trata
+roles sem acesso a custos (linhas com `NULL`, não filas ausentes) e a correcção à lista de
+"roles de custo" deste prompt (`logistics` não está em `can_read_costs()`): `STATE.md`.
 
-### i3+ — Administração de utilizadores, formulário de produto, configuração, overrides,
-dashboard — por iniciar, pela ordem do `app/README.md`.
+### i3+ — a decidir com o Pedro
+Opções pela ordem do `app/README.md`: **administração de utilizadores** (criar/editar
+utilizadores e roles via Admin API — hoje só possível por `docker exec`/SQL directo) ou
+**formulário de produto** com as acções de ciclo de vida (`draft → pending → active ⇄ review →
+inactive → discontinued`) e o motor `compute_price` na UI. Depois: configuração (câmbios, fees,
+transporte, direitos, margens), overrides + histórico/auditoria, dashboard. Não escolhida pelo
+agente — decisão do Pedro no início da próxima sessão.
 
 ## E4 — Migração 0002 — por iniciar
 Políticas de escrita por estado (quem aprova — questão L2 do handover, decisão do Pedro

@@ -3,10 +3,45 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 2 — listagem de preços por role/filial, em curso.** Ordem e
-critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2 e E3-i1 estão fechadas.
+**Etapa actual: E3, iteração 3 — a decidir com o Pedro (ver ROADMAP).** Ordem e critérios de
+saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1 e E3-i2 estão fechadas.
 
-## Utilizadores de teste (dados fictícios, criados na E3-i2, 2026-09-04)
+## E3, iteração 2 — Listagem de preços por role/filial — ✅ FECHADA 2026-09-04
+
+**Digest:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:0d613cb86d65cd94a774896ae3c770480cfba4e85c84c54dc7712ee52ffd1020`
+(`Created` 2026-09-04T12:25:17Z). **Footprint:** RAM available 251 MB; swap 962 MB / 4096 MB
+(≈23%, denominador registado conforme pedido — bem abaixo do limiar de 90% da restrição 4).
+
+**Ficheiros entregues:** `src/app/prices/page.tsx` (nova rota, protegida por omissão pela
+middleware — não precisou de entrar nas rotas públicas); `src/app/page.tsx` com link para
+`/prices`.
+
+**Decisão de desenho — sem replicar lógica de segurança no cliente:** a página não decide "este
+role vê custos" em TypeScript; pergunta ao Postgres via RPC `tmsi.schema('tmsi').rpc(
+'can_read_costs')` — a mesma função que `compute_price()` usa internamente — e escolhe a vista
+(`v_branch_prices` vs `v_selling_prices`) com base na resposta. A segurança real continua a ser
+inteiramente RLS + `security definer`; a escolha de vista é só conveniência de apresentação.
+
+**Achado do schema, mais preciso que o previsto no prompt:** `v_branch_prices` **não é uma
+vista exclusiva de roles de custo** — é a mesma vista para todos os utilizadores autenticados;
+`compute_price()` (chamada em `lateral join`) devolve as colunas de custo/margem como `NULL`
+por linha para quem não tem `see_costs`, em vez de omitir a linha. `v_selling_prices` é que
+exclui essas colunas da própria `SELECT` e filtra a `status='active'`. Verificado por leitura
+directa do `0001_initial_schema.sql` (linhas 494–527), não assumido — e confirmado
+empiricamente via API antes do deploy (ver "Provas" abaixo).
+
+**Correcção ao prompt, registada:** a secção 1 do prompt agrupava `logistics` como "role de
+custo" (junto com admin/product_manager/finance/branch_manager). A função real
+`tmsi.can_read_costs()` **não inclui `logistics`** — só admin/product_manager/finance/
+branch_manager/viewer. `logistics` vê preços de venda (via `see_sell`) mas não custos, tal
+como sales/agent. A app segue a função real, não a lista do prompt.
+
+**Detalhe técnico apanhado a escrever o código:** `.returns<T>()` do `@supabase/postgrest-js`
+está **deprecated** nesta versão pinada (2.115.0) — substituído por
+`.overrideTypes<T, {merge: false}>()`. Verificado nos tipos reais do pacote antes de escrever,
+não assumido de memória.
+
+**Utilizadores de teste (dados fictícios):**
 
 | Email | Role | Âmbito | Password |
 |---|---|---|---|
@@ -15,6 +50,19 @@ critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2 e E3-i1 estão
 
 Domínio `.test` deliberado (reservado pela IANA para testes, nunca resolve) — impossível de
 confundir com um endereço real. Sem dados reais da TMSI associados a nenhum dos dois.
+
+**Provas (as 6 do prompt):**
+1–3. Browser, confirmadas pelo Pedro: admin vê a listagem completa com custos/margens, filtro
+de filial funciona; `sales.sa` vê só artigos activos da SA sem colunas de custo; `agent.apac`
+vê só o canal APAC (filial TBM).
+4. **Ramo negado, forma exacta apurada por teste directo (agente, antes do deploy):** com o JWT
+   do `sales.sa`, `GET /rest/v1/v_branch_prices` devolve **linhas** com `total_cost_eur`/
+   `margin` a `null` — não vazio, não 403. `can_read_costs()` via RPC → `false`, confirmando a
+   causa. `GET /rest/v1/v_selling_prices` (a vista que a UI de facto usa para este role) não
+   tem essas colunas de todo.
+5. Com o mesmo JWT, `v_selling_prices?branch_id=eq.TBM` (filial fora do âmbito) → `[]`. Testado
+   também o inverso com `agent.apac`: `v_selling_prices?branch_id=eq.SA` → `[]`.
+6. `/auth/v1/`, `/rest/v1/`, `/login`, `/api/health` confirmados sem regressão após o deploy.
 
 ## E3, iteração 1 — Auth real (login/logout/reset) — ✅ FECHADA 2026-09-04
 
