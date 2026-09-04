@@ -3,9 +3,40 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: migração 0003/0004 (protecção de custos ao nível da BD) — ✅ FECHADA
-2026-09-04.** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1,
-E3-i2, E3-i3 e E3-i4 estão fechadas.
+**Etapa actual: E3, iteração 5 (ecrãs de configuração do pricing) — F0 fechado, a avançar para
+o código.** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1,
+E3-i2, E3-i3, E3-i4 e a migração 0003/0004 estão fechadas.
+
+## E3, iteração 5 — Configuração do pricing — F0: matriz de permissões (0001, real, não assumida)
+
+| Tabela | Leitura (RLS) | Escrita (RLS) | `audit_log`? |
+|---|---|---|---|
+| `exchange_rates` | `can_read_costs()` | admin ou finance | ✅ (trigger 0001 §5) |
+| `interco_fees` | `can_read_costs()` | admin ou finance | ✅ |
+| `transport_tiers` | `can_read_costs()` ou `logistics` | admin, finance ou logistics | ✅ |
+| `customs_rates` | `can_read_costs()` ou `logistics` | admin, finance ou logistics | ✅ |
+| `margin_grids` | `can_read_costs()` | admin ou finance | ✅ |
+| `settings` | `true` (qualquer `authenticated`; `anon` tem `GRANT` mas nenhuma policy `to
+  anon` — RLS nega por omissão, `grant` é inofensivo) | admin ou finance | ✅ |
+
+**Restrição 2 do prompt (RLS de escrita ausente/incoerente → parar):** não accionada — as seis
+têm política de escrita coerente com o desenho (nunca "qualquer `authenticated`"). **Restrição 3
+(GRANT de tabela + dados que roles sem custo não devem ler → sinalizar):** verificada, não
+accionada — ao contrário de `tmsi.products` (i4/0003), nenhuma destas seis tem uma mistura de
+colunas "seguras" e "sensíveis" na mesma linha; cada linha é inteiramente visível ou
+inteiramente invisível por role (RLS ao nível da linha chega, não há necessidade de mascarar
+colunas dentro de uma linha visível — a lição da 0003 não se aplica aqui). `settings` visível a
+qualquer `authenticated` por desenho da 0001 (não é uma fuga; é a política já aplicada,
+registada, não alterada). **Restrição 4 (`audit_log` cobre as tabelas de configuração?):**
+confirmado — as seis estão no `array` do trigger (0001 §5, `do $$ ... foreach t in array
+[...'exchange_rates','interco_fees','transport_tiers','customs_rates','margin_grids',...
+'settings'...] ...`); `hs_codes` (tabela de referência, não é uma das seis de configuração,
+`ref_write` admin-only) não está no array — fora do âmbito desta iteração, tratada como dado de
+referência para o separador de direitos, não com CRUD próprio.
+
+**Regra de negócio já decidida (fonte obrigatória em câmbio manual):** `exchange_rates.source`
+já é `not null` na 0001 — a BD já impõe isto, o formulário só precisa de tornar o campo
+obrigatório, não inventar validação nova.
 
 ## Migração 0003/0004 — protecção dos custos ao nível da BD — ✅ FECHADA 2026-09-04
 
