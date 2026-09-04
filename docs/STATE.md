@@ -3,9 +3,9 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 4 — ✅ FECHADA 2026-09-04 (provas de API; faltam as provas de
-browser do Pedro).** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2,
-E3-i1, E3-i2 e E3-i3 estão fechadas.
+**Etapa actual: E3, iteração 4 — ✅ FECHADA 2026-09-04, confirmada pelo Pedro no browser
+(`sales.sa`, `/products`, já não vê o EXW).** Ordem e critérios de saída de cada etapa:
+`docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2 e E3-i3 estão fechadas.
 
 ## E3, iteração 4 — Formulário de produto — ✅ FECHADA 2026-09-04 (reaberta e corrigida no mesmo dia)
 
@@ -120,9 +120,10 @@ IDs `T-9xxx` deliberadamente fora do intervalo `T-0001`–`T-0010`): `T-9002` (e
 isenção HS/peso). `T-9001` (do achado da 0002, F1) foi apagado; `T-0005` foi revertido ao estado
 do seed depois desse teste — ver secção anterior.
 
-**Falta (passos do Pedro):** confirmar CI verde (já confirmado nesta sessão, não precisa de
-repetir) e as provas de browser — ver ESTADO final da sessão. A questão L2 (workflow de
-aprovação) fica explicitamente em aberto para a E4, não tocada nesta iteração.
+**Provas de browser confirmadas pelo Pedro** — CI verde, ecrãs como admin, e (depois da
+reabertura) `sales.sa` em `/products` já não vê o EXW. Iteração fechada, sem pendências. A
+questão L2 (workflow de aprovação) fica explicitamente em aberto para a E4, não tocada nesta
+iteração.
 
 ## E3, iteração 4 — Formulário de produto — F1: migração 0002 (defeito real da 0001, corrigido)
 
