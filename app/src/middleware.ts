@@ -10,7 +10,10 @@ import { updateSession } from '@/lib/supabase-middleware';
 
 // /auth/* covers the PKCE code-exchange route (/auth/confirm); it has to be
 // public since the visitor doesn't have a session yet when they land there.
-const PUBLIC_PATHS = ['/login', '/forgot-password', '/auth', '/api/health'];
+// /email-templates/* is fetched by GoTrue itself (no user session at all —
+// caught live: without this, GoTrue got our /login page's HTML instead of
+// the template, since the redirect-to-/login response was what got fetched).
+const PUBLIC_PATHS = ['/login', '/forgot-password', '/auth', '/api/health', '/email-templates'];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(path + '/'));
