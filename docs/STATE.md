@@ -3,8 +3,46 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 3 — a decidir com o Pedro (ver ROADMAP).** Ordem e critérios de
-saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1 e E3-i2 estão fechadas.
+**Etapa actual: E3, iteração 3 — administração de utilizadores, em curso.** Ordem e critérios
+de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1 e E3-i2 estão fechadas.
+
+## E3, iteração 3 — Administração de utilizadores — decisão de desenho (F1, antes do código)
+
+**Escritas em `tmsi.profiles`/`tmsi.user_roles` (listar, atribuir/remover role): pela sessão do
+próprio admin, via RLS.** Confirmado no schema real: `profiles_admin`/`roles_admin` dão `for
+all` (select/insert/update/delete) a quem tem `has_role('admin')`. **Sem `SERVICE_ROLE_KEY`
+para isto** — o Server Action usa `createSupabaseServerClient()` (sessão do chamador) e a RLS
+faz o resto.
+
+**Convite e ban/reactivação: têm de ir pela Admin API do GoTrue, com `SERVICE_ROLE_KEY`.** Não
+há forma RLS/security-definer de criar uma linha em `auth.users` ou desactivar login — isso é
+GoTrue, não Postgres. Endpoints reais confirmados no código-fonte v2.189.0 (não assumidos):
+- Convite: `POST /invite` (**não** `/admin/users` — endpoint próprio, top-level, mas na mesma
+  atrás de `requireAdminCredentials`), corpo `{"email": "..."}`.
+- Ban: `PUT /admin/users/{id}`, corpo `{"ban_duration": "<duração Go, ex. "876000h"> "}`.
+  Reactivar: mesmo endpoint, `{"ban_duration": "none"}`.
+Todo o Server Action que usa a `SERVICE_ROLE_KEY` **verifica primeiro, com a sessão do
+chamador**, `tmsi.has_role('admin')` via RPC — antes de tocar na chave. A UI esconder o menu é
+conveniência, não controlo (restrição 3 do prompt).
+
+⚠️ **Achado que obrigou a mexer no email de convite antes de chegar ao F2 de código:** o
+convite (`POST /invite` chamado directamente, sem `code_challenge` — não passa pelo SDK
+`@supabase/ssr`) gera um token **sem prefixo `pkce_`**, verificado em fluxo *implicit*. O
+`/verify` do GoTrue, nesse fluxo, redirige com os tokens num **fragmento de URL**
+(`#access_token=...`) — invisível a um handler server-side (fragmentos nunca chegam ao
+servidor). O `/auth/confirm` construído na i1 só lê `token_hash`/`code` da query string; não
+teria funcionado para o convite. Mesmo fix da i1, aplicado agora também ao `INVITE`: template
+próprio (`email-templates/invite`), `GOTRUE_MAILER_TEMPLATES_INVITE` a apontar para lá, link
+com `token_hash`+`type=invite` — o `/auth/confirm` já é genérico quanto ao `type`, não precisou
+de alteração. Sem este fix, a prova 1 da F4 (email de convite a funcionar) teria falhado à
+primeira — a nota da i1 ("CONFIRMATION/INVITE ficam com o template por omissão, aceitável por
+agora") deixou de valer assim que o convite passou a ser exercitado a sério.
+
+**Superfície nova, registada:** o `tmsi-app` passa a deter a `SERVICE_ROLE_KEY` (env de
+runtime, server-only, `${SERVICE_ROLE_KEY}` por referência no compose — nunca `NEXT_PUBLIC_*`,
+nunca no bundle do cliente, nunca em log). Quem comprometer o container ganha acesso total à
+API do GoTrue e ao Postgres via PostgREST. Mitigação: gate `has_role('admin')` server-side
+antes de qualquer uso da chave; a chave nunca é lida por código que corre no browser.
 
 ## E3, iteração 2 — Listagem de preços por role/filial — ✅ FECHADA 2026-09-04
 
