@@ -3,9 +3,10 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 6 (overrides + auditoria) — F0 fechado, a avançar para o
-código.** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1,
-E3-i2, E3-i3, E3-i4, E3-i5 e as migrações 0003/0004/0005 estão fechadas.
+**Etapa actual: E3, iteração 6 (overrides + auditoria) — ✅ FECHADA.** Próximo: dashboard, ou
+E4 (migração 0006) quando a decisão L2 do Pedro estiver tomada. Ordem e critérios de saída de
+cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2, E3-i3, E3-i4, E3-i5, E3-i6 e as
+migrações 0003/0004/0005 estão fechadas.
 
 ## E3, iteração 6 — Overrides + auditoria — F0: matriz (0001, real, não assumida)
 
@@ -48,6 +49,77 @@ iniciativa própria:**
      assinatura actual só tem `p_product, p_branch, p_date`, sem identificador de
      canal/agente nenhum. Fica ao lado da questão L2 (quem aprova, E4) na lista de decisões
      em aberto — mesma família (decisões de desenho do motor, não de infra).
+
+## E3, iteração 6 — Overrides + auditoria — ✅ FECHADA 2026-09-04
+
+**Digest:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:9c1a59be27fbe07d1f3364b79c05edc64dac52cc52055810797a5448d46f89c8`
+(`Created` 2026-09-04T21:24:12Z, commit `e3eb7bf`, CI concluído 21:24:22Z — ordem consistente,
+sem confusão UTC/local). **Footprint pós-deploy:** RAM available 159 MB; swap 1060/4095 MB
+(≈26%); disco 48%.
+
+**Sem migração nesta iteração.** Os três achados da matriz F0 (acima) foram resolvidos ao nível
+da UI/Server Action, não da BD (decisão do Pedro, registada acima). O número **0006** continua
+reservado para a migração funcional da E4.
+
+**Bug real, apanhado na revisão de código antes do push (nunca chegou a correr em CI):**
+`app/src/app/audit/page.tsx` encadeava `.eq()`/`.gte()`/`.lte()` condicionais **depois** de
+`.order()`/`.range()` — o `postgrest-js` devolve, a partir de `.order()`, um tipo mais estreito
+(`PostgrestTransformBuilder`) sem métodos de filtro, ao contrário do padrão já usado em todas
+as outras páginas da app (filtros sempre antes de `order`/`range`, ex. `config/page.tsx`).
+Corrigido antes do commit — filtros movidos para antes do `.order()`/`.range()` final.
+
+**Ecrãs:**
+- `/overrides` — duas secções (price overrides, HS overrides), cada uma com listagem
+  (activo/expirado/futuro — mesma classificação de datas do `override_value()`) e formulário de
+  criação, `gated` por `canManageAnyPriceOverride()`/`isAdmin()` (convenience — RLS é a
+  fronteira real). HS overrides: campo de âmbito fixo/desactivado na UI, `scope_type`
+  hardcoded no servidor — nunca lido do formulário, mesmo por um pedido a contornar o campo
+  desactivado.
+- `/products/[id]` — nova coluna "Overridden" na tabela de preço por filial, a combinar
+  `compute_price()`.`overrides[]` com o override de HS próprio da filial. **Achado confirmado
+  na Prova 3 abaixo:** um override de HS **não aparece** em `overrides[]` — só afecta o
+  cálculo de direitos por baixo, sem deixar rasto nesse array — por isso a UI tem de juntar as
+  duas fontes explicitamente, não bastava ler `overrides[]`. Secção "Overrides" nova com as
+  entradas do próprio produto.
+- `/audit` — leitura global, filtrável (tabela/actor/período), paginada, só-leitura, `gated`
+  como a política `audit_read` (admin/finance/viewer/branch_manager).
+
+**Provas (backend, `BEGIN`/`ROLLBACK` no `psql` com claims JWT reais por `role_code` — sem
+tocar em passwords, sem deixar dados permanentes — valores calculados à mão antes de cada
+teste):**
+1. Override de `margin` (0.6) em T-0005/SA, por `finance.test`: base `margin 0.5000, min
+   1780.00, ref 1958.00` → pós-override `margin 0.600000, min **2225.00** (=890/(1−0.6)), ref
+   **2448.00** (=arred(2225×1.1) — Postgres arredonda .5 para cima em `numeric`), `overrides
+   {margin}` — exacto.
+2. Ramo temporal: override de `coef` (1.2) com `valid_to` ontem → pedido de hoje devolve o
+   valor de base (`list_coef 1.000`, `overrides {}`); o mesmo pedido com `p_date` há 15 dias
+   (dentro da janela de validade) → `list_coef 1.200000`, `overrides {coef}` — o motor é
+   sensível à data pedida, não só à de hoje.
+3. Override de HS (T-0005/CORP, `392690` em vez de `960390`, zona US), pelo admin (`ref_write`
+   é admin-only): `duty_rate` 0.0370→0.0650, `duty` 45.79→80.44, margem manteve-se no mesmo
+   escalão (0.3500), `min_price` 2128.00→**2181.00**, `ref_price` 2341.00→**2399.00** —
+   `overrides[]` continuou `{}` (ver achado da coluna "Overridden" acima).
+4. `reason` a `NULL` → rejeitado pela própria BD (`null value in column "reason" ... violates
+   not-null constraint`), não só pela UI.
+5. A inserção da Prova 1 gerou de imediato uma linha em `audit_log` com `actor` = o `uid` real
+   do autor (nunca lido do formulário), `action=INSERT`, `row_pk` correcto.
+6. `sales.sa`: `INSERT` em `price_overrides` → negado por RLS (`new row violates row-level
+   security policy`); `SELECT` em `price_overrides` e em `audit_log` → 0 linhas (RLS a filtrar
+   silenciosamente, não erro); sem regressão — `compute_price()` continua a devolver
+   `min_price`/`ref_price` (custos a `null`) para a filial própria.
+
+Todas as provas confirmaram os valores calculados à mão sem desvio nenhum.
+
+**Utilizadores de teste usados (mantidos, nenhum novo criado):** `finance.test@example.test`,
+`sales.sa@example.test`, e o admin real (`pedroalexandre625@gmail.com`) — só ele tem `ref_write`
+sobre `product_hs_overrides`.
+
+**Nota de processo:** durante a preparação das provas, um `cat` a um ficheiro de passwords de
+teste (`~/tmp/tmsi-sudo/test-users-passwords.txt`) imprimiu duas passwords em claro no output —
+violação da regra "nunca em output" deste projecto, apesar de serem só duas contas fictícias
+`.test` a que o Pedro já tem acesso directo ao ficheiro. Não repetido; as provas seguintes
+passaram a usar injecção directa de claims JWT no `psql` (`set_config('request.jwt.claims', …)`
++ `set local role authenticated`), que nem sequer precisa de password nenhuma.
 
 ## Migração 0005 — correcção de câmbio no mesmo dia — ✅ FECHADA 2026-09-04
 

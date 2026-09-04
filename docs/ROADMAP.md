@@ -14,7 +14,7 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅ | em curso |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅ | em curso |
 | — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
 | — | Migração 0005 — correcção de câmbio no mesmo dia | ✅ 04/09/2026 |
 | E4 | Migração 0006 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
@@ -145,6 +145,29 @@ em `auth-guard.ts` — nenhuma das seis mistura colunas seguras/sensíveis na me
 `tmsi.v_products` da 0003. As 5 provas confirmadas via API, incluindo cálculo à mão do preço
 esperado antes de cada edição, exacto em todos os casos (detalhe: `STATE.md`).
 
+### i6 — Overrides + auditoria — ✅ FECHADA 04/09/2026
+`/overrides`: criar e listar (activo/expirado/futuro) `price_overrides` (fx/fee/transport/duty/
+margin/coef — cada um substitui um input do motor, nunca o resultado, sempre com motivo, autor
+de sessão e validade) e `product_hs_overrides`. `/products/[id]` ganhou uma coluna "Overridden"
+por filial e uma secção com os overrides do próprio produto. `/audit`: leitura global,
+filtrável, só-leitura, complementando o audit por-produto já existente desde a i4. As 6 provas
+confirmadas via `psql`/RLS directa, com cálculo à mão do preço/direito esperado antes de cada
+teste, exacto em todos os casos (detalhe: `STATE.md`).
+
+⚠️ **Achado real de F0, não hipotético, resolvido sem migração:** `product_hs_overrides.scope_type`
+aceita `branch`/`channel`/`agent` na BD, mas `compute_price()` só lê `scope_type='branch'` — um
+override de canal/agente seria aceite e pareceria válido, mas nunca teria efeito no preço.
+Decisão do Pedro: a UI só oferece `branch` por agora; linhas `channel`/`agent` já existentes
+nunca ficam invisíveis, aparecem marcadas "no effect". Duas perguntas de desenho ficam
+registadas para quando canal/agente forem implementados — ver "Questões abertas" no fim deste
+ficheiro.
+
+⚠️ **Achado menor, também sem migração:** `price_overrides.created_by` é `uuid` nullable — a
+app define-o sempre a partir da sessão, mas um pedido directo à API a contornar a app podia
+criar um override sem autor. `product_hs_overrides` não tem `created_at`/`created_by`/validade
+nenhuma (só o `admin` escreve, e o `audit_log` cobre a tabela). Ambos sinalizados, nenhum
+corrigido nesta iteração — candidatos a migração futura, não bloqueiam nada hoje.
+
 ## Migração 0003/0004 — protecção de custos ao nível da BD — ✅ FECHADA 04/09/2026
 Fecha a pendência da i4: RLS só protegia linhas, nunca colunas — um pedido manual à API,
 contornando a app, ainda lia `exw_price`/`sap_code_*`/`supplier_id`. O candidato simples do
@@ -202,3 +225,10 @@ handover §7 — do Pedro, antes de qualquer transferência).
 ## Questões abertas do Pedro (do handover §7 — não bloqueiam E1–E2)
 Moeda dos escalões de transporte TBM (T2) · periodicidade/mecanismo das taxas SAP (C2 —
 manual no piloto) · quem aprova (L2 — bloqueia E4) · titularidade CPI (bloqueia E6).
+
+**Duas questões novas da i6 (mesma família que L2 — desenho do motor, não de infra), sem
+bloquear nada hoje porque `product_hs_overrides` de canal/agente ainda não é oferecido pela UI:**
+(a) ordem de precedência entre âmbitos coexistentes, se um produto tiver override de filial E de
+canal/agente ao mesmo tempo, qual vence; (b) como é que o contexto de canal/agente chega ao
+`compute_price()` — a assinatura actual só tem `p_product, p_branch, p_date`, sem identificador
+de canal/agente nenhum.
