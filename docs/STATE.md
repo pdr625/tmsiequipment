@@ -3,8 +3,51 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 3 — administração de utilizadores, em curso.** Ordem e critérios
-de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1 e E3-i2 estão fechadas.
+**Etapa actual: E3, iteração 4 (formulário de produto), a começar.** Ordem e critérios de saída
+de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2 e E3-i3 estão fechadas.
+
+## E3, iteração 3 — Administração de utilizadores — ✅ FECHADA 2026-09-04
+
+**Digest final:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:72e5dfeed47cb206079c2d7a6dd4dd5dbe6e32e88869e47f19a4c491c287c76a`
+(`Created` 2026-09-04T14:26:08Z — digest intermédio `sha256:3a372e18ed…` nunca ficou exposto a
+um convite real além do teste da própria i3, ver bug abaixo). **Footprint:** RAM available 207
+MB; swap 1013/4096 MB (≈25%, bem abaixo do limiar de 90% da restrição 4); disco 46%. Uso real
+por container: db 22.1M/320M, auth 12.2M/128M, rest 1.1M/128M, tmsi-app 28.3M/192M.
+
+⚠️ **Bug real apanhado em F4, não em F1/F2 — corrigido antes de fechar:** o `/auth/confirm`
+herdado da i1 corria `verifyOtp`/`exchangeCodeForSession` directamente no `GET` (o clique no
+link do email). Testado ao vivo com um endereço corporativo real (`condat.fr`, Microsoft 365 +
+Exchange Online Protection), o token de uso único foi consumido **3 em 3 vezes**, em menos de um
+minuto após o envio, sempre pelo próprio servidor (`user-agent: "node"` no `/verify` do GoTrue) —
+nunca pelo destinatário, que nunca chegou a ver o email. Causa: gateways de segurança de email
+corporativos (Microsoft Defender Safe Links, Proofpoint, Mimecast) pré-buscam todos os links de
+um email recebido para os analisar, o que um `GET` com efeito lateral trata como um clique real.
+Confirmado por `mail.log` que a entrega em si nunca falhou (`250 OK` do relay Gmail, 6 em 6
+tentativas ao longo do incidente) — o problema era só a semântica do `GET`.
+
+**Fix, aplicado ao único handler partilhado por convite e recuperação
+(`src/app/auth/confirm/{page.tsx,confirm-form.tsx,actions.ts}`, substituindo o antigo
+`route.ts`):** o `GET` passou a só renderizar uma página de confirmação (sem tocar no GoTrue); a
+troca real do token só acontece no `POST` que o clique num botão desencadeia — nenhum scanner
+automático submete formulários. Provado ao vivo, ambos os fluxos até ao fim (ver Provas abaixo).
+
+⚠️ **Achado à parte, não é bug nosso — documentado como limitação externa:** depois do fix, o
+convite e a recuperação para `pedro.dacosta@condat.fr` continuaram a não chegar (nem à pasta de
+spam). MX de `condat.fr` → `condat-fr.mail.protection.outlook.com` (Microsoft 365/Exchange
+Online Protection), SPF `-all` estrito. Entrega confirmada limpa do nosso lado em todas as
+tentativas (`mail.log`, `250 OK`); zero chegada ao destinatário mesmo assim — consistente com
+quarentena silenciosa do Defender/EOP para email de primeiro contacto vindo de um relay Gmail
+genérico, contra a qual não há nada a corrigir na nossa stack (exigiria acção do lado do IT do
+`condat.fr` — allowlist ou verificação da quarentena, fora do âmbito desta sessão). A utilizadora
+de teste contaminada pelos 3 consumos automáticos foi apagada por completo
+(`DELETE /admin/users/{id}`, cascade limpo confirmado em `tmsi.profiles`/`tmsi.user_roles`) antes
+de reencaminhar o teste para um endereço Gmail próprio do Pedro, onde os dois fluxos passaram
+integralmente.
+
+**Lição de teste, registada para o ROADMAP:** endereços `.test` (nunca entregues) e Gmail pessoal
+(sem scanner de links) não exercitam um gateway corporativo — foi exactamente essa lacuna que
+deixou o bug do `GET` sobreviver, sem ser detectado, desde a i1 até à i3. Toda a prova futura de
+fluxo de email deve incluir pelo menos um destinatário atrás de um gateway corporativo.
 
 ## E3, iteração 3 — Administração de utilizadores — decisão de desenho (F1, antes do código)
 
@@ -43,6 +86,28 @@ runtime, server-only, `${SERVICE_ROLE_KEY}` por referência no compose — nunca
 nunca no bundle do cliente, nunca em log). Quem comprometer o container ganha acesso total à
 API do GoTrue e ao Postgres via PostgREST. Mitigação: gate `has_role('admin')` server-side
 antes de qualquer uso da chave; a chave nunca é lida por código que corre no browser.
+
+**Provas (as 5 do prompt), todas confirmadas:**
+1. **Convite → email → link → password → login**, ponta a ponta (confirmado pelo Pedro, próprio
+   Gmail, depois do fix do `GET` acima — ver logs de auditoria do GoTrue correlacionados:
+   `user_invited` → `/verify` (200, clique real) → `PUT /user` (`user_updated_password`) →
+   `login` (`POST /token`, 200)). **Não foi possível reproduzir contra `condat.fr`** por
+   quarentena externa (Microsoft 365/EOP) — ver achado acima, fora do nosso controlo.
+2. Atribuição de role reflectida de imediato na listagem; remoção reflectida — confirmado pelo
+   Pedro na UI.
+3. **Ramo negado, três camadas independentes, testadas com o JWT do `sales.sa`:** `has_role
+   ('admin')` via RPC → `false` (o predicado exacto que `isAdmin()` usa); escrita directa a
+   `tmsi.user_roles` via PostgREST → `403` (RLS); `POST /invite` directo no GoTrue (bypass total
+   da app) → `403` (`this token needs to have one of the following roles: service_role`).
+4. **Disable/reactivate**, provado nos logs de auditoria: ban (`PUT /admin/users/{id}`) → login
+   seguinte → `400 "User is banned"`; unban (mesmo endpoint) → login seguinte → `200`.
+5. Sem regressões: `/auth/v1`, `/rest/v1`, `/login`, `/prices` confirmados sem alteração de
+   comportamento depois do deploy final.
+
+**Limpeza pós-testes:** as duas contas de teste usadas nesta iteração (`pedro.dacosta@condat.fr`
+contaminada pelo scanner; `pedroalexandre625+tmsitest@gmail.com` do teste do fix) foram apagadas
+por completo via `DELETE /admin/users/{id}` — cascade confirmado em `tmsi.profiles`/
+`tmsi.user_roles`. Só ficam os fixtures deliberados da i2 (`sales.sa`/`agent.apac@example.test`).
 
 ## E3, iteração 2 — Listagem de preços por role/filial — ✅ FECHADA 2026-09-04
 

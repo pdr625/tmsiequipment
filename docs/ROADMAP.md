@@ -14,7 +14,7 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 a decidir | em curso |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto | em curso |
 | E4 | Migração 0002 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
 | E5 | Operações e endurecimento | por iniciar |
 | E6 | Validação do piloto + preparação da migração para a empresa | por iniciar |
@@ -93,13 +93,28 @@ deploy). Detalhe completo, incluindo o achado sobre como `v_branch_prices` realm
 roles sem acesso a custos (linhas com `NULL`, não filas ausentes) e a correcção à lista de
 "roles de custo" deste prompt (`logistics` não está em `can_read_costs()`): `STATE.md`.
 
-### i3+ — a decidir com o Pedro
-Opções pela ordem do `app/README.md`: **administração de utilizadores** (criar/editar
-utilizadores e roles via Admin API — hoje só possível por `docker exec`/SQL directo) ou
-**formulário de produto** com as acções de ciclo de vida (`draft → pending → active ⇄ review →
-inactive → discontinued`) e o motor `compute_price` na UI. Depois: configuração (câmbios, fees,
-transporte, direitos, margens), overrides + histórico/auditoria, dashboard. Não escolhida pelo
-agente — decisão do Pedro no início da próxima sessão.
+### i3 — Administração de utilizadores — ✅ FECHADA 04/09/2026
+Rota `/admin/users`: listar, convidar (Admin API do GoTrue), atribuir/remover role (RLS directa,
+sessão do próprio admin), disable/reactivate (ban via Admin API). As 5 provas do prompt
+confirmadas. Detalhe completo, incluindo o bug real encontrado e corrigido em F4 (`/auth/confirm`
+consumia o token no `GET`, explorável por scanners de email corporativos) e o achado externo
+(quarentena Microsoft 365/EOP para `condat.fr`, fora do nosso controlo): `STATE.md`.
+
+⚠️ **Lição de teste, para toda a iteração futura com fluxo de email:** endereços `.test` (nunca
+entregues) e Gmail pessoal (sem scanner de links) não exercitam um gateway corporativo — foi
+essa lacuna que deixou o bug do `GET` acima sobreviver, sem detecção, da i1 até à i3. Sempre que
+uma prova envolver um link de email a ser clicado, incluir pelo menos um destinatário real atrás
+de um gateway corporativo (M365/EOP, Proofpoint, Mimecast) antes de considerar a prova fechada.
+
+### i4 — Formulário de produto — próxima (prompt já recebido)
+Ciclo de vida (`draft → pending → active ⇄ review → inactive → discontinued`) e o motor
+`compute_price` na UI: bloqueios reais de activação (HS/peso/código SAP, excepto opções/
+serviços), auto-transição para `review` + nova entrada em `price_versions` ao mudar o EXW de um
+item activo, breakdown de custos só para roles com `can_read_costs()` (reusa a i2),
+`price_versions`/`audit_log` na UI. Escritas só pelos ramos que a RLS real permitir — se não
+permitir o que o ecrã precisa, propor migração 0002 sem a aplicar. Nunca editar a 0001. Depois:
+configuração (câmbios, fees, transporte, direitos, margens), overrides + histórico/auditoria,
+dashboard.
 
 ## E4 — Migração 0002 — por iniciar
 Políticas de escrita por estado (quem aprova — questão L2 do handover, decisão do Pedro
