@@ -120,6 +120,19 @@ migração `0002` (aprovada pelo Pedro, aplicada 04/09/2026):** `tmsi.record_exw
 de `search_path` (apanhado na revisão do Pedro antes de aplicar). Detalhe completo: `STATE.md`,
 `supabase/migrations/0002_price_versions_security_definer.sql`.
 
+⚠️ **Reaberta no mesmo dia — achado real de teste (Pedro, browser):** `exw_price` (e
+`sap_code_*`/`supplier_id`) visíveis a `sales.sa` em `/products`/`/products/[id]`. `tmsi.products`
+não tem protecção nenhuma ao nível da coluna, só da linha — `compute_price()` esconde os valores
+derivados do EXW, mas as páginas liam a tabela crua. Corrigido ao nível do `.select()`
+(`can_read_costs()` escolhe a lista de colunas antes do pedido sair, nunca ao nível da
+renderização) — provado ao nível do payload, não só do ecrã. **Candidata registada para a
+E4/0003:** protecção real ao nível da BD para `tmsi.products` exigiria uma vista `security
+definer` (o mesmo padrão de `v_selling_prices`) — privilégios de coluna Postgres não servem aqui,
+porque todos os utilizadores autenticados partilham o mesmo role Postgres (`authenticated`) via
+PostgREST, independentemente do seu role em `tmsi.user_roles`. Até essa vista existir, a
+disciplina de `.select()` condicional na app é a única protecção — cada página nova sobre
+`tmsi.products` repete o risco. Detalhe completo: `STATE.md`.
+
 Depois: configuração (câmbios, fees, transporte, direitos, margens), overrides + histórico/
 auditoria, dashboard.
 

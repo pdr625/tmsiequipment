@@ -7,11 +7,53 @@ Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 browser do Pedro).** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2,
 E3-i1, E3-i2 e E3-i3 estão fechadas.
 
-## E3, iteração 4 — Formulário de produto — ✅ FECHADA 2026-09-04
+## E3, iteração 4 — Formulário de produto — ✅ FECHADA 2026-09-04 (reaberta e corrigida no mesmo dia)
 
-**Digest:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:68c5a95e9f8e8bc9ce7f1d05be877089e8cc6aa398cb7c8215dcf9f811179aa4`
-(`Created` 2026-09-04T17:54:06Z). **Footprint:** RAM available 215 MB; swap 1011/4096 MB (≈25%);
-disco 47%. Containers: db 14.1M/320M, auth 4.0M/128M, rest 3.6M/128M, tmsi-app 24.7M/192M.
+**Digest final:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:4d8bc1995caceb38f02c2c9b3d1a354c4b64dc8c21558384e2b279c9c761a632`
+(`Created` 2026-09-04T18:42:19Z). **Footprint:** RAM available 230 MB; swap 1077/4096 MB (≈26%);
+disco 47%.
+
+⚠️ **Reaberta pelo Pedro, achado real em teste de browser (a prova 4 do fecho anterior estava
+incompleta):** como `sales.sa`, o EXW price era visível no separador `/products`.
+`tmsi.products` tem RLS **só ao nível da linha** — não há protecção nenhuma ao nível da coluna.
+`compute_price()` trata os valores derivados do EXW como estritamente need-to-know (`fx_used`,
+`fee`, `total_cost_eur`, `margin`, etc. todos `null` para roles sem `can_read_costs()`), mas as
+duas páginas desta iteração liam `tmsi.products` directamente e seleccionavam `exw_price` sem
+condição nenhuma — o próprio EXW bruto, mais granular do que qualquer figura que o
+`compute_price()` já esconde. **Corrigido ao nível do `.select()`, não da renderização:**
+`can_read_costs()` (o mesmo predicado do `see_costs` interno do `compute_price()`) escolhe agora
+entre duas listas de colunas explícitas antes do pedido à API sair — o valor nunca chega a sair
+do PostgREST para quem não deve vê-lo, tal como a `v_selling_prices` (i2) já faz. Estendido a
+`sap_code_*`/`supplier_id` (não tocados pelo `compute_price()` em si, mas também excluídos da
+`v_selling_prices`, por consistência com o limite que o próprio schema já define).
+
+**Prova nova, ao nível do payload, não do ecrã (condição do Pedro):** com o JWT do `sales.sa`,
+repliquei directamente o `select` exacto que cada página agora envia — a resposta de
+`/products` e de `/products/[id]` (`T-0005`) **não tem as chaves** `exw_price`/`sap_code_*`/
+`supplier_id` (não `null` — ausentes). Confirmado em contraste com `pm.test` (role
+`product_manager`), cujo `select` (o das colunas de custo) devolve tudo, incluindo `exw_price:
+890.00`. Sem regressões (`/login`, `/prices`, `/products`, `/api/health`).
+
+⚠️ **Registado, honestamente, o limite real desta correcção:** é só ao nível da aplicação —
+`sales.sa` a pedir `exw_price`/`sap_code_sa` **directamente** por API (`?select=id,exw_price,
+sap_code_sa`), a contornar a app, **continua a devolver o valor**. Não há nada na BD que impeça
+isto hoje. **Candidata a registar para a E4/0003** — com uma correcção à sugestão original do
+Pedro: privilégios de coluna Postgres (`REVOKE SELECT`) **não conseguem discriminar por role da
+app** (todos os utilizadores `authenticated` são o mesmo role Postgres via PostgREST,
+independentemente do `role` que têm em `tmsi.user_roles` — o `REVOKE`/`GRANT` de coluna é estático
+por role Postgres, não por linha nem por utilizador). O mecanismo real, com precedente já
+comprovado no próprio schema, é uma **vista `security definer`** (exactamente o padrão de
+`v_selling_prices`/`compute_price()`) — não existe hoje uma vista equivalente para `tmsi.products`
+em si (só para preços). Até essa vista existir (ou a app manter a disciplina actual de `.select()`
+condicional), cada página nova sobre `tmsi.products` é uma oportunidade de repetir esta fuga.
+
+**Ficheiros entregues:** `/products` (listagem, âmbito por `products_read`, mesmo padrão "pergunta
+ao Postgres" do `/prices`); `/products/new` (rascunho mínimo — só as colunas `not null` sem
+`default` de `tmsi.products`, coerente com o próprio ciclo de vida "rascunho não precisa de
+tudo"); `/products/[id]` (detalhe: breakdown de `compute_price()` por filial, histórico de
+`price_versions`, `audit_log`, formulário de edição gated por `canManageProducts()`).
+`canManageProducts()` (`auth-guard.ts`) espelha exactamente a `USING` clause de
+`products_write_pm` (`has_role('admin') or has_role('product_manager')`).
 
 **Ficheiros entregues:** `/products` (listagem, âmbito por `products_read`, mesmo padrão "pergunta
 ao Postgres" do `/prices`); `/products/new` (rascunho mínimo — só as colunas `not null` sem
@@ -57,7 +99,11 @@ Pedro:**
    `status: "review"`; `tmsi.price_versions` confirmada com 2 linhas (criação + a alteração).
 4. **Custos por role:** `compute_price('T-0005','SA')` como `pm.test` → todas as colunas de
    custo preenchidas (`total_cost_eur: 890`, `margin: 0.50`, etc.); o mesmo RPC como `sales.sa`
-   → custos todos `null`, `min_price`/`ref_price` continuam visíveis (mesmo padrão da i2).
+   → custos todos `null`, `min_price`/`ref_price` continuam visíveis (mesmo padrão da i2). **Ao
+   nível do payload das duas páginas** (completado depois da reabertura, ver acima): `select`
+   exacto que `/products` e `/products/[id]` enviam para `sales.sa` → resposta sem as chaves
+   `exw_price`/`sap_code_*`/`supplier_id` (ausentes, não `null`); o mesmo `select` de custo como
+   `pm.test` → tudo presente, `exw_price: 890.00` incluído.
 5. **Ramo negado:** `POST /products` como `sales.sa` → `403` RLS explícito; `PATCH` num produto
    existente → `200` mas array **vazio** (`[]`, `Prefer: return=representation`) — RLS excluiu a
    linha do conjunto alvo do `UPDATE`, zero linhas afectadas, confirmado directamente na BD que
