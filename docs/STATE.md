@@ -3,6 +3,10 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
+**Etapa actual: E1 — scaffold frontend + CI→GHCR, em curso (2026-09-04).** Ordem e critérios
+de saída de cada etapa: `docs/ROADMAP.md`. E0 (infra backend, este ficheiro na íntegra abaixo)
+está fechada.
+
 ## 1. Identidade
 
 - **App:** TMSI Equipment Price Listing
