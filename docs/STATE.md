@@ -3,10 +3,51 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: migração 0005 (correcção de câmbio no mesmo dia) — ✅ FECHADA 2026-09-04,
-confirmada pelo Pedro no browser ("o câmbio funciona bem agora").** Ordem e critérios de saída
-de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2, E3-i3, E3-i4, E3-i5 e a migração
-0003/0004 estão fechadas.
+**Etapa actual: E3, iteração 6 (overrides + auditoria) — F0 fechado, a avançar para o
+código.** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1,
+E3-i2, E3-i3, E3-i4, E3-i5 e as migrações 0003/0004/0005 estão fechadas.
+
+## E3, iteração 6 — Overrides + auditoria — F0: matriz (0001, real, não assumida)
+
+| Tabela | Input do motor substituído | Colunas obrigatórias (schema) | Leitura (RLS) | Escrita (RLS) | Validade avaliada por `compute_price`? |
+|---|---|---|---|---|---|
+| `price_overrides` | `fx`/`fee`/`transport`/`duty`/`margin`/`coef` (um dos seis, por `kind`) | `product_id, branch_id, kind, value, reason` `not null`; `valid_from` `not null default hoje` | `can_read_costs()` AND (admin/finance/product_manager/viewer OU `branch_id` no âmbito do `branch_manager`) | admin/finance (qualquer `kind`); `branch_manager` (só `transport`/`margin`/`coef`, filial própria); `logistics` (só `duty`) | **Sim** — `tmsi.override_value()`: `valid_from <= p_date AND (valid_to IS NULL OR valid_to >= p_date)`, a mais recente (`created_at desc`) entre as válidas nessa data vence — mesmo padrão "corrigir = criar novo" já usado pela 0005, já embutido na 0001 desde o início (sem `unique` a bloquear) |
+| `product_hs_overrides` | `hs_code` usado no cálculo de direitos (substitui `products.hs_code`) — **só `scope_type='branch'`**, confirmado no código real do `compute_price()` | `product_id, scope_type ('branch'\|'channel'\|'agent'), scope_id, hs_code, reason` `not null` | qualquer `authenticated` (`ref_read`, `using(true)`) — não é dado de custo | **admin apenas** (`ref_write`) | **Não tem `valid_from`/`valid_to` nenhum** — permanente até ser alterado/apagado |
+| `audit_log` | — (não é input do motor, é o registo) | `at, actor, table_name, row_pk, action` `not null`; `old_row`/`new_row` `jsonb` | admin/finance/viewer/`branch_manager` (**não** `product_manager` nem `logistics`, apesar de poderem escrever produtos/overrides) | — (só o trigger `tmsi.audit()`, `security definer`, escreve) | — |
+
+**Três achados reais, sinalizados antes de desenhar (restrição 2), não corrigidos por
+iniciativa própria:**
+1. **`price_overrides.created_by` é `uuid` nullable** — a regra do handover ("levam sempre
+   motivo, autor, data e validade") não está imposta na BD para o autor, ao contrário de
+   `reason` (`not null`). A app define sempre `created_by` a partir da sessão (nunca um campo
+   editável — restrição 3), mas um pedido directo à API, a contornar a app, podia criar um
+   override sem autor. Candidato a migração futura (`not null default auth.uid()` ou
+   equivalente) — não aplicado nesta iteração.
+2. **`product_hs_overrides` não tem `created_at`/`created_by` nem validade nenhuma** — autor e
+   data só existem no `audit_log` (a tabela está no `array` do trigger, 0001 §5). Na prática
+   suficiente: só o admin escreve esta tabela (`ref_write`) e o admin tem acesso total ao
+   `audit_log`. Ainda assim, assimétrico com `price_overrides` e mais fraco que a letra da
+   regra do handover. Sinalizado, não corrigido.
+3. ⚠️ **O mais sério — risco de defeito silencioso real, não hipotético:** o `check` constraint
+   de `product_hs_overrides.scope_type` aceita `'branch'`, `'channel'` e `'agent'` — mas o
+   código real do `compute_price()` (0001 §7, cálculo de direitos) **só lê overrides com
+   `scope_type='branch'`** (`where h.scope_type = 'branch' and h.scope_id = b.id`). Um
+   override de canal ou de agente seria aceite pela BD e pareceria válido em qualquer UI, mas
+   nunca teria efeito nenhum no preço — exactamente o tipo de "defeito silencioso" que a regra
+   de qualidade do próprio handover (`handover.md` §6) proíbe.
+   - **Decisão do Pedro:** a UI de criação só oferece `scope_type='branch'` por agora (o único
+     que o motor lê), com nota visível de que canal/agente estão por implementar. Qualquer
+     linha `channel`/`agent` que já exista (API directa, ou dados anteriores) **nunca fica
+     invisível**: a listagem mostra-a com um aviso explícito "no effect — scope not yet
+     supported by the pricing engine" — um override sem efeito pode existir, mas nunca em
+     silêncio.
+   - **Pendência funcional registada** (não só "por implementar", as duas perguntas de desenho
+     que a implementação exigiria, do Pedro): (a) ordem de precedência entre âmbitos
+     coexistentes (se um produto tiver override de filial E de canal ao mesmo tempo, qual
+     vence?); (b) como é que o contexto de canal/agente chega ao `compute_price()` — a
+     assinatura actual só tem `p_product, p_branch, p_date`, sem identificador de
+     canal/agente nenhum. Fica ao lado da questão L2 (quem aprova, E4) na lista de decisões
+     em aberto — mesma família (decisões de desenho do motor, não de infra).
 
 ## Migração 0005 — correcção de câmbio no mesmo dia — ✅ FECHADA 2026-09-04
 
