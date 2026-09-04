@@ -3,9 +3,56 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 5 — ✅ FECHADA 2026-09-04, provas de API confirmadas; falta
-confirmação de browser do Pedro.** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`.
-E0, E1, E2, E3-i1, E3-i2, E3-i3, E3-i4 e a migração 0003/0004 estão fechadas.
+**Etapa actual: migração 0005 (correcção de câmbio no mesmo dia) — ✅ FECHADA 2026-09-04,
+provas de API confirmadas; falta confirmação de browser do Pedro.** Ordem e critérios de saída
+de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2, E3-i3, E3-i4, E3-i5 e a migração
+0003/0004 estão fechadas.
+
+## Migração 0005 — correcção de câmbio no mesmo dia — ✅ FECHADA 2026-09-04
+
+**Digest:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:50a6e8ef998e6a8d6e00c3f448a3ca6d3b4d55dc17ff95ad0ba3dac7634be628`
+(`Created` 2026-09-04T20:42:48Z). **Footprint:** RAM available 194 MB; swap 1120/4096 MB (≈27%);
+disco 48%.
+
+**Achado real, do Pedro, ao usar o `/config` da i5 (não hipotético):** `tmsi.exchange_rates` tem
+`unique (currency, effective_date)` — só uma entrada por moeda por dia. Um engano ao introduzir
+uma taxa ficava sem correcção possível até ao dia seguinte, com o erro `duplicate key value
+violates unique constraint "exchange_rates_currency_effective_date_key"`.
+
+**Condição 1 (verificar todos os consumidores, não só o `fx_rate()`), antes de desenhar:**
+`grep` ao schema (0001) e à app — `tmsi.fx_rate()` é o **único** leitor de cálculo desta tabela;
+nenhuma outra função/vista lê `exchange_rates` directamente. A página `/config` lê a tabela
+directamente, mas só para listagem (não é caminho de cálculo) — actualizada nesta mesma
+migração para mostrar a supersessão (condição 2).
+
+**Desenho:** relaxar o `unique` constraint (mais de uma entrada por moeda por dia passa a ser
+permitida) + `fx_rate()` a desempatar por `created_at` (a mais recente introduzida vence entre
+entradas do mesmo dia). **Achado de F1, não assumido:** o valor por omissão de `created_at`
+(`now()`) fica **congelado durante toda a transacção** — confirmado ao vivo: duas inserções na
+mesma transacção ficaram com o mesmo `created_at` ao byte, tornando o desempate
+não-determinístico entre elas. Em uso real cada submissão do `/config` é a sua própria
+transacção (o `now()` teria provavelmente funcionado na prática), mas depender dessa nuance
+não documentada é frágil para uma coluna que passa também a desempatar de forma fiável — mudado
+o valor por omissão para `clock_timestamp()`, confirmado ao vivo a resolver mesmo o pior caso
+(duas inserções na mesma transacção).
+
+**Condição 2 (a UI mostra a supersessão):** a listagem de câmbios em `/config` agrupa por
+(`currency`, `effective_date`) — a primeira linha de cada grupo (pela mesma ordenação que o
+`fx_rate()` usa) aparece como "in use"; qualquer outra do mesmo grupo aparece marcada "superseded
+same day", em cinzento, não como uma duplicata inexplicada.
+
+**Provas (condição 3), o cenário exacto do Pedro reproduzido antes de fechar:**
+1. Entrada USD "enganada" (5.000000, hoje) → aceite (`201`); `fx_rate('USD')` → `5.000000`.
+2. Segunda entrada USD, mesma data (1.150000) → **aceite** (`201` — antes desta migração seria
+   `409`/erro de chave duplicada); `fx_rate('USD')` → `1.150000`, a corrigida, de imediato.
+3. **Ramo temporal:** `fx_rate('USD', '2025-12-01')` → `1.158700`, a taxa histórica original da
+   seed, insensível às correcções de hoje.
+4. Terceira entrada a repor o valor da seed para hoje (1.158700) — `fx_rate('USD')` volta a
+   `1.158700`; as duas entradas anteriores ficam na listagem como demonstração real da marcação
+   "superseded same day".
+
+**Numeração:** esta é a **0005** (consumiu o número que estava reservado para a migração
+funcional da E4). **A migração funcional da E4 passa a 0006.**
 
 ## E3, iteração 5 — Configuração do pricing — ✅ FECHADA 2026-09-04
 
@@ -90,6 +137,11 @@ obrigatório, não inventar validação nova.
 `~/tmp/tmsi-sudo/{finance,logistics}-test-password.txt` no VPS (600), nunca no repo. Junto de
 `pm.test`/`sales.sa`/`agent.apac` já existentes, cobrem agora todos os roles relevantes às
 fronteiras de configuração.
+
+**Provas de browser confirmadas pelo Pedro** (editar um câmbio como admin e ver o preço
+recalculado; `/config` inexistente para `sales.sa`) — durante essa própria confirmação, o Pedro
+encontrou um defeito real de usabilidade (não conseguia corrigir um câmbio enganado no mesmo
+dia) — ver secção "Migração 0005" acima, já fechada.
 
 ## Migração 0003/0004 — protecção dos custos ao nível da BD — ✅ FECHADA 2026-09-04
 

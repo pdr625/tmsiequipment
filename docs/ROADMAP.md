@@ -16,7 +16,8 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
 | E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅ | em curso |
 | — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
-| E4 | Migração 0005 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
+| — | Migração 0005 — correcção de câmbio no mesmo dia | ✅ 04/09/2026 |
+| E4 | Migração 0006 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
 | E5 | Operações e endurecimento | por iniciar |
 | E6 | Validação do piloto + preparação da migração para a empresa | por iniciar |
 
@@ -160,12 +161,24 @@ price-by-branch para sales/agent) antes de qualquer prova ser reportada feita. A
 prompt confirmadas, incluindo a suite completa da i4 sem regressão. Detalhe completo, incluindo
 o percurso empírico de F1 (`BEGIN`/`ROLLBACK`) que descartou o candidato simples: `STATE.md`.
 
-## E4 — Migração 0005 — por iniciar
-A numeração avança duas vezes: `0002` foi consumida pelo defeito real de RLS da i4, `0003`/`0004`
-pela protecção de custos ao nível da BD (nenhuma é a migração funcional da E4). Políticas de
-escrita por estado (quem aprova — questão L2 do handover, decisão do Pedro pendente), regra dos
-90 dias, notificações. Nunca editar a 0001/0002/0003/0004 aplicadas. Backup + restauro
-provado antes de aplicar.
+## Migração 0005 — correcção de câmbio no mesmo dia — ✅ FECHADA 04/09/2026
+Achado real do Pedro ao usar o `/config` da i5, não hipotético: `unique(currency,
+effective_date)` em `tmsi.exchange_rates` só permitia uma entrada por moeda por dia — um engano
+ficava sem correcção possível até ao dia seguinte. Verificado antes de desenhar que
+`tmsi.fx_rate()` é o único leitor de cálculo desta tabela. Corrigido: `unique` relaxado,
+`fx_rate()` a desempatar por `created_at` entre entradas do mesmo dia. Achado de F1: o valor por
+omissão de `created_at` (`now()`) fica congelado durante toda a transacção — mudado para
+`clock_timestamp()`, que reflecte sempre o momento real da inserção. `/config` actualizado a
+marcar entradas do mesmo dia superadas como tal, em vez de as mostrar como duplicatas
+inexplicadas. Cenário exacto do Pedro reproduzido e o ramo temporal (consulta histórica
+insensível a correcções de hoje) confirmados antes de fechar. Detalhe completo: `STATE.md`.
+
+## E4 — Migração 0006 — por iniciar
+A numeração avança três vezes: `0002` foi consumida pelo defeito real de RLS da i4, `0003`/`0004`
+pela protecção de custos ao nível da BD, `0005` pela correcção de câmbio no mesmo dia (nenhuma é
+a migração funcional da E4). Políticas de escrita por estado (quem aprova — questão L2 do
+handover, decisão do Pedro pendente), regra dos 90 dias, notificações. Nunca editar a
+0001/0002/0003/0004/0005 aplicadas. Backup + restauro provado antes de aplicar.
 
 **Inclinação registada (i5, 2026-09-04), não uma decisão:** Branch Manager como aprovador
 provável — já tem RLS de leitura de custos con âmbito de filial (0001, `can_read_costs()`
