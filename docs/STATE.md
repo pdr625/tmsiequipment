@@ -3,15 +3,37 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E1 — scaffold frontend + CI→GHCR, em curso (2026-09-04).** Ordem e critérios
-de saída de cada etapa: `docs/ROADMAP.md`. E0 (infra backend, este ficheiro na íntegra abaixo)
-está fechada.
+**Etapa actual: E2 — deploy do frontend + prova fim-a-fim, próxima.** Ordem e critérios de saída
+de cada etapa: `docs/ROADMAP.md`. E0 e E1 estão fechadas.
 
-## E1 — Scaffold frontend + CI→GHCR (2026-09-04)
+## E1 — Scaffold frontend + CI→GHCR — ✅ FECHADA 2026-09-04
 
-**Não fechada.** Critério de saída = CI verde + imagem no GHCR, confirmado pelo Pedro (passo
-manual, secção 6 do prompt). Todo o trabalho desta etapa foi escrita de ficheiros + git — **nenhum
-comando `npm`/`npx`/`node` correu no VPS**, confirmado.
+Critério de saída (CI verde + imagem no GHCR) confirmado pelo Pedro. Todo o trabalho desta etapa
+foi escrita de ficheiros + git — **nenhum comando `npm`/`npx`/`node` correu no VPS**, confirmado.
+
+⚠️ **Dois attempts de CI, só um utilizável.** O attempt #1 correu automaticamente no push do
+commit `d7cbd6c` (o workflow dispara em qualquer alteração a `app/**`, e esse commit tocou
+`app/Dockerfile`) — **antes** de o segredo `NEXT_PUBLIC_SUPABASE_ANON_KEY` existir no repo. Build
+verde na mesma (a ausência do segredo não falha o build, só embute uma string vazia), mas a
+imagem desse attempt **tem a chave vazia e não deve ser usada**. Attempt #2, disparado depois de o
+segredo ser criado, é o correcto — confirmado pelo Pedro. Como os dois attempts empurram para as
+mesmas tags (`sha-<curta>` do mesmo commit + `latest`), o registo em GHCR **já só aponta para o
+attempt #2** (push para a mesma tag substitui o manifesto anterior) — não há tag a apontar para o
+attempt #1 para confundir um deploy futuro. Ainda assim, a **E2 deve confirmar explicitamente**
+(ex.: inspeccionar a imagem puxada, não confiar cegamente na tag) antes do primeiro deploy real.
+
+**Melhorias identificadas, registadas para a E2 (não implementadas agora — fora do âmbito desta
+etapa):**
+1. **O workflow deve falhar alto quando `NEXT_PUBLIC_SUPABASE_ANON_KEY` está vazio** — guard de
+   uma linha no início do job (`if [ -z "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" ]; then
+   exit 1; fi` ou equivalente), para que o attempt #1 desta etapa nunca se repita silenciosamente
+   como "CI verde" com uma imagem inutilizável.
+2. **Rotação futura do `JWT_SECRET` implica rebuild da imagem, não só redeploy.** O
+   `ANON_KEY`/`SERVICE_ROLE_KEY` são JWT assinados com o `JWT_SECRET` actual; o `ANON_KEY` fica
+   embutido no bundle do cliente **no build**. Rodar o `JWT_SECRET` no backend sem gerar um novo
+   `ANON_KEY` e sem reconstruir a imagem deixa o frontend a enviar um `ANON_KEY` que já não valida
+   contra o `JWT_SECRET` novo — REST/Auth passam a devolver 401 mesmo com o container "redeployado
+   com sucesso". Registar este acoplamento explicitamente no procedimento de rotação (E5).
 
 **Ficheiros entregues:**
 - `docs/ROADMAP.md` — folha de rota (aplicada verbatim do prompt E1).
@@ -59,9 +81,8 @@ and variables → Actions → New repository secret`, nome `NEXT_PUBLIC_SUPABASE
 o `ANON_KEY` gerado na E0, `deploy/supabase/.env` no VPS) — sem ele o CI continua verde mas a
 imagem fica com o valor vazio embutido no bundle do cliente.
 
-**CI por confirmar pelo Pedro:** GitHub → Actions (workflow verde?) e Packages (imagem
-`tmsi-app` visível?). Sem alteração de estado do VPS nesta etapa (containers/nginx/postfix
-intocados) → **sem delta no dossier**.
+**CI confirmado pelo Pedro:** attempt #2 verde, imagem `tmsi-app` no GHCR. Sem alteração de
+estado do VPS nesta etapa (containers/nginx/postfix intocados) → **sem delta no dossier**.
 
 ## 1. Identidade
 

@@ -12,8 +12,8 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | Etapa | Título | Estado |
 |---|---|---|
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
-| E1 | Scaffold frontend Next.js + CI→GHCR | ⏳ próxima |
-| E2 | Deploy do frontend no VPS + prova fim-a-fim no browser | por iniciar |
+| E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
+| E2 | Deploy do frontend no VPS + prova fim-a-fim no browser | ⏳ próxima |
 | E3 | Ecrãs da aplicação, por iterações | por iniciar |
 | E4 | Migração 0002 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
 | E5 | Operações e endurecimento | por iniciar |
@@ -25,25 +25,29 @@ Entregue: stack magra db+auth+rest (rede `tmsi_net` 172.20.40.0/24), schema `tms
 (listener dedicado sem STARTTLS), backup nocturno com restauro provado, primeiro admin criado,
 RLS provado nos dois ramos. Detalhe: `STATE.md` + dossier `VPS.md`.
 
-## E1 — Scaffold frontend + CI→GHCR — ⏳ PRÓXIMA
-**Onde:** sessão Claude Code no VPS (só escrita de ficheiros + git; **nunca** `npm`/`node`/
-build no VPS — invariante 12).
-**Objectivo:** o repo passa a conter uma app Next.js mínima que compila em CI e produz imagem
-em `ghcr.io/pdr625/tmsiequipment`.
-**Entregáveis:** `app/` (Next.js app router, TypeScript, Tailwind; página de login placeholder
-com o aviso proprietário no rodapé; `app/api/health`; cliente Supabase via `@supabase/ssr`,
-`SUPABASE_URL=https://tmsiequipment.duckdns.org` — o nginx já serve `/auth/v1/` e `/rest/v1/`
-nesse domínio, portanto o URL raiz funciona sem Kong); `Dockerfile` multi-stage (output
-standalone, non-root); `.dockerignore`; workflow GitHub Actions (push em `main` → build →
-push GHCR). Cabeçalho de `docs/COPYRIGHT_HEADER.md` em todos os ficheiros novos.
-**Regras:** versões de dependências verificadas no registo npm e pinadas — nunca de memória;
-`ANON_KEY` **não** entra no repo (entra como env no deploy, E2); sem lockfile gerável no VPS,
-o Dockerfile usa `npm install` com pendência de pinagem por lockfile registada.
-**Critério de saída:** CI verde no GitHub (Pedro confirma no browser) + imagem visível no
-GHCR. Sem CI verde, a E2 não abre.
+## E1 — Scaffold frontend + CI→GHCR — ✅ FECHADA 04/09/2026
+Entregue: `app/` (Next.js app router, TypeScript, Tailwind v4; página de login placeholder com o
+aviso proprietário no rodapé; `app/api/health`; cliente Supabase via `@supabase/ssr`, dividido em
+`supabase-client.ts`/`supabase-server.ts` — `next/headers` é server-only, não cabia no mesmo
+módulo do factory de browser sem quebrar o build); `Dockerfile` multi-stage (`node:24.20.0-alpine`,
+output standalone, non-root, `HOSTNAME=0.0.0.0`); `.dockerignore`; workflow GitHub Actions (push
+em `app/**` → build → push GHCR, `docker/metadata-action` para as tags). Dependências pinadas por
+versão verificada no registo npm, não de memória. Detalhe completo: `STATE.md`.
 
-## E2 — Deploy do frontend + prova fim-a-fim — por iniciar
-**Onde:** VPS. **Pré-condição:** E1 fechada (imagem no GHCR, pinada por digest).
+⚠️ **CI teve dois attempts — só o #2 é válido** (o #1 correu antes do segredo
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` existir, imagem com a chave vazia). Confirmado pelo Pedro. Ver
+`STATE.md` para o porquê de as tags em GHCR já apontarem só para o #2, e a recomendação de a E2
+confirmar explicitamente antes do primeiro deploy.
+
+**Duas melhorias identificadas nesta etapa, para aplicar na E2** (não implementadas em E1):
+1. Guard no início do job do CI que falha alto se `NEXT_PUBLIC_SUPABASE_ANON_KEY` vier vazio —
+   evita repetir silenciosamente o erro do attempt #1 como "CI verde".
+2. Registar explicitamente no procedimento de rotação de segredos (E5): rodar o `JWT_SECRET`
+   invalida o `ANON_KEY` já embutido na imagem — exige **rebuild**, não só redeploy do container.
+
+## E2 — Deploy do frontend + prova fim-a-fim — ⏳ PRÓXIMA
+**Onde:** VPS. **Pré-condição:** E1 fechada (imagem no GHCR, pinada por digest) — ✅, mas
+confirmar que o digest usado é o do attempt #2 antes de deployar (ver nota acima).
 Serviço `tmsi-app` no compose (rede `tmsi_net`, `mem_limit` a definir após medição);
 **bind `172.20.40.1:3001`** — a porta 3000 desse gateway já é do `rest`; `location /` no
 vhost → `http://172.20.40.1:3001`. Medir RAM/swap antes e depois (pendência registada:
