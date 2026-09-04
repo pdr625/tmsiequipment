@@ -7,7 +7,7 @@
 
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { isAdmin } from '@/lib/auth-guard';
+import { isAdmin, pricingConfigReadAccess } from '@/lib/auth-guard';
 import { signOut } from './actions';
 
 // Minimal authenticated home — middleware already guarantees a session
@@ -20,6 +20,7 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
   const admin = await isAdmin();
+  const { readCosts, readLogistics } = await pricingConfigReadAccess();
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
@@ -38,6 +39,14 @@ export default async function HomePage() {
         >
           Products
         </Link>
+        {(readCosts || readLogistics) && (
+          <Link
+            href="/config"
+            className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+          >
+            Pricing configuration
+          </Link>
+        )}
         {admin && (
           <Link
             href="/admin/users"

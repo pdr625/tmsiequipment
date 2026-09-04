@@ -30,3 +30,44 @@ export async function canManageProducts(): Promise<boolean> {
   ]);
   return admin === true || pm === true;
 }
+
+// Mirrors config_write on tmsi.exchange_rates/interco_fees/margin_grids/
+// settings (0001 §8: `has_role('admin') or has_role('finance')`).
+export async function canManageFinanceConfig(): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const [{ data: admin }, { data: finance }] = await Promise.all([
+    supabase.schema('tmsi').rpc('has_role', { r: 'admin' }),
+    supabase.schema('tmsi').rpc('has_role', { r: 'finance' }),
+  ]);
+  return admin === true || finance === true;
+}
+
+// Mirrors config_write on tmsi.transport_tiers/customs_rates (0001 §8:
+// `has_role('admin') or has_role('finance') or has_role('logistics')`) —
+// a different, wider predicate than canManageFinanceConfig above, not the
+// same helper reused: logistics can write these two specifically, not
+// exchange_rates/interco_fees/margin_grids/settings.
+export async function canManageOperationalConfig(): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const [{ data: admin }, { data: finance }, { data: logistics }] = await Promise.all([
+    supabase.schema('tmsi').rpc('has_role', { r: 'admin' }),
+    supabase.schema('tmsi').rpc('has_role', { r: 'finance' }),
+    supabase.schema('tmsi').rpc('has_role', { r: 'logistics' }),
+  ]);
+  return admin === true || finance === true || logistics === true;
+}
+
+// "Can this role read at least one pricing config table beyond
+// settings" — settings itself is readable by any authenticated (0001 §8,
+// config_read using(true)) regardless of this. Individual flags returned
+// separately since /config's own sections gate differently:
+// exchange_rates/interco_fees/margin_grids need can_read_costs()
+// specifically; transport_tiers/customs_rates accept either.
+export async function pricingConfigReadAccess(): Promise<{ readCosts: boolean; readLogistics: boolean }> {
+  const supabase = await createSupabaseServerClient();
+  const [{ data: readCosts }, { data: readLogistics }] = await Promise.all([
+    supabase.schema('tmsi').rpc('can_read_costs'),
+    supabase.schema('tmsi').rpc('has_role', { r: 'logistics' }),
+  ]);
+  return { readCosts: readCosts === true, readLogistics: readLogistics === true };
+}
