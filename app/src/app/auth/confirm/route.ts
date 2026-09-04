@@ -6,20 +6,35 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
+import type { EmailOtpType } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 
-// GoTrue's own /auth/v1/verify (GOTRUE_MAILER_URLPATHS_RECOVERY) handles the
-// recovery link first: it verifies the token server-side, then redirects
-// the browser here with a PKCE `code` query param (our @supabase/ssr
-// clients default to flowType: "pkce" — confirmed against
-// @supabase/ssr@0.12.5's source, not assumed). This route exchanges that
-// code for a real session, using the PKCE code_verifier cookie the browser
-// client stored when the reset was first requested (forgot-password/actions.ts).
+// Primary path: our custom recovery email template
+// (email-templates/recovery/route.ts) links straight here with
+// token_hash + type=recovery, verified via verifyOtp — self-contained,
+// no dependency on browser/cookie state from whenever the reset was
+// requested, so it works when the link is opened on a different device
+// or in a different browser context (the common real case for "check
+// your email" on a phone). Confirmed against @supabase/auth-js@2.115.0's
+// VerifyTokenHashParams type, not assumed.
+//
+// Fallback path: a PKCE `code` (GoTrue's default {{ .ConfirmationURL }}
+// via its own /auth/v1/verify, still used by confirmation/invite/
+// email_change — untouched in this iteration, out of scope). Only works
+// same-browser; kept for completeness, not the primary flow.
 export async function GET(request: NextRequest) {
+  const tokenHash = request.nextUrl.searchParams.get('token_hash');
+  const type = request.nextUrl.searchParams.get('type') as EmailOtpType | null;
   const code = request.nextUrl.searchParams.get('code');
 
-  if (code) {
-    const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
+
+  if (tokenHash && type) {
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    if (!error) {
+      return NextResponse.redirect(new URL('/reset-password', request.url));
+    }
+  } else if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       return NextResponse.redirect(new URL('/reset-password', request.url));
