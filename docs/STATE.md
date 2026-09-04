@@ -4,7 +4,7 @@ Documento vivo do estado real da infra deste projecto. Sem segredos — só *ond
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
 **Etapa actual: migração 0005 (correcção de câmbio no mesmo dia) — ✅ FECHADA 2026-09-04,
-provas de API confirmadas; falta confirmação de browser do Pedro.** Ordem e critérios de saída
+confirmada pelo Pedro no browser ("o câmbio funciona bem agora").** Ordem e critérios de saída
 de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2, E3-i3, E3-i4, E3-i5 e a migração
 0003/0004 estão fechadas.
 
