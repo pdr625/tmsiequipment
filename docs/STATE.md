@@ -3,8 +3,48 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 4 (formulário de produto), a começar.** Ordem e critérios de saída
-de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2 e E3-i3 estão fechadas.
+**Etapa actual: E3, iteração 4 (formulário de produto) — PARADA em F1, à espera de decisão do
+Pedro.** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2 e
+E3-i3 estão fechadas.
+
+## E3, iteração 4 — Formulário de produto — ⛔ PARADA EM F1 (2026-09-04), condição de paragem do próprio prompt
+
+**Achado, antes de qualquer código de UI:** `tmsi.record_exw_version()` (trigger AFTER que grava
+`tmsi.price_versions` a cada insert/alteração de `exw_price`/`currency` — 0001 §5) está declarada
+`language plpgsql` simples, **sem `security definer`** — corre com o role de quem chama
+(`authenticated`), não com o dono da tabela. `tmsi.price_versions` tem RLS activo com **só** uma
+política de leitura (`versions_read`); não existe política de escrita nenhuma. Resultado: **toda
+e qualquer escrita em `tmsi.products` falha**, `42501 new row violates row-level security policy
+for table "price_versions"` — confirmado ao vivo, sessão real (não `service_role`), utilizador de
+teste com role `product_manager`:
+- `INSERT` de um produto novo em rascunho → 403.
+- `UPDATE` de `exw_price` num produto já `active` (`T-0005`) → 403.
+
+Ambos confirmados sem deixar rasto (transacção Postgres é atómica — nem o produto nem a versão
+ficaram gravados nos dois testes). As 11 linhas existentes em `price_versions` vêm do script de
+seed (0001 §9), que corre directamente como superuser — nunca passou por PostgREST/RLS, por isso
+este defeito nunca tinha sido exercitado antes desta sessão. `tmsi.audit()` (mesma secção do
+ficheiro, poucas linhas antes) já resolve exactamente a mesma categoria de problema — tabela de
+sistema alimentada por trigger, que o `authenticated` não deve escrever directamente — sendo
+`security definer`; `record_exw_version()` ficou inconsistente com o seu próprio vizinho no
+ficheiro.
+
+**Isto bloqueia toda a iteração à nascença** — não é um caso de bordo do fluxo de review, é
+qualquer escrita em produtos, para qualquer role, incluindo admin. Condição de paragem do próprio
+prompt da i4: "sem caminho de escrita RLS → propor migração 0002, sem aplicar." Proposta em
+`supabase/migrations/0002_price_versions_security_definer.sql` (**não aplicada**): `alter
+function tmsi.record_exw_version() security definer set search_path = tmsi, public;` — mesmo
+padrão já usado por `compute_price`/`fx_rate`/`branch_margin`/`override_value` no 0001, aplicado
+à função que faltava. Um comando, reversível (`alter function ... security invoker`), sem tocar
+em dados nem na 0001 (nunca editada).
+
+**Utilizador de teste criado para este achado:** `pm.test@example.test`, role `product_manager`,
+sem filial/canal (não é role com âmbito). Password gerada, `~/tmp/tmsi-sudo/pm-test-password.txt`
+no VPS (600), nunca no repo. Mantido — útil para reprovar o fluxo assim que/se a 0002 for
+aplicada.
+
+**À espera do Pedro:** aplicar a `0002` proposta (ou outra correcção que prefira) antes de
+continuar. Sem código de UI escrito ainda — parado exactamente onde o prompt manda parar.
 
 ## E3, iteração 3 — Administração de utilizadores — ✅ FECHADA 2026-09-04
 
