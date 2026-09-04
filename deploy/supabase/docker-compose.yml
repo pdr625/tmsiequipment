@@ -76,6 +76,22 @@ services:
       GOTRUE_MAILER_URLPATHS_INVITE: ${GOTRUE_MAILER_URLPATHS_INVITE}
       GOTRUE_MAILER_URLPATHS_RECOVERY: ${GOTRUE_MAILER_URLPATHS_RECOVERY}
       GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE}
+      # Recovery only (E3-i1 scope) — confirmation/invite/email_change keep
+      # GoTrue's default {{ .ConfirmationURL }} template, unaffected by this.
+      # GoTrue's default recovery template links to its own /auth/v1/verify,
+      # which redirects back with a PKCE `code` that only exchanges
+      # successfully in the SAME browser that requested the reset (the
+      # code_verifier lives in a cookie there). Recovery links are routinely
+      # opened somewhere else — the phone's mail app, a different browser —
+      # which broke every real attempt. This custom template (served by our
+      # own app over the tmsi_net network, fetched by GoTrue at send time)
+      # links straight to /auth/confirm with token_hash + type=recovery,
+      # verified via verifyOtp — self-contained, no local browser state
+      # needed. No hard depends_on tmsi-app here: that would be circular
+      # (tmsi-app already depends_on auth); the natural startup order
+      # (auth healthy, then tmsi-app) already means tmsi-app is up well
+      # before any real recovery request happens.
+      GOTRUE_MAILER_TEMPLATES_RECOVERY: ${GOTRUE_MAILER_TEMPLATES_RECOVERY}
       GOTRUE_SMTP_HOST: ${GOTRUE_SMTP_HOST}
       GOTRUE_SMTP_PORT: ${GOTRUE_SMTP_PORT}
       GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL}
@@ -114,7 +130,7 @@ services:
     # (curl against the published endpoint, B4/B7).
 
   tmsi-app:
-    image: ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:9665685ce97b07eaaa28551ec907bbf902afa617d82caf8f2790901e5466a8b4
+    image: ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:b93e9a7b5a59596f2f636a52792bf75e6939357bc42734c9b3e29ffa3e460cb6
     container_name: tmsi-app
     restart: unless-stopped
     mem_limit: 192m
