@@ -14,12 +14,12 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅ | em curso |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅, i7 protocolo de verificação ✅ | em curso (falta dashboard) |
 | — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
 | — | Migração 0005 — correcção de câmbio no mesmo dia | ✅ 04/09/2026 |
 | E4 | Migração 0006 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
 | E5 | Operações e endurecimento | por iniciar |
-| E6 | Validação do piloto + preparação da migração para a empresa | por iniciar |
+| E6 | Validação do piloto + preparação da migração para a empresa (gate: `VERIFICATION-PROTOCOL.md`) | por iniciar |
 
 ## E0 — Infra backend — ✅ FECHADA 03/09/2026
 Entregue: stack magra db+auth+rest (rede `tmsi_net` 172.20.40.0/24), schema `tmsi` aplicado
@@ -168,6 +168,32 @@ criar um override sem autor. `product_hs_overrides` não tem `created_at`/`creat
 nenhuma (só o `admin` escreve, e o `audit_log` cobre a tabela). Ambos sinalizados, nenhum
 corrigido nesta iteração — candidatos a migração futura, não bloqueiam nada hoje.
 
+### i7 — Protocolo de verificação de segurança — ✅ FECHADA 04/09/2026
+Iteração documental, sem deploy. `docs/VERIFICATION-PROTOCOL.md` (protocolo re-executável de
+teste/auditoria/formação/demonstração à direcção): quatro camadas de segurança em uma página,
+matriz de visibilidade por papel, 20 passos de teste por papel (browser + API), regras de
+execução em produção, tabela de registo re-utilizável. A matriz-base do prompt foi verificada
+célula a célula contra o schema real (`can_read_costs()`/`can_read_operational()`/
+`products_visible()`, `see_costs`/`see_sell` do `compute_price()`, políticas RLS reais) —
+**16 correcções** encontradas e feitas, nenhuma célula ficou por confirmar. Duas classes de
+erro dominaram: (a) o papel `viewer` estava marcado ❌ em 7 células onde a BD real lhe dá
+acesso total e sem âmbito (`can_read_costs()`/`can_read_operational()`/`see_costs`/`audit_read`
+incluem `viewer` sem condição nenhuma — é um papel de supervisão total, não "só leitura
+limitada"); (b) a capacidade de criar overrides tinha `product_manager` marcado ✅ (não está em
+`overrides_write` nenhures) e `branch_manager`/`logistics` marcados ❌ (podem escrever, cada um
+restrito a um subconjunto diferente de `kind`/filial). Detalhe completo, célula a célula:
+`STATE.md`.
+
+## Gate de produção
+**Princípio do Pedro, registado 2026-09-04:** provas com dados fictícios validam o
+**mecanismo** (a lógica de acesso está correcta), não o **ambiente** (que ninguém com acesso
+legítimo consegue, na prática, ver o que não devia). Antes de qualquer utilizador real ou dado
+real, e antes de qualquer apresentação à direcção: **re-execução completa do
+`docs/VERIFICATION-PROTOCOL.md`, com registo assinado** (secção 7 desse documento). Repete-se a
+cada migração que toque em RLS/vistas/privilégios e a cada release major. A E6 (validação do
+piloto + preparação da migração para a empresa) só avança depois da primeira execução formal
+deste protocolo — é o critério de entrada dessa etapa, não só uma recomendação.
+
 ## Migração 0003/0004 — protecção de custos ao nível da BD — ✅ FECHADA 04/09/2026
 Fecha a pendência da i4: RLS só protegia linhas, nunca colunas — um pedido manual à API,
 contornando a app, ainda lia `exw_price`/`sap_code_*`/`supplier_id`. O candidato simples do
@@ -217,6 +243,11 @@ status.json + métrica T8 · decisão sobre lockfile/pinagem definitiva das imag
 Pode correr em paralelo com a E3; não bloqueia nem é bloqueada por ela.
 
 ## E6 — Validação do piloto + migração para a empresa — por iniciar
+⚠️ **Gate de entrada (ver "Gate de produção" acima):** não arranca sem uma primeira execução
+formal do `docs/VERIFICATION-PROTOCOL.md`, com registo assinado — as provas por dados
+fictícios de cada iteração validam o mecanismo, não substituem esta execução com dados e
+utilizadores reais.
+
 Validação com utilizadores-piloto (dados sempre fictícios). Preparar: procedimento de
 migração (`git clone` + novo `.env` + `pg_restore` — destino: servidor da empresa),
 autorização escrita ao abrigo da licença, e o esclarecimento CPI art. L113-9 (questão do

@@ -3,10 +3,69 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 6 (overrides + auditoria) — ✅ FECHADA.** Próximo: dashboard, ou
-E4 (migração 0006) quando a decisão L2 do Pedro estiver tomada. Ordem e critérios de saída de
-cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2, E3-i3, E3-i4, E3-i5, E3-i6 e as
-migrações 0003/0004/0005 estão fechadas.
+**Etapa actual: E3, iteração 7 (protocolo de verificação) — ✅ FECHADA.** Próximo: dashboard
+(último item da E3), ou E4 (migração 0006) quando a decisão L2 do Pedro estiver tomada. A E6
+tem agora um gate de entrada explícito — ver `docs/ROADMAP.md`, secção "Gate de produção".
+Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2, E3-i3,
+E3-i4, E3-i5, E3-i6, E3-i7 e as migrações 0003/0004/0005 estão fechadas.
+
+## E3, iteração 7 — Protocolo de verificação de segurança — ✅ FECHADA 2026-09-04
+
+Iteração documental, sem deploy nem migração — nenhum container tocado, `git status` confirmado
+limpo antes e depois (além dos próprios commits desta iteração). Entregue:
+`docs/VERIFICATION-PROTOCOL.md` (protocolo re-executável de teste de aceitação, auditoria
+periódica, formação de utilizadores novos e demonstração à direcção).
+
+**F0, achado antes de escrever código nenhum:** a árvore não estava limpa — a alteração de
+`deploy/supabase/docker-compose.yml` (pin do digest da i6) tinha ficado por commitar no fecho
+anterior. Commitado à parte (`cdf5f7e`) antes de arrancar esta iteração.
+
+**F1 — as 16 correcções feitas à matriz do prompt, célula a célula, contra o schema real
+(nenhuma célula ficou por confirmar):**
+
+| # | Linha | Papel | Valor do prompt | Valor real | Fonte |
+|---|---|---|---|---|---|
+| 1 | Custos | `branch_manager` | ✅ | ◐ (filial pedida) | `compute_price()`.`see_costs` verifica `b.id = any(my_branches())` para `branch_manager` — só a filial pedida, não o produto inteiro (nota ¹ do documento: EXW/SAP em `v_products` não têm esta restrição, só o `compute_price()`) |
+| 2 | Custos | `viewer` | ❌ | ✅ | `can_read_costs()` e `see_costs` incluem `viewer` sem condição |
+| 3 | Códigos SAP / fornecedor | `viewer` | ❌ | ✅ | `can_read_costs()` inclui `viewer` (0003, `tmsi.v_products`) |
+| 4 | HS/peso/dimensões | `viewer` | ❌ | ✅ | `can_read_operational()` = `can_read_costs() OR logistics`; `can_read_costs()` inclui `viewer` |
+| 5 | Breakdown do motor | `branch_manager` | ✅ | ◐ (filial pedida) | mesma fonte que #1, sem a nuance do EXW (esta linha é 100% `compute_price()`) |
+| 6 | Breakdown do motor | `viewer` | ❌ | ✅ | mesma fonte que #2 |
+| 7 | Configuração | `logistics` (anotação) | "◐ transporte" | "◐ transporte/direitos" | `config_write` em `tmsi.customs_rates` também inclui `logistics`, não só `tmsi.transport_tiers` |
+| 8 | Criar overrides | `product_manager` | ✅ | ❌ | `overrides_write` (0001 §8) não tem cláusula nenhuma para `product_manager` |
+| 9 | Criar overrides | `branch_manager` | ❌ | ◐ (transport/margin/coef, filial própria) | `overrides_write`: `has_role('branch_manager') and branch_id = any(my_branches()) and kind in ('transport','margin','coef')` |
+| 10 | Criar overrides | `logistics` | ❌ | ◐ (só `duty`, qualquer filial) | `overrides_write`: `has_role('logistics') and kind = 'duty'` — sem restrição de filial |
+| 11 | Ver valores de overrides | `branch_manager` | ✅ | ◐ (filial própria) | `overrides_read`: `can_read_costs() and (admin/finance/pm/viewer or branch_id = any(my_branches()))` — só o `branch_manager` cai no último ramo |
+| 12 | Ver valores de overrides | `viewer` | ❌ | ✅ | `viewer` nomeado directamente em `overrides_read` |
+| 13 | Auditoria global | `branch_manager` | ❌ | ✅ (sem âmbito, não ◐) | `audit_read` (0001 §8) não tem cláusula de filial nenhuma — acesso total, ao contrário do resto da matriz onde `branch_manager` costuma ser ◐ |
+| 14 | Auditoria global | `viewer` | ❌ | ✅ | `viewer` nomeado directamente em `audit_read` |
+| 15 | Artigos não-activos | `logistics` | ❌ | ✅ | `tmsi.products_visible()`: `logistics` está no grupo de visibilidade incondicional (sem filtro de `status` nem de filial) |
+| 16 | Artigos não-activos | `viewer` | ❌ | ✅ | mesma fonte que #15 |
+
+**Duas classes de erro dominaram, não aleatórias:** (a) 7 das 16 correcções foram `viewer`
+marcado ❌ onde a BD lhe dá acesso total — o desenho real trata `viewer` como um papel de
+**supervisão total sem âmbito**, não "leitura limitada"; isto já tinha aparecido nas notas da
+i2 desta sessão (`can_read_costs()` inclui `viewer`) mas nunca tinha sido reflectido num
+documento de auditoria formal até agora. (b) a capacidade de criar overrides tinha as três
+correcções mais graves da lista (#8–10) — um papel marcado com acesso que não tem
+(`product_manager`) e dois marcados sem acesso que efectivamente têm, cada um restrito de forma
+diferente (`branch_manager` por `kind`+filial, `logistics` só por `kind`).
+
+**Duas notas de schema não redutíveis a uma célula da matriz, registadas como texto no
+documento (secção 3):** a assimetria em que `logistics` pode criar um override de `duty` mas
+não o consegue ler depois (comportamento real da 0001, não um defeito desta iteração); e que
+`Artigos não-activos` não filtra por `status` nenhum para cinco dos oito papéis — só
+`branch_manager`/`sales`/`agent` têm essa restrição adicional.
+
+**F1, secção 4 (passos de teste) — restrição 3:** um único ajuste de rota necessário — o passo
+F referia `/admin` como rota gated; a rota real é `/admin/users` (`/admin` sozinho não tem
+`page.tsx`, não é uma rota). O resto da secção 4 já usava descrição conceptual (não nomes de
+rota literais) e não precisou de ajuste.
+
+**Nenhuma célula ficou sem confirmação** — todas as 12 linhas × 8 papéis foram lidas
+directamente do SQL aplicado (`supabase/migrations/0001_initial_schema.sql`,
+`0003_products_column_privileges.sql`, `0004_products_safe_routing_columns.sql`), não
+assumidas por semelhança com outras linhas.
 
 ## E3, iteração 6 — Overrides + auditoria — F0: matriz (0001, real, não assumida)
 
