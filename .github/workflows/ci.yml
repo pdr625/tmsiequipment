@@ -31,6 +31,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7.0.1
 
+      # Registered as an E1 pendency (STATE.md) after attempt #1 built green
+      # with an empty key silently baked into the client bundle. Fail loud
+      # instead of shipping a broken image with a passing CI status.
+      - name: Verify NEXT_PUBLIC_SUPABASE_ANON_KEY is set
+        env:
+          ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$ANON_KEY" ]; then
+            echo "::error::NEXT_PUBLIC_SUPABASE_ANON_KEY repository secret is empty or unset — the built image would ship a broken client bundle."
+            exit 1
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.3.0
 
