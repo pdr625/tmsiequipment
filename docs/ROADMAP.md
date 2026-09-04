@@ -14,8 +14,8 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto | em curso |
-| E4 | Migração 0002 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅ | em curso |
+| E4 | Migração 0003 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
 | E5 | Operações e endurecimento | por iniciar |
 | E6 | Validação do piloto + preparação da migração para a empresa | por iniciar |
 
@@ -106,19 +106,28 @@ essa lacuna que deixou o bug do `GET` acima sobreviver, sem detecção, da i1 at
 uma prova envolver um link de email a ser clicado, incluir pelo menos um destinatário real atrás
 de um gateway corporativo (M365/EOP, Proofpoint, Mimecast) antes de considerar a prova fechada.
 
-### i4 — Formulário de produto — próxima (prompt já recebido)
-Ciclo de vida (`draft → pending → active ⇄ review → inactive → discontinued`) e o motor
-`compute_price` na UI: bloqueios reais de activação (HS/peso/código SAP, excepto opções/
-serviços), auto-transição para `review` + nova entrada em `price_versions` ao mudar o EXW de um
-item activo, breakdown de custos só para roles com `can_read_costs()` (reusa a i2),
-`price_versions`/`audit_log` na UI. Escritas só pelos ramos que a RLS real permitir — se não
-permitir o que o ecrã precisa, propor migração 0002 sem a aplicar. Nunca editar a 0001. Depois:
-configuração (câmbios, fees, transporte, direitos, margens), overrides + histórico/auditoria,
-dashboard.
+### i4 — Formulário de produto — ✅ FECHADA 04/09/2026
+Ciclo de vida e o motor `compute_price` na UI: `/products`, `/products/new` (rascunho mínimo),
+`/products/[id]` (detalhe, breakdown por filial, histórico de `price_versions`, `audit_log`,
+edição gated por `canManageProducts()`). Status é um `<select>` livre — a 0001 não impõe grafo de
+transições além do trigger de activação e do de reabertura por EXW; nenhuma máquina de estados
+inventada no cliente. As 6 provas confirmadas via API (detalhe: `STATE.md`).
 
-## E4 — Migração 0002 — por iniciar
-Políticas de escrita por estado (quem aprova — questão L2 do handover, decisão do Pedro
-pendente), regra dos 90 dias, notificações. Nunca editar a 0001 aplicada. Backup + restauro
+⚠️ **Defeito real da 0001, encontrado em F1 antes de qualquer código de UI, corrigido pela
+migração `0002` (aprovada pelo Pedro, aplicada 04/09/2026):** `tmsi.record_exw_version()` não era
+`security definer` — toda e qualquer escrita em `tmsi.products` falhava por RLS em
+`tmsi.price_versions`, para qualquer role. `tmsi.audit()` tinha o mesmo tipo de falha por omissão
+de `search_path` (apanhado na revisão do Pedro antes de aplicar). Detalhe completo: `STATE.md`,
+`supabase/migrations/0002_price_versions_security_definer.sql`.
+
+Depois: configuração (câmbios, fees, transporte, direitos, margens), overrides + histórico/
+auditoria, dashboard.
+
+## E4 — Migração 0003 — por iniciar
+A numeração avança: `0002` já foi consumida pelo defeito real de RLS encontrado e corrigido na
+i4 (não é a migração funcional da E4). Políticas de escrita por estado (quem aprova — questão L2
+do handover, decisão do Pedro pendente), regra dos 90 dias, notificações. Nunca editar a 0001
+aplicada nem a 0002 aplicada. Backup + restauro
 provado antes de aplicar.
 
 ## E5 — Operações e endurecimento — por iniciar

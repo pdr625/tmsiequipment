@@ -3,9 +3,80 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 4 (formulário de produto) — migração 0002 aplicada, F1 fechado, a
-avançar para o desenho do ecrã.** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`.
-E0, E1, E2, E3-i1, E3-i2 e E3-i3 estão fechadas.
+**Etapa actual: E3, iteração 4 — ✅ FECHADA 2026-09-04 (provas de API; faltam as provas de
+browser do Pedro).** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2,
+E3-i1, E3-i2 e E3-i3 estão fechadas.
+
+## E3, iteração 4 — Formulário de produto — ✅ FECHADA 2026-09-04
+
+**Digest:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:68c5a95e9f8e8bc9ce7f1d05be877089e8cc6aa398cb7c8215dcf9f811179aa4`
+(`Created` 2026-09-04T17:54:06Z). **Footprint:** RAM available 215 MB; swap 1011/4096 MB (≈25%);
+disco 47%. Containers: db 14.1M/320M, auth 4.0M/128M, rest 3.6M/128M, tmsi-app 24.7M/192M.
+
+**Ficheiros entregues:** `/products` (listagem, âmbito por `products_read`, mesmo padrão "pergunta
+ao Postgres" do `/prices`); `/products/new` (rascunho mínimo — só as colunas `not null` sem
+`default` de `tmsi.products`, coerente com o próprio ciclo de vida "rascunho não precisa de
+tudo"); `/products/[id]` (detalhe: breakdown de `compute_price()` por filial, histórico de
+`price_versions`, `audit_log`, formulário de edição gated por `canManageProducts()`).
+`canManageProducts()` (`auth-guard.ts`) espelha exactamente a `USING` clause de
+`products_write_pm` (`has_role('admin') or has_role('product_manager')`).
+
+**Dois CI failures apanhados e corrigidos antes do deploy** (nenhum exigiu decisão de arquitectura,
+ambos defeitos mecânicos de tipos):
+1. `state?.error`/`state?.success` num union `{error} | {success}` não compila — cada ramo não
+   tem a propriedade do outro, mesmo com `?.`. Corrigido para `'error' in state`, o padrão já
+   usado no `ErrorText` do admin/users.
+2. `.overrideTypes()` encadeado directamente a seguir a `.rpc()` — nunca usado antes nesta app
+   (só depois de `.from().select()`) — parte do princípio de que sem tipos gerados de Database
+   (decisão da E1: sem lockfile), o `.rpc()` cai num tipo solto que o guard interno do
+   `overrideTypes` rejeita para um retorno em tabela/array. Resolvido com o mesmo cast simples
+   (`as`) que o `prices/page.tsx` já usa para as suas próprias linhas de vista, através de
+   `unknown` (o tipo inferido de linha única e o array real não têm sobreposição estrutural
+   suficiente para um `as` directo).
+
+**Estado (status) é um `<select>` simples sobre os 6 valores, sem restrição nenhuma do lado do
+cliente** — verificado no schema real: para além do trigger de activação (`active`/`review`) e do
+trigger de reabertura por alteração de EXW num produto `active`, a 0001 **não impõe grafo de
+transições nenhum**. Uma máquina de estados no cliente estaria a inventar regras que o schema não
+tem; o formulário deixa passar qualquer transição e mostra o erro real da BD quando a activação
+falha.
+
+**Provas (as 6 do prompt), todas confirmadas via API antes do deploy pedir confirmação ao
+Pedro:**
+1. **Rascunho + `audit_log`:** criado `T-9002` como `pm.test` (role `product_manager`) → `201`;
+   `audit_log` confirmado directamente na BD com `actor` = user_id exacto do `pm.test`.
+2. **Bloqueio de activação, sequência real do trigger, depois sucesso:** `T-9002` sem HS → erro
+   real `"Product T-9002 cannot be active without an HS code"`; corrigido HS → bloqueia em peso;
+   corrigido peso → bloqueia em unidade; corrigido unidade → bloqueia em código SAP da filial
+   fornecedora; corrigido SAP → `active`, sucesso. **Excepção options/services provada à parte**
+   (`T-9004`, `item_type=option`, `parent_id=T-0005`): activou **sem nunca ter HS nem peso**,
+   bloqueado só em unidade e depois só em SAP — a isenção é real e tem o âmbito certo (não isenta
+   unidade nem SAP).
+3. **EXW em produto activo → `review` automático + nova versão, sem intervenção manual:**
+   `PATCH` só com `exw_price` (sem tocar em `status`) em `T-9002` (activo) → resposta já com
+   `status: "review"`; `tmsi.price_versions` confirmada com 2 linhas (criação + a alteração).
+4. **Custos por role:** `compute_price('T-0005','SA')` como `pm.test` → todas as colunas de
+   custo preenchidas (`total_cost_eur: 890`, `margin: 0.50`, etc.); o mesmo RPC como `sales.sa`
+   → custos todos `null`, `min_price`/`ref_price` continuam visíveis (mesmo padrão da i2).
+5. **Ramo negado:** `POST /products` como `sales.sa` → `403` RLS explícito; `PATCH` num produto
+   existente → `200` mas array **vazio** (`[]`, `Prefer: return=representation`) — RLS excluiu a
+   linha do conjunto alvo do `UPDATE`, zero linhas afectadas, confirmado directamente na BD que
+   `T-0005` **não mudou** (`890.00`, `updated_at` inalterado). ⚠️ Registado porque a primeira
+   tentativa deste teste, sem `return=representation`, deu `204` — ambíguo entre "escreveu" e
+   "zero linhas". Nunca tratado como prova sem o `[]`/verificação directa na BD.
+6. Sem regressões: `/login`, `/prices`, `/admin/users`, `/api/health` confirmados sem alteração
+   de comportamento depois do deploy; `/products` (sem sessão) → 307, mesma protecção por
+   omissão da middleware que as restantes rotas.
+
+**Produtos de teste ficam no seed, documentados aqui** (não fazem parte da 0001/seed original,
+IDs `T-9xxx` deliberadamente fora do intervalo `T-0001`–`T-0010`): `T-9002` (equipment, ficou em
+`review` — demonstra o ciclo EXW→review), `T-9004` (option de `T-0005`, `active` — demonstra a
+isenção HS/peso). `T-9001` (do achado da 0002, F1) foi apagado; `T-0005` foi revertido ao estado
+do seed depois desse teste — ver secção anterior.
+
+**Falta (passos do Pedro):** confirmar CI verde (já confirmado nesta sessão, não precisa de
+repetir) e as provas de browser — ver ESTADO final da sessão. A questão L2 (workflow de
+aprovação) fica explicitamente em aberto para a E4, não tocada nesta iteração.
 
 ## E3, iteração 4 — Formulário de produto — F1: migração 0002 (defeito real da 0001, corrigido)
 
