@@ -92,6 +92,11 @@ services:
       # (auth healthy, then tmsi-app) already means tmsi-app is up well
       # before any real recovery request happens.
       GOTRUE_MAILER_TEMPLATES_RECOVERY: ${GOTRUE_MAILER_TEMPLATES_RECOVERY}
+      # Same reasoning, extended to INVITE now that E3-i3 actually exercises
+      # it: a raw POST /invite (no code_challenge) yields an implicit-flow
+      # token whose /verify redirect puts tokens in a URL fragment, which a
+      # server-side route handler can never see.
+      GOTRUE_MAILER_TEMPLATES_INVITE: ${GOTRUE_MAILER_TEMPLATES_INVITE}
       GOTRUE_SMTP_HOST: ${GOTRUE_SMTP_HOST}
       GOTRUE_SMTP_PORT: ${GOTRUE_SMTP_PORT}
       GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL}
@@ -130,7 +135,7 @@ services:
     # (curl against the published endpoint, B4/B7).
 
   tmsi-app:
-    image: ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:0d613cb86d65cd94a774896ae3c770480cfba4e85c84c54dc7712ee52ffd1020
+    image: ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:3a372e18ed284790a6e29bf343e0c7657b0cdb886096d1c87956bf43bdd29360
     container_name: tmsi-app
     restart: unless-stopped
     mem_limit: 192m
@@ -145,6 +150,14 @@ services:
     environment:
       HOSTNAME: 0.0.0.0
       PORT: 3000
+      # E3-i3: GoTrue admin operations (invite, ban) have no RLS/security-
+      # definer equivalent — they're GoTrue-level, not Postgres. Runtime
+      # env only, never NEXT_PUBLIC_* (never reaches the client bundle).
+      # Every server action using it checks tmsi.has_role('admin') via the
+      # caller's own session first — see src/lib/auth-guard.ts. New attack
+      # surface, documented: whoever compromises this container gets full
+      # GoTrue admin + PostgREST access.
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
     ports:
       - "172.20.40.1:3001:3000"
     networks:
