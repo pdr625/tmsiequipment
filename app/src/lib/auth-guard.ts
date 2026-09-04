@@ -18,3 +18,15 @@ export async function isAdmin(): Promise<boolean> {
   const { data } = await supabase.schema('tmsi').rpc('has_role', { r: 'admin' });
   return data === true;
 }
+
+// Mirrors tmsi.products_write_pm's own USING clause exactly (0001 §8:
+// `has_role('admin') or has_role('product_manager')`) — two calls to the
+// same has_role() RLS already relies on, not a new authorization rule.
+export async function canManageProducts(): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const [{ data: admin }, { data: pm }] = await Promise.all([
+    supabase.schema('tmsi').rpc('has_role', { r: 'admin' }),
+    supabase.schema('tmsi').rpc('has_role', { r: 'product_manager' }),
+  ]);
+  return admin === true || pm === true;
+}
