@@ -97,7 +97,8 @@ isso aí "pelo menos uma linha não-nula" é um sinal fiável por chamador.
    (`201`); activação bloqueada sem HS (erro real, não de permissão); preenchidos HS/peso/
    unidade/SAP → activa; EXW num produto `active`, sem tocar em `status` no pedido → `review`
    automático + nova linha em `price_versions` — a suite da i4 sem regressão nenhuma.
-3. Provas de browser do Pedro (ver ESTADO da sessão).
+3. Confirmado pelo Pedro no browser: como admin tudo igual; como `sales.sa`, `/products` e
+   `/prices` continuam a funcionar, sem custos.
 4. Sem outros endpoints partidos: `/auth/v1/health`, `/login`, `/prices`, `/products`,
    `/admin/users`, `/api/health` confirmados sem alteração de comportamento. Cache de schema do
    PostgREST recarregou-se sozinha (self-hosted, sem `NOTIFY`/restart manual necessário — a
