@@ -71,3 +71,35 @@ export async function pricingConfigReadAccess(): Promise<{ readCosts: boolean; r
   ]);
   return { readCosts: readCosts === true, readLogistics: readLogistics === true };
 }
+
+// Coarse: "can this role write at least one price_overrides kind" —
+// mirrors overrides_write's OR-list of roles (0001 §8), not its finer
+// per-kind/per-branch conditions (branch_manager: transport/margin/coef
+// only, own branch; logistics: duty only) — those stay entirely on RLS,
+// exactly like the product edit form lets any status through and shows
+// the real trigger error. This only decides whether to render the create
+// form at all.
+export async function canManageAnyPriceOverride(): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const [{ data: admin }, { data: finance }, { data: branchManager }, { data: logistics }] = await Promise.all([
+    supabase.schema('tmsi').rpc('has_role', { r: 'admin' }),
+    supabase.schema('tmsi').rpc('has_role', { r: 'finance' }),
+    supabase.schema('tmsi').rpc('has_role', { r: 'branch_manager' }),
+    supabase.schema('tmsi').rpc('has_role', { r: 'logistics' }),
+  ]);
+  return admin === true || finance === true || branchManager === true || logistics === true;
+}
+
+// Mirrors audit_read on tmsi.audit_log (0001 §8: admin/finance/viewer/
+// branch_manager — notably NOT product_manager or logistics, even though
+// both can write products/overrides).
+export async function canReadAuditLog(): Promise<boolean> {
+  const supabase = await createSupabaseServerClient();
+  const [{ data: admin }, { data: finance }, { data: viewer }, { data: branchManager }] = await Promise.all([
+    supabase.schema('tmsi').rpc('has_role', { r: 'admin' }),
+    supabase.schema('tmsi').rpc('has_role', { r: 'finance' }),
+    supabase.schema('tmsi').rpc('has_role', { r: 'viewer' }),
+    supabase.schema('tmsi').rpc('has_role', { r: 'branch_manager' }),
+  ]);
+  return admin === true || finance === true || viewer === true || branchManager === true;
+}

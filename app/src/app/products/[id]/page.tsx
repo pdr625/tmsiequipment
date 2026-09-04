@@ -68,12 +68,34 @@ type PriceBreakdown = {
   min_price: number | null;
   ref_price: number | null;
   alert: string | null;
+  overrides: string[] | null;
 };
 
 type PriceVersion = { id: number; version: number; currency: string; exw_price: number; changed_at: string; note: string | null };
 type AuditEntry = { id: number; at: string; actor: string | null; action: string; old_row: unknown; new_row: unknown };
+type PriceOverride = {
+  id: number;
+  branch_id: string;
+  kind: string;
+  value: number;
+  reason: string;
+  valid_from: string;
+  valid_to: string | null;
+};
+type HsOverride = { scope_type: string; scope_id: string; hs_code: string; reason: string };
 type Branch = { id: string; name: string };
 type RefRow = { id?: string; code?: string; name?: string; description?: string };
+
+// today <= valid_from -> future; valid_to set and < today -> expired;
+// otherwise active — same classification /overrides/page.tsx uses,
+// mirroring tmsi.override_value()'s own date range (0001 §7), never a
+// new rule.
+function overrideStatus(validFrom: string, validTo: string | null): 'active' | 'expired' | 'future' {
+  const today = new Date().toISOString().slice(0, 10);
+  if (validFrom > today) return 'future';
+  if (validTo !== null && validTo < today) return 'expired';
+  return 'active';
+}
 
 // Everything a role should not see is decided by Postgres, not this page:
 // tmsi.v_products (E3-0003/0004) gates rows via tmsi.products_visible()
@@ -123,6 +145,8 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     { data: hsCodes },
     { data: versions },
     { data: auditEntries },
+    { data: priceOverrides },
+    { data: hsOverrides },
     priceResults,
   ] = await Promise.all([
     supabase.schema('tmsi').from('branches').select('id, name').eq('active', true).order('id').overrideTypes<Branch[], { merge: false }>(),
@@ -145,6 +169,19 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       .eq('row_pk', id)
       .order('at', { ascending: false })
       .overrideTypes<AuditEntry[], { merge: false }>(),
+    supabase
+      .schema('tmsi')
+      .from('price_overrides')
+      .select('id, branch_id, kind, value, reason, valid_from, valid_to')
+      .eq('product_id', id)
+      .order('valid_from', { ascending: false })
+      .overrideTypes<PriceOverride[], { merge: false }>(),
+    supabase
+      .schema('tmsi')
+      .from('product_hs_overrides')
+      .select('scope_type, scope_id, hs_code, reason')
+      .eq('product_id', id)
+      .overrideTypes<HsOverride[], { merge: false }>(),
     Promise.all(
       branchIds.map((b) => supabase.schema('tmsi').rpc('compute_price', { p_product: id, p_branch: b })),
     ),
@@ -158,6 +195,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // setof-row array don't structurally overlap enough for a direct `as`.
   const priceRows = priceResults.flatMap((r) => (r.data ?? []) as unknown as PriceBreakdown[]);
   const seesCosts = priceRows.some((r) => r.total_cost_eur !== null);
+
+  // Only scope_type='branch' actually reaches compute_price()'s duty
+  // calculation (F0 finding, E3-i6/STATE.md) — a channel/agent override
+  // for this product would never show up here, matching what the engine
+  // itself does.
+  const hsOverrideFor = (branchId: string) => hsOverrides?.find((h) => h.scope_type === 'branch' && h.scope_id === branchId);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -210,27 +253,41 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 <th className="py-2 pr-4">Min price</th>
                 <th className="py-2 pr-4">Ref price</th>
                 <th className="py-2 pr-4">Alert</th>
+                <th className="py-2 pr-4">Overridden</th>
               </tr>
             </thead>
             <tbody>
-              {priceRows.map((r) => (
-                <tr key={r.branch_id} className="border-b border-gray-100">
-                  <td className="py-2 pr-4">{r.branch_id}</td>
-                  {seesCosts && (
-                    <>
-                      <td className="py-2 pr-4">{r.total_cost_eur ?? '—'}</td>
-                      <td className="py-2 pr-4">{r.margin ?? '—'}</td>
-                    </>
-                  )}
-                  <td className="py-2 pr-4">
-                    {r.min_price ?? '—'} {r.currency}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {r.ref_price ?? '—'} {r.currency}
-                  </td>
-                  <td className="py-2 pr-4">{r.alert ?? '—'}</td>
-                </tr>
-              ))}
+              {priceRows.map((r) => {
+                const hsOverride = hsOverrideFor(r.branch_id);
+                const overriddenInputs = [...(r.overrides ?? []), ...(hsOverride ? ['hs_code'] : [])];
+                return (
+                  <tr key={r.branch_id} className="border-b border-gray-100">
+                    <td className="py-2 pr-4">{r.branch_id}</td>
+                    {seesCosts && (
+                      <>
+                        <td className="py-2 pr-4">{r.total_cost_eur ?? '—'}</td>
+                        <td className="py-2 pr-4">{r.margin ?? '—'}</td>
+                      </>
+                    )}
+                    <td className="py-2 pr-4">
+                      {r.min_price ?? '—'} {r.currency}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {r.ref_price ?? '—'} {r.currency}
+                    </td>
+                    <td className="py-2 pr-4">{r.alert ?? '—'}</td>
+                    <td className="py-2 pr-4">
+                      {overriddenInputs.length === 0 ? (
+                        '—'
+                      ) : (
+                        <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700" title={hsOverride ? `HS: ${hsOverride.hs_code}` : undefined}>
+                          {overriddenInputs.join(', ')}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -261,6 +318,70 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               ))}
             </tbody>
           </table>
+        </section>
+      )}
+
+      {((priceOverrides && priceOverrides.length > 0) || (hsOverrides && hsOverrides.length > 0)) && (
+        <section className="mb-8">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">Overrides</h2>
+            <Link href="/overrides" className="text-xs text-gray-600 underline">
+              Manage overrides
+            </Link>
+          </div>
+          {priceOverrides && priceOverrides.length > 0 && (
+            <table className="mb-3 w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-left text-gray-500">
+                  <th className="py-2 pr-4">Branch</th>
+                  <th className="py-2 pr-4">Kind</th>
+                  <th className="py-2 pr-4">Value</th>
+                  <th className="py-2 pr-4">Reason</th>
+                  <th className="py-2 pr-4">Valid</th>
+                  <th className="py-2 pr-4">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {priceOverrides.map((o) => (
+                  <tr key={o.id} className="border-b border-gray-100">
+                    <td className="py-2 pr-4">{o.branch_id}</td>
+                    <td className="py-2 pr-4">{o.kind}</td>
+                    <td className="py-2 pr-4">{o.value}</td>
+                    <td className="py-2 pr-4">{o.reason}</td>
+                    <td className="py-2 pr-4">
+                      {o.valid_from} → {o.valid_to ?? 'open'}
+                    </td>
+                    <td className="py-2 pr-4">{overrideStatus(o.valid_from, o.valid_to)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {hsOverrides && hsOverrides.length > 0 && (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-left text-gray-500">
+                  <th className="py-2 pr-4">Scope</th>
+                  <th className="py-2 pr-4">HS code</th>
+                  <th className="py-2 pr-4">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hsOverrides.map((o) => (
+                  <tr key={`${o.scope_type}-${o.scope_id}`} className="border-b border-gray-100">
+                    <td className="py-2 pr-4">
+                      {o.scope_type}: {o.scope_id}
+                      {o.scope_type !== 'branch' && (
+                        <span className="ml-2 rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">no effect</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4">{o.hs_code}</td>
+                    <td className="py-2 pr-4">{o.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
       )}
 
