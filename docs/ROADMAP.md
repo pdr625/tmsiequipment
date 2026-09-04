@@ -15,7 +15,8 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
 | E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅ | em curso |
-| E4 | Migração 0003 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
+| — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
+| E4 | Migração 0005 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
 | E5 | Operações e endurecimento | por iniciar |
 | E6 | Validação do piloto + preparação da migração para a empresa | por iniciar |
 
@@ -125,22 +126,33 @@ de `search_path` (apanhado na revisão do Pedro antes de aplicar). Detalhe compl
 não tem protecção nenhuma ao nível da coluna, só da linha — `compute_price()` esconde os valores
 derivados do EXW, mas as páginas liam a tabela crua. Corrigido ao nível do `.select()`
 (`can_read_costs()` escolhe a lista de colunas antes do pedido sair, nunca ao nível da
-renderização) — provado ao nível do payload, não só do ecrã. **Candidata registada para a
-E4/0003:** protecção real ao nível da BD para `tmsi.products` exigiria uma vista `security
-definer` (o mesmo padrão de `v_selling_prices`) — privilégios de coluna Postgres não servem aqui,
-porque todos os utilizadores autenticados partilham o mesmo role Postgres (`authenticated`) via
-PostgREST, independentemente do seu role em `tmsi.user_roles`. Até essa vista existir, a
-disciplina de `.select()` condicional na app é a única protecção — cada página nova sobre
-`tmsi.products` repete o risco. Detalhe completo: `STATE.md`.
+renderização) — provado ao nível do payload, não só do ecrã. ✅ **A candidata registada aqui foi
+implementada — ver secção "Migração 0003/0004" abaixo. Fechada.**
 
 Depois: configuração (câmbios, fees, transporte, direitos, margens), overrides + histórico/
 auditoria, dashboard.
 
-## E4 — Migração 0003 — por iniciar
-A numeração avança: `0002` já foi consumida pelo defeito real de RLS encontrado e corrigido na
-i4 (não é a migração funcional da E4). Políticas de escrita por estado (quem aprova — questão L2
-do handover, decisão do Pedro pendente), regra dos 90 dias, notificações. Nunca editar a 0001
-aplicada nem a 0002 aplicada. Backup + restauro
+## Migração 0003/0004 — protecção de custos ao nível da BD — ✅ FECHADA 04/09/2026
+Fecha a pendência da i4: RLS só protegia linhas, nunca colunas — um pedido manual à API,
+contornando a app, ainda lia `exw_price`/`sap_code_*`/`supplier_id`. O candidato simples do
+prompt original (`REVOKE SELECT (col)`) revelou-se um no-op silencioso (privilégios de coluna
+Postgres são aditivos sobre os de tabela — 0001 já concede tudo à tabela); e uma vista ingénua
+para os roles de custo lerem as colunas revogadas **ignorava a RLS por completo** (dono com
+`BYPASSRLS`). O desenho final: `REVOKE`/`GRANT` ao nível certo na tabela + `tmsi.v_products`
+(vista com semântica de dono para o acesso a colunas, mas visibilidade de linha replicada
+explicitamente via `tmsi.products_visible()`, a mesma função que a policy `products_read` passou
+a chamar). Duas fronteiras nomeadas — `can_read_operational()` (custos ou `logistics`, que já lê
+dados físicos noutro lado) e `can_read_costs()` (só financeiro) — não uma genérica. 0004 corrigiu
+uma regressão da própria 0003 (primary_branch/sold_in tinham ficado gated, partindo o
+price-by-branch para sales/agent) antes de qualquer prova ser reportada feita. As 4 provas do
+prompt confirmadas, incluindo a suite completa da i4 sem regressão. Detalhe completo, incluindo
+o percurso empírico de F1 (`BEGIN`/`ROLLBACK`) que descartou o candidato simples: `STATE.md`.
+
+## E4 — Migração 0005 — por iniciar
+A numeração avança duas vezes: `0002` foi consumida pelo defeito real de RLS da i4, `0003`/`0004`
+pela protecção de custos ao nível da BD (nenhuma é a migração funcional da E4). Políticas de
+escrita por estado (quem aprova — questão L2 do handover, decisão do Pedro pendente), regra dos
+90 dias, notificações. Nunca editar a 0001/0002/0003/0004 aplicadas. Backup + restauro
 provado antes de aplicar.
 
 ## E5 — Operações e endurecimento — por iniciar

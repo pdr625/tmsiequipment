@@ -3,9 +3,115 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 4 — ✅ FECHADA 2026-09-04, confirmada pelo Pedro no browser
-(`sales.sa`, `/products`, já não vê o EXW).** Ordem e critérios de saída de cada etapa:
-`docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2 e E3-i3 estão fechadas.
+**Etapa actual: migração 0003/0004 (protecção de custos ao nível da BD) — ✅ FECHADA
+2026-09-04.** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1,
+E3-i2, E3-i3 e E3-i4 estão fechadas.
+
+## Migração 0003/0004 — protecção dos custos ao nível da BD — ✅ FECHADA 2026-09-04
+
+**Digest final:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:183e26ab19570034825344575ab19ccb94489579ab828386dbef88c98e831e03`
+(`Created` 2026-09-04T19:30:07Z). **Footprint:** RAM available 179 MB; swap 1040/4096 MB (≈25%);
+disco 47%. Containers: db 11.3M/320M, auth 1.9M/128M, rest 3.3M/128M, tmsi-app 23.6M/192M.
+
+**Fecha a pendência registada no fecho da i4** (secção acima): um pedido manual à API,
+contornando a app, ainda lia `exw_price`/`sap_code_*`/`supplier_id` directamente de
+`tmsi.products` — RLS só protegia linhas, nunca colunas. Esta migração move a fronteira para a
+própria BD.
+
+**F1 — o candidato do prompt (`REVOKE SELECT (col) ... FROM authenticated`) não funciona,
+apanhado por teste empírico (`BEGIN`/`ROLLBACK`) antes de escrever a migração real:**
+1. Um `REVOKE` de coluna sozinho é um **no-op silencioso** — privilégios de coluna no Postgres
+   são aditivos sobre os de tabela, e a 0001 já corre `grant all on all tables in schema tmsi
+   to authenticated`; esse grant de tabela continua a autorizar todas as colunas
+   independentemente de um `REVOKE` de coluna posterior. Confirmado: `information_schema.
+   column_privileges` continuava a mostrar `SELECT` depois do `REVOKE`, e uma leitura directa
+   continuava a funcionar. Correcção: `REVOKE SELECT` **ao nível da tabela** primeiro, depois
+   `GRANT SELECT (colunas seguras)` ao nível da coluna.
+2. Isto também bloqueia os roles com acesso a custos (ex. `product_manager`) de ler as mesmas
+   colunas directamente da tabela — todos os `authenticated` são o mesmo role Postgres via
+   PostgREST, independentemente do `role` em `tmsi.user_roles`. Confirmado ao vivo. Precisa de
+   uma vista como via de leitura alternativa.
+3. Uma vista "ingénua" (dono por omissão, sem `security_invoker`) **ignora a RLS por completo**
+   — o dono de `tmsi.products` e o role administrativo ligado têm ambos `BYPASSRLS`; uma vista
+   assim devolveu **13 linhas** a uma sessão de teste `sales.sa` em vez das 7 reais. Forçar
+   `security_invoker = true` resolve essa fuga mas volta a herdar os privilégios de coluna do
+   role que chama, partindo a máscara `CASE` com um erro de permissão em vez de `NULL` limpo.
+   **Desenho que sobrevive aos testes:** vista com semântica de dono (`security_invoker =
+   false`, explícito) para o acesso às colunas, mas com a visibilidade de linha **replicada
+   explicitamente** na própria cláusula `WHERE` da vista (as mesmas funções que a RLS usa, não
+   lógica nova) em vez de herdada da RLS.
+
+**Duas fronteiras nomeadas, não uma só `can_read_costs()` genérica** (decisão do Pedro, ao
+apanhar que o complemento literal da `v_selling_prices` incluía dados físicos que o role
+`logistics` já lê legitimamente noutro sítio — `transport_tiers`/`customs_rates`, e não é
+`can_read_costs()`):
+- **Segura (sem gate):** `id, name, category_id, item_type, status, lead_time_days, unit,
+  primary_branch, sold_in` — as duas últimas movidas para aqui na 0004 (ver abaixo).
+- **Operacional (`tmsi.can_read_operational()` = `can_read_costs() OR has_role('logistics')`):**
+  `description, parent_id, origin_country, hs_code, gross_weight_kg, net_weight_kg, volume_m3,
+  dimensions, palletizable, pallets, stackable`.
+- **Financeira (`tmsi.can_read_costs()`, já existia desde a 0001):** `exw_price, currency,
+  supplier_id, sap_code_sa, sap_code_cn, sap_code_us, sap_code_uk, last_reviewed_at, created_at,
+  updated_at, created_by, updated_by` (campos de auditoria/bookkeeping ficaram na fronteira mais
+  estreita — mais próximo do conjunto de roles da própria `audit_read` policy da `audit_log`,
+  que também exclui `logistics`, do que o alargamento para `can_read_operational()`).
+
+**Drift da predicate replicada, fechado, não só anotado:** `tmsi.products_visible(p_primary_branch,
+p_sold_in, p_status)` factoriza a expressão exacta que `products_read` já usava; a própria policy
+foi alterada (`alter policy ... using (tmsi.products_visible(...))`, legítimo numa migração nova,
+0001 nunca tocada) para chamar a função em vez de duplicar a lógica — só há um sítio para mudar
+"quem vê que produtos" no futuro. `config_read` em `transport_tiers`/`customs_rates` (0001, já
+duplicava `can_read_costs() or has_role('logistics')` inline) também foi realinhada para chamar
+`can_read_operational()`.
+
+⚠️ **0004 — regressão da 0003 apanhada durante a F3 (ligação da app à vista), antes de reportar
+qualquer prova como feita:** `primary_branch`/`sold_in` tinham ficado na fronteira "operacional"
+(complemento literal da `v_selling_prices`) — mas a secção "Price by branch" de
+`/products/[id]` usa exactamente essas duas colunas para saber a que filiais perguntar ao
+`compute_price()`. Confirmado ao vivo: um pedido fresco de `sales.sa` a `v_products` devolvia
+`primary_branch`/`sold_in` a `null`, partindo essa secção para o público principal dela. Estas
+duas são metadados de encaminhamento, não dados sensíveis — a própria RLS de `products_read` já
+condiciona a visibilidade da linha a `primary_branch`/`sold_in` coincidirem com o âmbito do
+chamador, portanto um `sales`/`agent` já sabe implicitamente que um produto é vendido na sua
+filial/canal só por conseguir ver a linha. Movidas para a fronteira segura; **0003 já aplicada,
+não editada** — nova migração, consistente com a disciplina do projecto. Consequência de
+numeração: a migração funcional da E4 passa a **0005**, não 0004.
+
+**F3 — app simplificada, não só ajustada:** como a vista já trata o mascaramento por coluna, as
+páginas deixaram de escolher entre duas listas de colunas explícitas consoante um role check —
+passam sempre a mesma `select` a `tmsi.v_products` e confiam na própria vista para decidir o que
+volta, o mesmo padrão já usado para o breakdown do `compute_price()`. `canReadOperational`/
+`canReadCosts` no ecrã de detalhe vêm de chamadas RPC directas, não de inferir a partir dos
+próprios campos devolvidos — todas as colunas da fronteira operacional são `nullable` também ao
+nível da tabela (opções/serviços têm legitimamente `hs_code`/`gross_weight_kg` nulos), pelo que
+um role com acesso ficaria com o mesmo aspecto de "sem acesso" ao ver um desses produtos. Na
+listagem, `exw_price`/`currency` são as excepções seguras (`not null` na tabela — 0001 §3), por
+isso aí "pelo menos uma linha não-nula" é um sinal fiável por chamador.
+
+**Provas (F4 do prompt):**
+1. **A que motiva tudo:** JWT do `sales.sa`, pedido a `/rest/v1/products?select=exw_price` →
+   `403`, `{"code":"42501","message":"permission denied for table products"}` — recusado pela
+   BD, não pela app. O mesmo para `sap_code_sa`/`supplier_id`. Via `tmsi.v_products` → `200`,
+   valores `null` (mascarado, não erro).
+2. `pm.test` (`product_manager`): vê custos via a vista (`exw_price: 890.00`); cria rascunho
+   (`201`); activação bloqueada sem HS (erro real, não de permissão); preenchidos HS/peso/
+   unidade/SAP → activa; EXW num produto `active`, sem tocar em `status` no pedido → `review`
+   automático + nova linha em `price_versions` — a suite da i4 sem regressão nenhuma.
+3. Provas de browser do Pedro (ver ESTADO da sessão).
+4. Sem outros endpoints partidos: `/auth/v1/health`, `/login`, `/prices`, `/products`,
+   `/admin/users`, `/api/health` confirmados sem alteração de comportamento. Cache de schema do
+   PostgREST recarregou-se sozinha (self-hosted, sem `NOTIFY`/restart manual necessário — a
+   vista ficou disponível via API imediatamente a seguir ao `COMMIT`).
+
+**Armadilha real, apanhada a testar (não hipotética):** `Prefer: return=representation` (ou
+`.select()` encadeado a seguir a `.update()`/`.insert()`) numa escrita contra `tmsi.products`
+falha agora com `42501` para qualquer `authenticated`, mesmo `product_manager`, porque
+`RETURNING *` exige `SELECT` nas colunas devolvidas — exactamente a armadilha que o prompt da
+0003 avisava para verificar. **A app nunca fez isto** (`createProduct`/`updateProduct` nunca
+encadeiam `.select()`), confirmado por leitura do código antes de escrever a migração — mas
+registado aqui para qualquer código futuro sobre `tmsi.products`: nunca pedir `RETURNING`/
+representação numa escrita à tabela; se for preciso ler o valor a seguir, ler da
+`tmsi.v_products`, não da tabela.
 
 ## E3, iteração 4 — Formulário de produto — ✅ FECHADA 2026-09-04 (reaberta e corrigida no mesmo dia)
 
@@ -34,26 +140,10 @@ repliquei directamente o `select` exacto que cada página agora envia — a resp
 `product_manager`), cujo `select` (o das colunas de custo) devolve tudo, incluindo `exw_price:
 890.00`. Sem regressões (`/login`, `/prices`, `/products`, `/api/health`).
 
-⚠️ **Registado, honestamente, o limite real desta correcção:** é só ao nível da aplicação —
-`sales.sa` a pedir `exw_price`/`sap_code_sa` **directamente** por API (`?select=id,exw_price,
-sap_code_sa`), a contornar a app, **continua a devolver o valor**. Não há nada na BD que impeça
-isto hoje. **Candidata a registar para a E4/0003** — com uma correcção à sugestão original do
-Pedro: privilégios de coluna Postgres (`REVOKE SELECT`) **não conseguem discriminar por role da
-app** (todos os utilizadores `authenticated` são o mesmo role Postgres via PostgREST,
-independentemente do `role` que têm em `tmsi.user_roles` — o `REVOKE`/`GRANT` de coluna é estático
-por role Postgres, não por linha nem por utilizador). O mecanismo real, com precedente já
-comprovado no próprio schema, é uma **vista `security definer`** (exactamente o padrão de
-`v_selling_prices`/`compute_price()`) — não existe hoje uma vista equivalente para `tmsi.products`
-em si (só para preços). Até essa vista existir (ou a app manter a disciplina actual de `.select()`
-condicional), cada página nova sobre `tmsi.products` é uma oportunidade de repetir esta fuga.
-
-**Ficheiros entregues:** `/products` (listagem, âmbito por `products_read`, mesmo padrão "pergunta
-ao Postgres" do `/prices`); `/products/new` (rascunho mínimo — só as colunas `not null` sem
-`default` de `tmsi.products`, coerente com o próprio ciclo de vida "rascunho não precisa de
-tudo"); `/products/[id]` (detalhe: breakdown de `compute_price()` por filial, histórico de
-`price_versions`, `audit_log`, formulário de edição gated por `canManageProducts()`).
-`canManageProducts()` (`auth-guard.ts`) espelha exactamente a `USING` clause de
-`products_write_pm` (`has_role('admin') or has_role('product_manager')`).
+✅ **Pendência fechada pela migração 0003/0004 — ver secção própria abaixo.** O limite
+registado aqui na altura (protecção só ao nível da aplicação; um pedido manual directo ainda
+lia `exw_price`/`sap_code_sa` da tabela) já não existe: a BD recusa agora esse pedido
+directamente (`403`, `permission denied for table products`), confirmado ao vivo.
 
 **Ficheiros entregues:** `/products` (listagem, âmbito por `products_read`, mesmo padrão "pergunta
 ao Postgres" do `/prices`); `/products/new` (rascunho mínimo — só as colunas `not null` sem
