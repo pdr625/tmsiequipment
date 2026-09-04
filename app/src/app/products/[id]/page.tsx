@@ -11,6 +11,16 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageProducts } from '@/lib/auth-guard';
 import { EditProductForm } from './edit-form';
 
+// Safe/ungated columns (tmsi.v_products, E3-0003/0004): id, name,
+// category_id, item_type, status, lead_time_days, unit, primary_branch,
+// sold_in — the last two moved here in 0004 after primary_branch/sold_in
+// being gated broke the price-by-branch section below for sales/agent,
+// who need them to know which branches to ask compute_price() about.
+// Everything else comes back null for a caller without
+// can_read_operational()/can_read_costs() — the DB decides this, not a
+// role check here. Optional/nullable throughout rather than split into
+// separate "safe"/"operational"/"cost" shapes, since which fields are
+// actually present varies per caller and isn't knowable from TypeScript.
 type Product = {
   id: string;
   name: string;
@@ -18,10 +28,10 @@ type Product = {
   category_id: string | null;
   item_type: string;
   parent_id: string | null;
-  supplier_id?: string | null;
+  supplier_id: string | null;
   origin_country: string | null;
-  currency: string;
-  exw_price?: number;
+  currency: string | null;
+  exw_price: number | null;
   primary_branch: string;
   hs_code: string | null;
   gross_weight_kg: number | null;
@@ -33,25 +43,13 @@ type Product = {
   stackable: boolean | null;
   unit: string | null;
   lead_time_days: number | null;
-  sap_code_sa?: string | null;
-  sap_code_cn?: string | null;
-  sap_code_us?: string | null;
-  sap_code_uk?: string | null;
+  sap_code_sa: string | null;
+  sap_code_cn: string | null;
+  sap_code_us: string | null;
+  sap_code_uk: string | null;
   status: string;
   sold_in: string[];
 };
-
-// canManageProducts() (admin/product_manager) is always a subset of
-// can_read_costs() (admin/pm/finance/branch_manager/viewer) — whenever the
-// edit form below actually renders, the COST_COLUMNS path was taken and
-// every field is really populated. TypeScript can't see that implication
-// through two separately-computed booleans, hence the optional fields
-// above and the `?? ...` fallbacks in edit-form.tsx.
-const SAFE_COLUMNS =
-  'id, name, description, category_id, item_type, parent_id, origin_country, currency, primary_branch, ' +
-  'hs_code, gross_weight_kg, net_weight_kg, volume_m3, dimensions, palletizable, pallets, stackable, unit, ' +
-  'lead_time_days, status, sold_in';
-const COST_COLUMNS = `${SAFE_COLUMNS}, exw_price, supplier_id, sap_code_sa, sap_code_cn, sap_code_us, sap_code_uk`;
 
 type PriceBreakdown = {
   branch_id: string;
@@ -78,40 +76,42 @@ type Branch = { id: string; name: string };
 type RefRow = { id?: string; code?: string; name?: string; description?: string };
 
 // Everything a role should not see is decided by Postgres, not this page:
-// products_read (RLS) gates the row itself; compute_price() nulls out its
-// own cost columns for non-cost roles (see_costs, internal — same pattern
-// as v_branch_prices in i2); price_versions/audit_log RLS return empty
-// rather than an error for roles without read access.
-//
-// exw_price (and supplier_id/SAP codes) are different: plain columns on
-// tmsi.products with no column-level protection — RLS only gates rows.
-// Caught live (sales.sa could read exw_price here even though
-// compute_price() nulls every cost figure derived from it): fixed by not
-// selecting those columns at all for non-cost roles, same predicate
-// (can_read_costs()) compute_price()'s own see_costs uses, mirroring how
-// v_selling_prices (i2) already excludes them from what a non-cost role's
-// view can return. This page only decides whether to render the *edit*
-// controls (canManageProducts()) — convenience; tmsi.products_write_pm
-// (RLS) is the real boundary for the Server Action itself.
+// tmsi.v_products (E3-0003/0004) gates rows via tmsi.products_visible()
+// (the same predicate products_read's RLS uses) and nulls out
+// operational/financial columns per-column via can_read_operational()/
+// can_read_costs() — the exact same functions compute_price()'s own
+// see_sell/see_costs and the config_read policies on transport_tiers/
+// customs_rates already use, not new logic invented for this page.
+// price_versions/audit_log RLS return empty rather than an error for
+// roles without read access. This page only decides whether to render
+// the *edit* controls (canManageProducts()) — convenience;
+// tmsi.products_write_pm (RLS) is the real boundary for the Server
+// Action itself, which still writes the raw table directly (unaffected
+// by 0003/0004 — only SELECT was ever touched).
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: canReadCosts }, canManage] = await Promise.all([
-    supabase.schema('tmsi').rpc('can_read_costs'),
+  const [{ data: product }, canManage, { data: canReadOperational }, { data: canReadCosts }] = await Promise.all([
+    supabase.schema('tmsi').from('v_products').select('*').eq('id', id).maybeSingle<Product>(),
     canManageProducts(),
+    supabase.schema('tmsi').rpc('can_read_operational'),
+    supabase.schema('tmsi').rpc('can_read_costs'),
   ]);
-
-  const { data: product } = await supabase
-    .schema('tmsi')
-    .from('products')
-    .select(canReadCosts ? COST_COLUMNS : SAFE_COLUMNS)
-    .eq('id', id)
-    .maybeSingle<Product>();
 
   if (!product) {
     notFound();
   }
+
+  // Not derived from whether hs_code/exw_price etc. actually came back
+  // non-null on THIS row — every operational-tier column (and
+  // description/parent_id/origin_country) is nullable at the table level
+  // too (options/services legitimately have null hs_code/gross_weight_kg,
+  // 0001 §3), so a cost/operational-visible role viewing one of those
+  // would wrongly look ungated. currency/exw_price are NOT NULL at the
+  // table level (0001 §3), so they'd be safe single-row signals for
+  // canReadCosts specifically, but the direct RPC call is simpler and
+  // uniform with canReadOperational, which has no such safe column at all.
 
   const branchIds = Array.from(new Set([product.primary_branch, ...product.sold_in]));
 
@@ -179,9 +179,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         <p className="mt-1">
           <span className="text-gray-500">Sold in:</span> {product.sold_in.join(', ') || '—'}
         </p>
-        <p className="mt-1 text-gray-500">
-          HS {product.hs_code ?? '—'} · Weight {product.gross_weight_kg ?? '—'} kg · Unit {product.unit ?? '—'}
-        </p>
+        {canReadOperational && (
+          <p className="mt-1 text-gray-500">
+            HS {product.hs_code ?? '—'} · Weight {product.gross_weight_kg ?? '—'} kg · Unit {product.unit ?? '—'}
+          </p>
+        )}
         {canReadCosts && (
           <p className="mt-1">
             <span className="text-gray-500">EXW:</span> {product.exw_price} {product.currency} ·{' '}

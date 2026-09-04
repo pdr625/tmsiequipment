@@ -15,41 +15,35 @@ type ProductRow = {
   item_type: string;
   status: string;
   primary_branch: string;
-  currency?: string;
-  exw_price?: number;
+  currency: string | null;
+  exw_price: number | null;
 };
 
-const SAFE_COLUMNS = 'id, name, item_type, status, primary_branch';
-const COST_COLUMNS = 'id, name, item_type, status, primary_branch, currency, exw_price';
-
-// Row visibility is entirely tmsi.products_read (0001 §8) — admin/pm/
-// finance/logistics/viewer see everything; branch_manager/sales/agent get
-// their own scoped, status-filtered subset. No role check decides *which
-// rows* come back.
-//
-// exw_price is a different problem: it's a plain column on tmsi.products,
-// with no column-level protection at all — RLS only gates rows. compute_price()
-// treats it as the raw input to every cost figure it computes and nulls
-// those outputs for non-cost roles; querying the table directly bypassed
-// that entirely (caught live: sales.sa could read it here). Fix is to not
-// select the column at all for non-cost roles — can_read_costs() decides
-// which column list to query, same predicate compute_price()'s own
-// see_costs uses, mirroring how v_selling_prices (i2) already excludes
-// exw_price from what a non-cost role's view can return.
+// tmsi.v_products (E3-0003/0004) — not the raw table. Row visibility is
+// still entirely tmsi.products_visible() (the same predicate
+// products_read's RLS uses). primary_branch is safe/ungated (0004 —
+// routing metadata, not sensitive, and price-by-branch on the detail page
+// needs it regardless of role); currency/exw_price stay financial-tier,
+// NULL from the view itself for callers without can_read_costs() — the
+// DB decides this, not a role check here. exw_price is NOT NULL at the
+// table level (0001 §3), so "did at least one row come back non-null" is
+// a reliable per-caller signal here (unlike a single detail row, where an
+// individual product's own nullable columns could be genuinely null —
+// see products/[id]/page.tsx).
 export default async function ProductsPage() {
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: canReadCosts }, canManage] = await Promise.all([
-    supabase.schema('tmsi').rpc('can_read_costs'),
+  const [{ data: products, error }, canManage] = await Promise.all([
+    supabase
+      .schema('tmsi')
+      .from('v_products')
+      .select('id, name, item_type, status, primary_branch, currency, exw_price')
+      .order('id')
+      .overrideTypes<ProductRow[], { merge: false }>(),
     canManageProducts(),
   ]);
 
-  const { data: products, error } = await supabase
-    .schema('tmsi')
-    .from('products')
-    .select(canReadCosts ? COST_COLUMNS : SAFE_COLUMNS)
-    .order('id')
-    .overrideTypes<ProductRow[], { merge: false }>();
+  const seesCosts = products?.some((p) => p.exw_price !== null) ?? false;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -88,7 +82,7 @@ export default async function ProductsPage() {
               <th className="py-2 pr-4">Type</th>
               <th className="py-2 pr-4">Status</th>
               <th className="py-2 pr-4">Branch</th>
-              {canReadCosts && <th className="py-2 pr-4">EXW price</th>}
+              {seesCosts && <th className="py-2 pr-4">EXW price</th>}
             </tr>
           </thead>
           <tbody>
@@ -103,9 +97,9 @@ export default async function ProductsPage() {
                 <td className="py-2 pr-4">{p.item_type}</td>
                 <td className="py-2 pr-4">{p.status}</td>
                 <td className="py-2 pr-4">{p.primary_branch}</td>
-                {canReadCosts && (
+                {seesCosts && (
                   <td className="py-2 pr-4">
-                    {p.exw_price} {p.currency}
+                    {p.exw_price ?? '—'} {p.currency}
                   </td>
                 )}
               </tr>
