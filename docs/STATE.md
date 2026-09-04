@@ -3,9 +3,27 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 5 (ecrãs de configuração do pricing) — F0 fechado, a avançar para
-o código.** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1,
-E3-i2, E3-i3, E3-i4 e a migração 0003/0004 estão fechadas.
+**Etapa actual: E3, iteração 5 — ✅ FECHADA 2026-09-04, provas de API confirmadas; falta
+confirmação de browser do Pedro.** Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`.
+E0, E1, E2, E3-i1, E3-i2, E3-i3, E3-i4 e a migração 0003/0004 estão fechadas.
+
+## E3, iteração 5 — Configuração do pricing — ✅ FECHADA 2026-09-04
+
+**Digest:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:5764934d727cafa1116ec8c8c05751d2d0b394b55b0d95cfb0d3149fdcc1ef37`
+(`Created` 2026-09-04T20:04:14Z). **Footprint:** RAM available 190 MB; swap 1060/4096 MB (≈26%);
+disco 47%. Containers: db 28.2M/320M, auth 1.9M/128M, rest 1.5M/128M, tmsi-app 41.6M/192M.
+
+**Ficheiros entregues:** `/config` (secções verticais por tabela — FX, interco fees, transport
+tiers, direitos aduaneiros, grelhas de margem, settings — mais simples que separadores em JS,
+consistente com o resto da app); `auth-guard.ts` ganhou `canManageFinanceConfig()`,
+`canManageOperationalConfig()` e `pricingConfigReadAccess()`, cada um a espelhar exactamente a
+policy RLS real correspondente (ver matriz abaixo), nunca inventados.
+
+**Técnica das linhas editáveis:** um `<form>` vazio (só `id`, `action` e os inputs escondidos da
+chave composta) no primeiro `<td>` da linha; os campos visíveis noutras células referenciam-no
+via `form="<id>"` (atributo HTML5), em vez de aninhar o `<form>` dentro de `<tr>`/múltiplos
+`<td>` (inválido) ou colapsar campos num só `<td>` com `colSpan` (desalinha contra o `<thead>`,
+que declara sempre um `<th>` por campo independentemente do acesso de escrita).
 
 ## E3, iteração 5 — Configuração do pricing — F0: matriz de permissões (0001, real, não assumida)
 
@@ -37,6 +55,41 @@ referência para o separador de direitos, não com CRUD próprio.
 **Regra de negócio já decidida (fonte obrigatória em câmbio manual):** `exchange_rates.source`
 já é `not null` na 0001 — a BD já impõe isto, o formulário só precisa de tornar o campo
 obrigatório, não inventar validação nova.
+
+**Provas (as 5 do prompt), confirmadas via API, cálculo à mão antes de cada edição:**
+1. **A que prova o motor vivo — câmbio:** `compute_price('T-0008','TBM')` antes:
+   `fx_used=8.2576, exw_local=404.6224, interco=485.54688, min_price=1620.00` CNY — confirmado
+   igual ao cálculo à mão antes de tocar em nada. Nova taxa CNY 9.0000 inserida (com fonte,
+   `finance.test`) → depois: `fx_used=9.0, exw_local=441.00, interco=529.20, min_price=1760.00`
+   CNY — **exactamente** o valor calculado à mão antes da edição (T-0008 é `service`, elimina
+   transporte/direitos da equação, deixando só FX + fee interco SA→TBM 20% + grelha de margem
+   TBM, tier1 fixo porque `total_cost_eur` = 58.80 EUR independe da taxa CNY neste caso concreto
+   — cancela algebricamente, registado como achado incidental, não um bug).
+2. **Transporte:** `compute_price('T-0001','SA')` antes: `transport=400.00` (tier 3, peso
+   180 kg > tope do tier 2), `total_cost=6908.80`, `min_price=9870.00`. Editado o custo do
+   tier 3 de SA para 500 → depois: `transport=500.00`, `total_cost=7008.80`, `min_price=10013.00`
+   — exacto. **Direitos aduaneiros:** `compute_price('T-0002','LTD')` antes: `duty_rate=0.022,
+   duty≈0.6627, min_price=222.00`. Editada a taxa HS 848180/UK para 0.050 → depois:
+   `duty_rate=0.05, duty≈1.5061, min_price=223.00` — exacto. Ambas revertidas ao valor da seed
+   depois da prova.
+3. **`audit_log`:** as três edições (câmbio, transporte, direitos) registadas com `actor` =
+   user_id exacto do utilizador de teste que as fez, valores antigo/novo capturados.
+4. **Ramos negados:** `sales.sa` — leitura directa de `margin_grids`/`exchange_rates`/
+   `interco_fees` → `[]` vazio (RLS nega a linha); escrita em `exchange_rates` → `403` explícito
+   (`42501`); o predicado exacto que o redirect de `/config` usa (`can_read_costs()`,
+   `has_role('logistics')`) → `false`/`false`. **Caso mais fino:** `logistics.test` — escreve
+   `transport_tiers` (âmbito próprio) com sucesso; tenta escrever `margin_grids` (fora do seu
+   âmbito, só admin/finance) → `200` com array vazio (RLS excluiu a linha do alvo do `UPDATE`,
+   zero linhas afectadas — o mesmo padrão "ambíguo sem `return=representation`" já visto na i4;
+   confirmado sem ambiguidade por leitura directa na BD que o valor não mudou).
+5. Sem regressões: `/login`, `/prices`, `/products`, `/admin/users`, `/api/health`,
+   `/auth/v1/health` confirmados sem alteração de comportamento.
+
+**Utilizadores de teste criados para esta iteração, mantidos:** `finance.test@example.test`
+(role `finance`) e `logistics.test@example.test` (role `logistics`) — passwords geradas,
+`~/tmp/tmsi-sudo/{finance,logistics}-test-password.txt` no VPS (600), nunca no repo. Junto de
+`pm.test`/`sales.sa`/`agent.apac` já existentes, cobrem agora todos os roles relevantes às
+fronteiras de configuração.
 
 ## Migração 0003/0004 — protecção dos custos ao nível da BD — ✅ FECHADA 2026-09-04
 

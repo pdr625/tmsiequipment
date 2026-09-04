@@ -14,7 +14,7 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅ | em curso |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅ | em curso |
 | — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
 | E4 | Migração 0005 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
 | E5 | Operações e endurecimento | por iniciar |
@@ -132,6 +132,18 @@ implementada — ver secção "Migração 0003/0004" abaixo. Fechada.**
 Depois: configuração (câmbios, fees, transporte, direitos, margens), overrides + histórico/
 auditoria, dashboard.
 
+### i5 — Configuração do pricing — ✅ FECHADA 04/09/2026
+`/config`: câmbios (`exchange_rates`, append-only — `fx_rate()` escolhe sempre a data efectiva
+mais recente ≤ hoje, editar significa acrescentar, nunca reescrever histórico; fonte
+obrigatória, já `not null` na 0001), fees interco, escalões de transporte, direitos por HS,
+grelhas de margem e settings (edição no próprio sítio — a seed já cobre todas as combinações
+das cinco, sem UI de criar/apagar). Acesso de leitura e escrita são as políticas RLS reais de
+cada tabela (matriz extraída na F0 antes de qualquer código), espelhadas como helpers nomeados
+em `auth-guard.ts` — nenhuma das seis mistura colunas seguras/sensíveis na mesma linha como
+`tmsi.products` (i4), por isso RLS ao nível da linha chega, sem precisar de uma vista como a
+`tmsi.v_products` da 0003. As 5 provas confirmadas via API, incluindo cálculo à mão do preço
+esperado antes de cada edição, exacto em todos os casos (detalhe: `STATE.md`).
+
 ## Migração 0003/0004 — protecção de custos ao nível da BD — ✅ FECHADA 04/09/2026
 Fecha a pendência da i4: RLS só protegia linhas, nunca colunas — um pedido manual à API,
 contornando a app, ainda lia `exw_price`/`sap_code_*`/`supplier_id`. O candidato simples do
@@ -154,6 +166,13 @@ pela protecção de custos ao nível da BD (nenhuma é a migração funcional da
 escrita por estado (quem aprova — questão L2 do handover, decisão do Pedro pendente), regra dos
 90 dias, notificações. Nunca editar a 0001/0002/0003/0004 aplicadas. Backup + restauro
 provado antes de aplicar.
+
+**Inclinação registada (i5, 2026-09-04), não uma decisão:** Branch Manager como aprovador
+provável — já tem RLS de leitura de custos con âmbito de filial (0001, `can_read_costs()`
+inclui `branch_manager`), o candidato mais natural para aprovar mudanças de preço na sua
+própria filial. Variante a considerar: «quem edita não aprova» (separação de funções — o
+`finance`/`admin` que propõe uma mudança de câmbio/margem não seria quem a aprova). Continua
+em aberto, decisão do Pedro antes de desenhar a 0005.
 
 ## E5 — Operações e endurecimento — por iniciar
 Pendências herdadas da E0, por ordem: off-site do backup (o dump só existe no VPS) ·
