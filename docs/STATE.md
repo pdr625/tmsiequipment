@@ -3,8 +3,58 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E2 — deploy do frontend + prova fim-a-fim, próxima.** Ordem e critérios de saída
-de cada etapa: `docs/ROADMAP.md`. E0 e E1 estão fechadas.
+**Etapa actual: E3 — auth real (login/logout/reset), próxima.** Ordem e critérios de saída de
+cada etapa: `docs/ROADMAP.md`. E0, E1 e E2 estão fechadas.
+
+## E2 — Deploy do frontend + vhost — ✅ FECHADA 2026-09-04
+
+**Ajuste de âmbito ao ROADMAP, registado:** a página de login da E1 é um *placeholder sem
+lógica* — o critério de saída da E2 passou a ser «app servida + `/api/health` a responder por
+HTTPS», não login real. Login real (e a prova de que o `ANON_KEY` embutido no bundle é o
+correcto) fica explicitamente adiado para a primeira iteração da E3.
+
+**Container `tmsi-app`:**
+- Imagem: `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:d608eaaea804ced6fbf7bd9f06e0281a1646898a3513ee9f6662fff2286571a7`
+  (`Created` 2026-09-04T09:42:40Z — confirma o attempt correcto: o Pedro esclareceu depois que
+  "attempt #1"/"#2" eram na verdade dois *re-runs* do mesmo workflow run do GitHub, não runs
+  distintos — por isso só há um run no histórico, com o segundo re-run a sobrescrever as mesmas
+  tags com o digest bom).
+- `172.20.40.1:3001` (a `:3000` desse gateway já é do `rest`), `mem_limit: 192m`, rede
+  `tmsi_net`, `depends_on: auth (service_healthy), rest (service_started)` — **`rest` não tem
+  healthcheck** (decisão da E0), por isso `service_healthy` nessa dependência falharia a
+  validação do compose; corrigido para `service_started`.
+- Uso real medido: ~49 MB / 192 MB.
+
+**Dois problemas encontrados e corrigidos nesta sessão (nenhum estava previsto no prompt):**
+1. **Healthcheck a apontar a `localhost` falhava** — `/etc/hosts` do container mapeia
+   `localhost` a `127.0.0.1` **e** `::1`; o `wget` tentava `::1` primeiro e levava "connection
+   refused" porque o servidor só liga o wildcard IPv4 (`HOSTNAME=0.0.0.0`, não escuta IPv6).
+   Corrigido para `http://127.0.0.1:3000/api/health` explícito. Verificado dentro do container
+   (`wget` a 127.0.0.1 funciona, a `[::1]` falha).
+2. **O comando de backup do vhost que dei ao Pedro estava errado.** `sudo cp -a
+   .../sites-enabled/tmsiequipment.conf .../sites-enabled/tmsiequipment.conf.<data>.bak` — como
+   o ficheiro em `sites-enabled` é um **symlink**, `cp -a` preserva-o como symlink em vez de
+   copiar o conteúdo: o "backup" era só mais um symlink para o **mesmo ficheiro vivo**, agora
+   dentro de `sites-enabled`. E o `include` do `nginx.conf` é `sites-enabled/*` **sem** filtro
+   `*.conf` (verificado, não assumido) — o nginx carregou o "backup" como um segundo vhost com o
+   mesmo `server_name`, dando 4 avisos "conflicting server name ... ignored" no `nginx -t`
+   (inofensivo neste caso porque o conteúdo era idêntico, mas era um defeito de higiene a
+   corrigir). Corrigido: symlink removido de `sites-enabled`; backup real (conteúdo pré-E2,
+   capturado antes da edição) colocado em `sites-available`, fora do `include`.
+
+**Footprint (linha de base F0 → depois do `up` do `tmsi-app`):**
+- RAM available: 231 MB → 179 MB (delta ≈ −52 MB, coerente com o uso real do container).
+- Swap: 854 MB → 878 MB (+24 MB — não é crescimento contínuo, dentro do já esperado).
+- Disco: 44% → 45%.
+
+**Vhost:** `location /` acrescentada a `/etc/nginx/sites-available/tmsiequipment.conf`, antes de
+`/auth/v1/` e `/rest/v1/` — `proxy_pass http://172.20.40.1:3001` (sem barra final: na raiz não há
+prefixo a remover). `/auth/v1/` e `/rest/v1/` confirmados a continuar a responder depois do
+reload (200/JSON válido nos dois).
+
+**Verificado fim-a-fim:** `GET /api/health` → 200 `{"status":"ok","version":"0.1.0"}`; `GET /` →
+200, página de login placeholder com o rodapé proprietário **confirmada pelo Pedro no browser**;
+`/auth/v1/health` e `/rest/v1/` continuam a responder.
 
 ## E1 — Scaffold frontend + CI→GHCR — ✅ FECHADA 2026-09-04
 
@@ -22,13 +72,11 @@ attempt #2** (push para a mesma tag substitui o manifesto anterior) — não há
 attempt #1 para confundir um deploy futuro. Ainda assim, a **E2 deve confirmar explicitamente**
 (ex.: inspeccionar a imagem puxada, não confiar cegamente na tag) antes do primeiro deploy real.
 
-**Melhorias identificadas, registadas para a E2 (não implementadas agora — fora do âmbito desta
-etapa):**
-1. **O workflow deve falhar alto quando `NEXT_PUBLIC_SUPABASE_ANON_KEY` está vazio** — guard de
-   uma linha no início do job (`if [ -z "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" ]; then
-   exit 1; fi` ou equivalente), para que o attempt #1 desta etapa nunca se repita silenciosamente
-   como "CI verde" com uma imagem inutilizável.
-2. **Rotação futura do `JWT_SECRET` implica rebuild da imagem, não só redeploy.** O
+**Melhorias identificadas nesta etapa:**
+1. ✅ **Implementada na E2** (`6359009`): guard no início do job do CI, falha alto se
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` vier vazio — o attempt #1 desta etapa não se pode repetir
+   silenciosamente como "CI verde" com uma imagem inutilizável.
+2. **Ainda por fazer (E5). Rotação futura do `JWT_SECRET` implica rebuild da imagem, não só redeploy.** O
    `ANON_KEY`/`SERVICE_ROLE_KEY` são JWT assinados com o `JWT_SECRET` actual; o `ANON_KEY` fica
    embutido no bundle do cliente **no build**. Rodar o `JWT_SECRET` no backend sem gerar um novo
    `ANON_KEY` e sem reconstruir a imagem deixa o frontend a enviar um `ANON_KEY` que já não valida

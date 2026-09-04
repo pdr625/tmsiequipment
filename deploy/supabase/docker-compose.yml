@@ -100,6 +100,36 @@ services:
     # external reachability via the published port. Verified functionally instead
     # (curl against the published endpoint, B4/B7).
 
+  tmsi-app:
+    image: ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:d608eaaea804ced6fbf7bd9f06e0281a1646898a3513ee9f6662fff2286571a7
+    container_name: tmsi-app
+    restart: unless-stopped
+    mem_limit: 192m
+    depends_on:
+      auth:
+        condition: service_healthy
+      # rest has no Docker healthcheck (see its own comment above) — a
+      # condition: service_healthy here would fail compose validation since
+      # there's no healthcheck to evaluate.
+      rest:
+        condition: service_started
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "172.20.40.1:3001:3000"
+    networks:
+      tmsi_net:
+    healthcheck:
+      # 127.0.0.1, not localhost: /etc/hosts maps localhost to both 127.0.0.1
+      # and ::1, wget tries ::1 first, and the server only binds the IPv4
+      # wildcard (HOSTNAME=0.0.0.0) — "localhost" fails with connection
+      # refused even though the server is up. Verified in this container.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 networks:
   tmsi_net:
     driver: bridge

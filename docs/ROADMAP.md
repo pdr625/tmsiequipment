@@ -13,8 +13,8 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 |---|---|---|
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
-| E2 | Deploy do frontend no VPS + prova fim-a-fim no browser | ⏳ próxima |
-| E3 | Ecrãs da aplicação, por iterações | por iniciar |
+| E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
+| E3 | Ecrãs da aplicação, por iterações — 1.ª iteração: auth real | ⏳ próxima |
 | E4 | Migração 0002 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
 | E5 | Operações e endurecimento | por iniciar |
 | E6 | Validação do piloto + preparação da migração para a empresa | por iniciar |
@@ -35,27 +35,35 @@ em `app/**` → build → push GHCR, `docker/metadata-action` para as tags). Dep
 versão verificada no registo npm, não de memória. Detalhe completo: `STATE.md`.
 
 ⚠️ **CI teve dois attempts — só o #2 é válido** (o #1 correu antes do segredo
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` existir, imagem com a chave vazia). Confirmado pelo Pedro. Ver
-`STATE.md` para o porquê de as tags em GHCR já apontarem só para o #2, e a recomendação de a E2
-confirmar explicitamente antes do primeiro deploy.
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` existir, imagem com a chave vazia). Confirmado pelo Pedro; na E2
+apurou-se que "#1"/"#2" eram dois *re-runs* do mesmo workflow run (terminologia do GitHub), não
+dois runs distintos — daí só haver um run no histórico. `STATE.md` tem o digest e a data
+(`Created`) usados para confirmar que o attempt #2 (o re-run bom) é o que ficou nas tags.
 
-**Duas melhorias identificadas nesta etapa, para aplicar na E2** (não implementadas em E1):
-1. Guard no início do job do CI que falha alto se `NEXT_PUBLIC_SUPABASE_ANON_KEY` vier vazio —
-   evita repetir silenciosamente o erro do attempt #1 como "CI verde".
-2. Registar explicitamente no procedimento de rotação de segredos (E5): rodar o `JWT_SECRET`
-   invalida o `ANON_KEY` já embutido na imagem — exige **rebuild**, não só redeploy do container.
+**Duas melhorias identificadas nesta etapa:**
+1. ✅ **Implementada na E2:** guard no início do job do CI que falha alto se
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` vier vazio.
+2. **Por fazer (E5):** registar explicitamente no procedimento de rotação de segredos que rodar
+   o `JWT_SECRET` invalida o `ANON_KEY` já embutido na imagem — exige **rebuild**, não só
+   redeploy do container.
 
-## E2 — Deploy do frontend + prova fim-a-fim — ⏳ PRÓXIMA
-**Onde:** VPS. **Pré-condição:** E1 fechada (imagem no GHCR, pinada por digest) — ✅, mas
-confirmar que o digest usado é o do attempt #2 antes de deployar (ver nota acima).
-Serviço `tmsi-app` no compose (rede `tmsi_net`, `mem_limit` a definir após medição);
-**bind `172.20.40.1:3001`** — a porta 3000 desse gateway já é do `rest`; `location /` no
-vhost → `http://172.20.40.1:3001`. Medir RAM/swap antes e depois (pendência registada:
-swap ~800 MB com a stack E0).
-**Critério de saída:** login real no browser com o admin criado na E0, sessão persistente,
-dados do seed visíveis conforme o role — prova comportamental, nunca só HTTP 200.
+## E2 — Deploy do frontend + vhost — ✅ FECHADA 04/09/2026
+Entregue: container `tmsi-app` (imagem pinada por digest, `172.20.40.1:3001`, `mem_limit
+192m`) no compose da E0; `location /` acrescentada ao vhost, `/auth/v1/`/`/rest/v1/` confirmados
+intocados; `/api/health` e `/` a responder por HTTPS; página placeholder confirmada no browser
+pelo Pedro. Footprint medido antes/depois (`STATE.md`): RAM −52 MB, swap +24 MB, sem
+crescimento contínuo.
 
-## E3 — Ecrãs da aplicação — por iniciar
+⚠️ **Ajuste de âmbito ao ROADMAP, registado:** a página de login da E1 é placeholder sem lógica
+— o critério de saída passou de "login real" para "app servida + `/api/health` por HTTPS". Login
+real (e a prova de que o `ANON_KEY` embutido é o correcto) move-se para a E3, 1.ª iteração.
+
+Dois problemas fora do prompt, encontrados e corrigidos nesta etapa (detalhe em `STATE.md`):
+healthcheck a `localhost` falhava por resolução IPv6 antes de IPv4; o comando de backup do vhost
+que o agente deu ao Pedro copiava o symlink (não o conteúdo) para dentro de `sites-enabled`,
+onde o `include` do nginx (sem filtro `*.conf`) o carregava como vhost duplicado.
+
+## E3 — Ecrãs da aplicação — ⏳ PRÓXIMA (1.ª iteração: autenticação real)
 Iterações pela ordem do `app/README.md` (referência de ecrãs). Cada iteração: editar → push →
 CI → nova imagem → deploy por digest. Primeiras: autenticação completa (logout, reset por
 email — SMTP já provado), listagem de preços por role/filial (`v_selling_prices` vs
