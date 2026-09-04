@@ -3,8 +3,83 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3 — auth real (login/logout/reset), próxima.** Ordem e critérios de saída de
-cada etapa: `docs/ROADMAP.md`. E0, E1 e E2 estão fechadas.
+**Etapa actual: E3, iteração 2 — listagem de preços por role/filial, próxima.** Ordem e
+critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2 e E3-i1 estão fechadas.
+
+## E3, iteração 1 — Auth real (login/logout/reset) — ✅ FECHADA 2026-09-04
+
+**Digest final:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:83d727741f3bfff756d51ef7a85ca39b38a282c37a286e5930bccd10393cb5c8`
+(`Created` 2026-09-04T12:04:40Z — quatro digests intermédios ao longo da iteração, ver "Bugs
+encontrados" abaixo; este é o único correcto, os anteriores nunca chegaram a ficar em produção
+por mais do que o tempo de os apanhar e corrigir).
+
+**Ficheiros entregues:** `src/middleware.ts` + `src/lib/supabase-middleware.ts` (refresh de
+sessão + protecção de rotas); `login/`, `forgot-password/`, `reset-password/` (páginas +
+Server Actions, `useActionState` do React 19); `auth/confirm/route.ts` (troca o `token_hash`/
+`code` por sessão); `email-templates/recovery/route.ts` (template de email próprio); `page.tsx`
+reescrita como home autenticada; `actions.ts` (logout). API real
+(`signInWithPassword`/`resetPasswordForEmail`/`updateUser`/`verifyOtp`/`exchangeCodeForSession`)
+verificada contra os tipos reais de `@supabase/auth-js@2.115.0`, não de memória.
+
+**Correcção de infra que teve de acontecer antes do código fazer sentido:** o GoTrue tinha os
+quatro `GOTRUE_MAILER_URLPATHS_*` por omissão (`/verify`, raiz do domínio) — o nosso vhost só
+tem `/auth/v1/` para o GoTrue, nunca testado clicar num link antes desta sessão (a E0 só provou
+a chegada do email). Confirmado por leitura do código-fonte do GoTrue e do `.env.example`
+oficial do `supabase/supabase` (que define as quatro como `/auth/v1/verify`, exactamente por
+este motivo) — a nossa stack magra tinha omitido essas vars e herdado o default errado. Fixadas
+as quatro (`CONFIRMATION`, `INVITE`, `RECOVERY`, `EMAIL_CHANGE`), `auth` recriado.
+
+**Pivot de arquitectura durante o teste real:** mesmo com o routing corrigido, o Pedro reportou
+o link partido em teste real. Isolei com Python (par PKCE verifier/challenge real, GoTrue +
+config testados directamente, sem passar pela app) — **o mecanismo GoTrue funciona
+perfeitamente quando o `code_verifier` está disponível.** A causa real: o `flowType: "pkce"`
+por omissão do `@supabase/ssr@0.12.5` (confirmado no código-fonte do pacote, não assumido) guarda
+o verifier num cookie do browser que pediu o reset — e um link de email é rotineiramente aberto
+noutro contexto (app de email do telemóvel, browser diferente), onde esse cookie não existe.
+**Fix:** template de email próprio (`email-templates/recovery`), servido pela nossa app na rede
+`tmsi_net` e obtido pelo GoTrue via `GOTRUE_MAILER_TEMPLATES_RECOVERY` — liga directamente a
+`/auth/confirm?token_hash=...&type=recovery`, verificado com `verifyOtp`, que não precisa de
+nenhum estado local do browser. Âmbito desta etapa: só `RECOVERY`; `CONFIRMATION`/`INVITE`/
+`EMAIL_CHANGE` continuam com o template por omissão do GoTrue (aceitável — normalmente abertos
+na mesma sessão que os pediu; `DISABLE_SIGNUP=true` significa que quase não são exercidos ainda
+neste piloto).
+
+**Três bugs reais apanhados a testar eu próprio, antes de pedir ao Pedro para repetir:**
+1. `/email-templates/recovery` ficou, por lapso, atrás da própria protecção de rotas da
+   middleware — o GoTrue recebia a página de `/login` (redirect de sessão) em vez do template.
+   Corrigido: `/email-templates` acrescentado às rotas públicas.
+2. `auth/confirm/route.ts` construía o redirect a partir de `request.url`, que atrás deste
+   proxy reflecte o bind interno da app (`https://0.0.0.0:3000/...`), não o domínio público —
+   sessão criada correctamente mas o browser era mandado para um URL interno inválido. Corrigido
+   para derivar de `request.headers.get('host')`, como já se fazia em `forgot-password/actions.ts`.
+   Nota: a `middleware.ts` usa o mesmo padrão `new URL(path, request.url)` e testou correcto —
+   não mexida, sem evidência de bug aí (Edge Runtime parece resolver isto de forma diferente de
+   um Route Handler comum).
+3. `depends_on: rest: condition: service_healthy` no `tmsi-app` (F2) teria falhado a validação
+   do compose — `rest` não tem healthcheck Docker (decisão da E0). Corrigido para
+   `service_started`.
+
+**Incidente de segredo, à parte do routing:** um `curl -D-` meu, a testar o fluxo manualmente,
+ecoou um `Set-Cookie` com uma sessão completa (JWT access+refresh token do admin) no output.
+Sinalizado de imediato; sessão revogada apagando as linhas correspondentes de
+`auth.sessions`/`auth.refresh_tokens` directamente na DB (a Admin API do GoTrue nesta versão não
+expõe um endpoint de revogação de sessão) — proporcional ao alcance real (transcript desta
+sessão, nunca publicado), ao contrário de rodar o `JWT_SECRET` inteiro, que invalidaria também
+o `ANON_KEY` embutido na imagem já em produção e obrigaria a novo build.
+
+**CI:** um "re-run all jobs" acidental do Pedro no run antigo (`d7cbd6c`, código de auth ainda
+sem existir) foi apanhado e cancelado (`gh`/API, `status: cancelled`) antes de poder empurrar
+uma imagem desactualizada para `:latest`, em corrida com o run bom (`2678c87`).
+
+**Footprint (fim da iteração):** RAM available 187 MB; swap 1001 MB (cruzou 1 GB pela primeira
+vez nesta sessão — sem sinal de fuga, uso real dos containers continua na casa das dezenas de
+MB; a vigiar, pendência já registada desde a E0); disco 46%.
+
+**Provas comportamentais (as 6 do prompt), todas confirmadas pelo Pedro:** login com a
+password nova → entra, header mostra o email; password antiga → falha (ramo negado); refresh →
+sessão persiste; logout → `/login`, acesso directo à home → redirect; reset completo
+(pedir → email → link → nova password → login antigo falha); `/auth/v1/`/`/rest/v1/`
+inalterados, sem binds novos.
 
 ## E2 — Deploy do frontend + vhost — ✅ FECHADA 2026-09-04
 

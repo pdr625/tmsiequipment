@@ -14,7 +14,7 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — 1.ª iteração: auth real | ⏳ próxima |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth real ✅, i2 preços ⏳ | em curso |
 | E4 | Migração 0002 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
 | E5 | Operações e endurecimento | por iniciar |
 | E6 | Validação do piloto + preparação da migração para a empresa | por iniciar |
@@ -63,13 +63,33 @@ healthcheck a `localhost` falhava por resolução IPv6 antes de IPv4; o comando 
 que o agente deu ao Pedro copiava o symlink (não o conteúdo) para dentro de `sites-enabled`,
 onde o `include` do nginx (sem filtro `*.conf`) o carregava como vhost duplicado.
 
-## E3 — Ecrãs da aplicação — ⏳ PRÓXIMA (1.ª iteração: autenticação real)
+## E3 — Ecrãs da aplicação — EM CURSO
 Iterações pela ordem do `app/README.md` (referência de ecrãs). Cada iteração: editar → push →
-CI → nova imagem → deploy por digest. Primeiras: autenticação completa (logout, reset por
-email — SMTP já provado), listagem de preços por role/filial (`v_selling_prices` vs
-`v_branch_prices`), administração de utilizadores (admin API). UI em inglês.
+CI → nova imagem → deploy por digest. UI em inglês.
 **Critério de saída por iteração:** o ecrã exercido com utilizadores de roles diferentes,
 incluindo o ramo negado.
+
+### i1 — Autenticação real — ✅ FECHADA 04/09/2026
+Login, logout, reset de password por email, protecção de rotas via middleware. As 6 provas
+comportamentais confirmadas pelo Pedro (login, ramo negado, refresh, logout+redirect, reset
+completo ponta-a-ponta, `/auth/v1/`/`/rest/v1/` inalterados). Detalhe completo, incluindo três
+bugs reais encontrados e corrigidos e um incidente de segredo (sessão revogada): `STATE.md`.
+
+⚠️ **O reset de password precisou de mais do que routing correcto.** GoTrue's `flowType: pkce`
+por omissão do `@supabase/ssr` guarda o `code_verifier` num cookie do browser que pediu o
+reset — um link de email aberto noutro contexto (telemóvel, browser diferente) não o tem. Fix:
+template de recovery próprio (servido pela nossa app, obtido pelo GoTrue via
+`GOTRUE_MAILER_TEMPLATES_RECOVERY`) a usar `token_hash` + `verifyOtp`, sem estado local. Só
+`RECOVERY` — `CONFIRMATION`/`INVITE`/`EMAIL_CHANGE` ficam com o template por omissão do GoTrue,
+por agora aceitável (`DISABLE_SIGNUP=true`, quase não exercidos neste piloto).
+
+### i2 — Listagem de preços por role/filial — ⏳ PRÓXIMA
+`v_selling_prices` (sales/agent) vs `v_branch_prices` (roles de custo); filtros por filial,
+categoria, estado, moeda (`app/README.md` ecrã 2). Critério de saída: ecrã exercido com
+utilizadores de roles diferentes, incluindo o ramo negado (RLS a bloquear o que não devia ver).
+
+### i3+ — Administração de utilizadores, formulário de produto, configuração, overrides,
+dashboard — por iniciar, pela ordem do `app/README.md`.
 
 ## E4 — Migração 0002 — por iniciar
 Políticas de escrita por estado (quem aprova — questão L2 do handover, decisão do Pedro
