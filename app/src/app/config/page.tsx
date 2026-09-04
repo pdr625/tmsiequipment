@@ -18,7 +18,14 @@ import {
   SettingRow,
 } from './forms';
 
-type ExchangeRate = { id: number; currency: string; rate_per_eur: number; effective_date: string; source: string };
+type ExchangeRate = {
+  id: number;
+  currency: string;
+  rate_per_eur: number;
+  effective_date: string;
+  source: string;
+  created_at: string;
+};
 type IntercoFee = { supplier_branch: string; seller_branch: string; fee: number };
 type TransportTier = { branch_id: string; tier: number; max_weight_kg: number | null; cost: number; currency: string };
 type CustomsRate = { hs_code: string; zone: string; rate: number };
@@ -62,9 +69,10 @@ export default async function ConfigPage() {
     supabase
       .schema('tmsi')
       .from('exchange_rates')
-      .select('id, currency, rate_per_eur, effective_date, source')
+      .select('id, currency, rate_per_eur, effective_date, source, created_at')
       .order('currency')
       .order('effective_date', { ascending: false })
+      .order('created_at', { ascending: false })
       .overrideTypes<ExchangeRate[], { merge: false }>(),
     supabase
       .schema('tmsi')
@@ -101,6 +109,24 @@ export default async function ConfigPage() {
 
   const hsDescription = (code: string) => hsCodes?.find((h) => h.code === code)?.description ?? '';
 
+  // tmsi.fx_rate() (0001 §7, tie-break added by 0005) picks, per currency,
+  // the row with the latest effective_date and, among same-day entries,
+  // the latest created_at — exactly the query's own ordering above, so
+  // the first row seen per (currency, effective_date) group is the one
+  // the engine actually uses today; 0005 allows more than one entry per
+  // day specifically so a mistake can be corrected without waiting for
+  // tomorrow, so any other row in that group is a superseded attempt, not
+  // an error — shown as such rather than left unexplained.
+  const activeExchangeRateIds = new Set<number>();
+  const seenGroups = new Set<string>();
+  for (const r of exchangeRates ?? []) {
+    const groupKey = `${r.currency}-${r.effective_date}`;
+    if (!seenGroups.has(groupKey)) {
+      seenGroups.add(groupKey);
+      activeExchangeRateIds.add(r.id);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
@@ -115,7 +141,9 @@ export default async function ConfigPage() {
           <h2 className="mb-2 text-sm font-semibold text-gray-700">Exchange rates</h2>
           <p className="mb-2 text-xs text-gray-500">
             Append-only: the engine always uses the latest entry with an effective date on or before
-            today. To change a rate, add a new one — never edit history.
+            today. To change a rate, add a new one — never edit history. Made a mistake today?
+            Add a corrected entry with the same date — it takes over immediately, and the
+            mistaken one is kept, marked below as superseded.
           </p>
           <table className="mb-3 w-full border-collapse text-sm">
             <thead>
@@ -124,17 +152,30 @@ export default async function ConfigPage() {
                 <th className="py-2 pr-4">Rate (per EUR)</th>
                 <th className="py-2 pr-4">Effective date</th>
                 <th className="py-2 pr-4">Source</th>
+                <th className="py-2 pr-4">Status</th>
               </tr>
             </thead>
             <tbody>
-              {exchangeRates?.map((r) => (
-                <tr key={r.id} className="border-b border-gray-100">
-                  <td className="py-2 pr-4">{r.currency}</td>
-                  <td className="py-2 pr-4">{r.rate_per_eur}</td>
-                  <td className="py-2 pr-4">{r.effective_date}</td>
-                  <td className="py-2 pr-4">{r.source}</td>
-                </tr>
-              ))}
+              {exchangeRates?.map((r) => {
+                const active = activeExchangeRateIds.has(r.id);
+                return (
+                  <tr key={r.id} className={`border-b border-gray-100 ${active ? '' : 'text-gray-400'}`}>
+                    <td className="py-2 pr-4">{r.currency}</td>
+                    <td className="py-2 pr-4">{r.rate_per_eur}</td>
+                    <td className="py-2 pr-4">{r.effective_date}</td>
+                    <td className="py-2 pr-4">{r.source}</td>
+                    <td className="py-2 pr-4">
+                      {active ? (
+                        'in use'
+                      ) : (
+                        <span className="rounded bg-gray-100 px-2 py-0.5 text-xs">
+                          superseded same day
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {canWriteFinance && <ExchangeRateForm currencies={currencies ?? []} />}
