@@ -5,59 +5,32 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
-// Placeholder login screen: static markup only, no auth wiring yet (E1 scaffold).
-// Real Supabase Auth submission lands in E3, screen 1.
-export default function LoginPage() {
+import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { signOut } from './actions';
+
+// Minimal authenticated home for this iteration — middleware already
+// guarantees a session exists here. Price-list screens are later
+// iterations (app/README.md).
+export default async function HomePage() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold">TMSI Equipment Price Listing</h1>
-
-        <form className="space-y-4">
-          <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              disabled
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
-              placeholder="you@company.com"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              disabled
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
-              placeholder="••••••••"
-            />
-          </div>
-
+      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+        <h1 className="mb-2 text-xl font-semibold">TMSI Equipment Price Listing</h1>
+        <p className="mb-6 text-sm text-gray-600">Signed in as {user?.email}</p>
+        <form action={signOut}>
           <button
             type="submit"
-            disabled
-            className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
           >
-            Sign in
+            Sign out
           </button>
         </form>
       </div>
-
-      <footer className="mt-8 max-w-sm text-center text-xs text-gray-500">
-        <p>© 2026 Pedro Alexandre. Proprietary software — authorised users only.</p>
-        <p>Unauthorised access or use is prohibited and may be prosecuted.</p>
-      </footer>
     </div>
   );
 }
