@@ -27,19 +27,26 @@ export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get('type') as EmailOtpType | null;
   const code = request.nextUrl.searchParams.get('code');
 
+  // request.url reflects the app's own bind address (0.0.0.0:3000) behind
+  // this reverse proxy, not the public host — caught live: redirects were
+  // going to https://0.0.0.0:3000/reset-password. nginx does forward the
+  // original Host header (proxy_set_header Host $host;), so read it
+  // directly instead, same technique as forgot-password/actions.ts.
+  const origin = `https://${request.headers.get('host')}`;
+
   const supabase = await createSupabaseServerClient();
 
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
     if (!error) {
-      return NextResponse.redirect(new URL('/reset-password', request.url));
+      return NextResponse.redirect(new URL('/reset-password', origin));
     }
   } else if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(new URL('/reset-password', request.url));
+      return NextResponse.redirect(new URL('/reset-password', origin));
     }
   }
 
-  return NextResponse.redirect(new URL('/login?error=reset_link_invalid', request.url));
+  return NextResponse.redirect(new URL('/login?error=reset_link_invalid', origin));
 }
