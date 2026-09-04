@@ -3,11 +3,71 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 7 (protocolo de verificação) — ✅ FECHADA.** Próximo: dashboard
-(último item da E3), ou E4 (migração 0006) quando a decisão L2 do Pedro estiver tomada. A E6
-tem agora um gate de entrada explícito — ver `docs/ROADMAP.md`, secção "Gate de produção".
-Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3-i1, E3-i2, E3-i3,
-E3-i4, E3-i5, E3-i6, E3-i7 e as migrações 0003/0004/0005 estão fechadas.
+**Etapa actual: E3, iteração 8 (dashboard) — ✅ FECHADA. A E3 está completa.** Próximo: decisão
+do Pedro entre E5 (operações, antes de utilizadores reais) e E4/0006 (quando a decisão L2
+fechar) — nenhuma das duas arranca sem a primeira execução formal do
+`docs/VERIFICATION-PROTOCOL.md` (gate de produção, `docs/ROADMAP.md`). Ordem e critérios de
+saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i8) e as migrações 0003/0004/0005
+estão fechadas.
+
+## E3, iteração 8 — Dashboard (KPIs e margens por filial) — ✅ FECHADA 2026-09-04 — **E3 completa**
+
+**Digest:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:3cc4e108bc85eb6589e5547cb7e67042094ec4335483dce526426dd91e2bb68e`
+(`Created` 2026-09-04T22:41:08Z, commit `3e71bb1`, CI concluído 22:41:20Z — ordem consistente).
+**Footprint pós-deploy:** RAM available 144 MB; swap 1084/4095 MB (≈26%); disco 48%.
+
+`/dashboard`, gate `can_read_costs()` apenas (admin já é o primeiro membro dessa própria função
+— um `isAdmin()` à parte só alargaria o gate, nunca o estreitaria). Cinco secções, todas lidas
+pelas mesmas vistas/funções que os ecrãs já existentes usam (restrição 2 do prompt): tiles de
+estado (`tmsi.v_products`, `review` destacado), margem média por filial em barras
+(`tmsi.v_branch_prices`, só produtos `active` — o rascunho de um produto ainda não é uma decisão
+de preço real), frescura dos câmbios por moeda (mesmo desempate `effective_date desc, created_at
+desc` do `tmsi.fx_rate()`, 0005 — nunca uma regra nova), overrides activos
+(`tmsi.price_overrides`, mesma janela de validade do `tmsi.override_value()`), e actividade
+recente (`tmsi.audit_log`, últimas 10).
+
+**Regras de dataviz do prompt (§2), seguidas à letra:** paleta categórica CVD-safe nos hexes
+exactos, como custom properties CSS, com `prefers-color-scheme` E `[data-theme]` ligados (a app
+não tem toggle de tema nenhum ainda — defensivo para um futuro toggle, confirmado a compilar
+correctamente no CSS final servido em produção, ver prova 3 abaixo); rótulos directos nas barras
+em cor de texto (nunca a cor da série — as cores 3/4 falham 3:1 no `surface` claro) + vista de
+tabela acessível por gráfico; paleta de estado própria (vermelho, nunca reutilizada das quatro
+cores categóricas) para o tile `review` e o aviso de câmbio velho, sempre ícone + texto.
+
+**Achado de F1, apanhado na revisão antes do commit (nunca chegou a correr em CI):**
+`new Map(array.map(x => [x.a, x.b]))` — o padrão de construir um `Map` a partir de tuplos
+inferidos inline dentro de `.map()` é um ponto conhecido de inferência frágil em TypeScript (o
+literal `[x.a, x.b]` nem sempre é inferido como tuplo `[K, V]` através de uma chamada genérica
+aninhada). Reescrito para o mesmo padrão imperativo (`for` + `.set()`) já usado no resto do
+ficheiro para os outros três agregados, em vez de arriscar um round-trip ao CI para confirmar.
+
+**Provas (F3):**
+1. **Cada tile/gráfico comparado ao SQL corrido à mão no `psql`** (claims JWT reais, admin):
+   tiles de estado (`draft 2, active 8, review 2, discontinued 1` — `pending`/`inactive`
+   correctamente a 0, não ausentes); margem média por filial (`CORP 44.3%, LTD 44.3%, SA 54.0%,
+   TBM 65.0%`, só produtos activos); frescura (`CNY/GBP/USD`, todas com a taxa mais recente de
+   hoje, `0` dias); overrides activos = `4` (inclui o override real criado pelo Pedro na i6,
+   ainda válido); actividade recente = as 10 entradas mais recentes do `audit_log` — todos os
+   valores coincidem exactamente com a query equivalente da app.
+2. **Ramo do aviso de frescura:** como todas as três moedas têm taxa de hoje (idade 0), o limiar
+   real (30 dias) nunca dispara com os dados actuais — provado correctamente sem inventar dados
+   falsos: baixei temporariamente `STALE_RATE_DAYS` para `-1` no ficheiro local (nunca commitado
+   — `git diff` confirmado limpo depois de reverter), tracei a lógica com os dados reais
+   (`0 > -1` = verdadeiro) e confirmei que o ramo de aviso (borda + `WarnBadge` com ícone+texto)
+   é o mesmo padrão condicional `{cond && <X/>}` já provado em produção nesta app (i6, i4) — sem
+   servidor local para correr (este VPS não tem `node` nem faz builds, restrição 1), a
+   verificação é um trace de código deliberado, não uma execução, registado como tal.
+3. **Dark mode:** sem browser para alternar o tema ao vivo, confirmado ao nível que consigo —
+   o CSS realmente servido em produção (`/_next/static/chunks/*.css`) contém os três blocos
+   exactos (`.dashboard-charts` base, `@media (prefers-color-scheme: dark)`, e
+   `:root[data-theme='dark']`), com os hexes exactos do prompt em cada um. A confirmação visual
+   fica para o passo manual do Pedro.
+4. **Ramo negado:** `sales.sa` e `logistics.test` — `can_read_costs()` = `false` para ambos
+   (logo `/dashboard` redirecciona, mesmo gate que a app usa); e, defesa em profundidade,
+   `tmsi.v_branch_prices` (margem), `tmsi.price_overrides` e `tmsi.audit_log` devolvem `0` linhas
+   para ambos — nenhum agregado de custo alcançável mesmo contornando o redirect da página.
+5. **Sem regressões:** todas as rotas anteriores continuam a devolver o código esperado
+   (redirect 307 sem sessão nas protegidas, 200 em `/login` e `/api/health`) depois do deploy.
 
 ## E3, iteração 7 — Protocolo de verificação de segurança — ✅ FECHADA 2026-09-04
 
