@@ -401,12 +401,12 @@ export function EditProductForm({
         </select>
       </fieldset>
 
-      {state?.error && (
+      {state && 'error' in state && (
         <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
           {state.error}
         </p>
       )}
-      {state?.success && <p className="text-sm text-green-700">Saved.</p>}
+      {state && 'success' in state && <p className="text-sm text-green-700">Saved.</p>}
 
       <button
         type="submit"

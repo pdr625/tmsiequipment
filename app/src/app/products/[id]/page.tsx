@@ -123,16 +123,17 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       .order('at', { ascending: false })
       .overrideTypes<AuditEntry[], { merge: false }>(),
     Promise.all(
-      branchIds.map((b) =>
-        supabase
-          .schema('tmsi')
-          .rpc('compute_price', { p_product: id, p_branch: b })
-          .overrideTypes<PriceBreakdown[], { merge: false }>(),
-      ),
+      branchIds.map((b) => supabase.schema('tmsi').rpc('compute_price', { p_product: id, p_branch: b })),
     ),
   ]);
 
-  const priceRows = priceResults.flatMap((r) => r.data ?? []);
+  // compute_price() has no generated Database type behind it (this app has
+  // none — E1), so .rpc() falls back to a loose result shape that
+  // .overrideTypes() rejects for a setof/array return. Same plain-cast
+  // fallback prices/page.tsx already uses for its view rows; bridged
+  // through unknown since the inferred single-row shape and the real
+  // setof-row array don't structurally overlap enough for a direct `as`.
+  const priceRows = priceResults.flatMap((r) => (r.data ?? []) as unknown as PriceBreakdown[]);
   const seesCosts = priceRows.some((r) => r.total_cost_eur !== null);
 
   return (
