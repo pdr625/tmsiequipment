@@ -5,12 +5,12 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
+import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { signOut } from './actions';
 
-// Minimal authenticated home for this iteration — middleware already
-// guarantees a session exists here. Price-list screens are later
-// iterations (app/README.md).
+// Minimal authenticated home — middleware already guarantees a session
+// exists here. Further screens (app/README.md) are their own routes.
 export default async function HomePage() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -22,6 +22,12 @@ export default async function HomePage() {
       <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
         <h1 className="mb-2 text-xl font-semibold">TMSI Equipment Price Listing</h1>
         <p className="mb-6 text-sm text-gray-600">Signed in as {user?.email}</p>
+        <Link
+          href="/prices"
+          className="mb-4 block w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+        >
+          Price list
+        </Link>
         <form action={signOut}>
           <button
             type="submit"

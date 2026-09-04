@@ -3,8 +3,18 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 2 — listagem de preços por role/filial, próxima.** Ordem e
+**Etapa actual: E3, iteração 2 — listagem de preços por role/filial, em curso.** Ordem e
 critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2 e E3-i1 estão fechadas.
+
+## Utilizadores de teste (dados fictícios, criados na E3-i2, 2026-09-04)
+
+| Email | Role | Âmbito | Password |
+|---|---|---|---|
+| `sales.sa@example.test` | `sales` | filial `SA` | gerada, `~/tmp/tmsi-sudo/test-users-passwords.txt` no VPS (600), nunca no repo |
+| `agent.apac@example.test` | `agent` | canal `APAC` | idem |
+
+Domínio `.test` deliberado (reservado pela IANA para testes, nunca resolve) — impossível de
+confundir com um endereço real. Sem dados reais da TMSI associados a nenhum dos dois.
 
 ## E3, iteração 1 — Auth real (login/logout/reset) — ✅ FECHADA 2026-09-04
 
