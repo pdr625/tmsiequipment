@@ -1,0 +1,63 @@
+# TMSI Equipment Price Listing
+# Copyright (c) 2026 Pedro Alexandre. All rights reserved.
+# PROPRIETARY AND CONFIDENTIAL — unauthorised use, copying, modification or
+# distribution is strictly prohibited. See LICENSE at the repository root.
+#
+# Builds app/ and pushes the image to GHCR. Never runs on the VPS.
+#
+# NEXT_PUBLIC_SUPABASE_ANON_KEY must exist as a repository secret before this
+# workflow produces a working image (it still builds fine without it — the
+# client bundle would just have an empty value baked in). See app/Dockerfile
+# for why it has to be a build arg. NEXT_PUBLIC_SUPABASE_URL is not sensitive
+# (it's the public domain) and is passed as a literal below.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # type=sha defaults to the "sha-<short>" tag format asked for.
+      - name: Compute tags
+        id: meta
+        uses: docker/metadata-action@v6.2.0
+        with:
+          images: ghcr.io/pdr625/tmsiequipment/tmsi-app
+          tags: |
+            type=sha
+            type=raw,value=latest
+
+      - name: Build and push tmsi-app
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: app
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=https://tmsiequipment.duckdns.org
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
