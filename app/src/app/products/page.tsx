@@ -15,26 +15,41 @@ type ProductRow = {
   item_type: string;
   status: string;
   primary_branch: string;
-  currency: string;
-  exw_price: number;
+  currency?: string;
+  exw_price?: number;
 };
+
+const SAFE_COLUMNS = 'id, name, item_type, status, primary_branch';
+const COST_COLUMNS = 'id, name, item_type, status, primary_branch, currency, exw_price';
 
 // Row visibility is entirely tmsi.products_read (0001 §8) — admin/pm/
 // finance/logistics/viewer see everything; branch_manager/sales/agent get
-// their own scoped, status-filtered subset. No role check here decides
-// what to query; the same SELECT just comes back with fewer rows.
+// their own scoped, status-filtered subset. No role check decides *which
+// rows* come back.
+//
+// exw_price is a different problem: it's a plain column on tmsi.products,
+// with no column-level protection at all — RLS only gates rows. compute_price()
+// treats it as the raw input to every cost figure it computes and nulls
+// those outputs for non-cost roles; querying the table directly bypassed
+// that entirely (caught live: sales.sa could read it here). Fix is to not
+// select the column at all for non-cost roles — can_read_costs() decides
+// which column list to query, same predicate compute_price()'s own
+// see_costs uses, mirroring how v_selling_prices (i2) already excludes
+// exw_price from what a non-cost role's view can return.
 export default async function ProductsPage() {
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: products, error }, canManage] = await Promise.all([
-    supabase
-      .schema('tmsi')
-      .from('products')
-      .select('id, name, item_type, status, primary_branch, currency, exw_price')
-      .order('id')
-      .overrideTypes<ProductRow[], { merge: false }>(),
+  const [{ data: canReadCosts }, canManage] = await Promise.all([
+    supabase.schema('tmsi').rpc('can_read_costs'),
     canManageProducts(),
   ]);
+
+  const { data: products, error } = await supabase
+    .schema('tmsi')
+    .from('products')
+    .select(canReadCosts ? COST_COLUMNS : SAFE_COLUMNS)
+    .order('id')
+    .overrideTypes<ProductRow[], { merge: false }>();
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -73,7 +88,7 @@ export default async function ProductsPage() {
               <th className="py-2 pr-4">Type</th>
               <th className="py-2 pr-4">Status</th>
               <th className="py-2 pr-4">Branch</th>
-              <th className="py-2 pr-4">EXW price</th>
+              {canReadCosts && <th className="py-2 pr-4">EXW price</th>}
             </tr>
           </thead>
           <tbody>
@@ -88,9 +103,11 @@ export default async function ProductsPage() {
                 <td className="py-2 pr-4">{p.item_type}</td>
                 <td className="py-2 pr-4">{p.status}</td>
                 <td className="py-2 pr-4">{p.primary_branch}</td>
-                <td className="py-2 pr-4">
-                  {p.exw_price} {p.currency}
-                </td>
+                {canReadCosts && (
+                  <td className="py-2 pr-4">
+                    {p.exw_price} {p.currency}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

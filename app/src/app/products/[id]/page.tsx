@@ -18,10 +18,10 @@ type Product = {
   category_id: string | null;
   item_type: string;
   parent_id: string | null;
-  supplier_id: string | null;
+  supplier_id?: string | null;
   origin_country: string | null;
   currency: string;
-  exw_price: number;
+  exw_price?: number;
   primary_branch: string;
   hs_code: string | null;
   gross_weight_kg: number | null;
@@ -33,13 +33,25 @@ type Product = {
   stackable: boolean | null;
   unit: string | null;
   lead_time_days: number | null;
-  sap_code_sa: string | null;
-  sap_code_cn: string | null;
-  sap_code_us: string | null;
-  sap_code_uk: string | null;
+  sap_code_sa?: string | null;
+  sap_code_cn?: string | null;
+  sap_code_us?: string | null;
+  sap_code_uk?: string | null;
   status: string;
   sold_in: string[];
 };
+
+// canManageProducts() (admin/product_manager) is always a subset of
+// can_read_costs() (admin/pm/finance/branch_manager/viewer) — whenever the
+// edit form below actually renders, the COST_COLUMNS path was taken and
+// every field is really populated. TypeScript can't see that implication
+// through two separately-computed booleans, hence the optional fields
+// above and the `?? ...` fallbacks in edit-form.tsx.
+const SAFE_COLUMNS =
+  'id, name, description, category_id, item_type, parent_id, origin_country, currency, primary_branch, ' +
+  'hs_code, gross_weight_kg, net_weight_kg, volume_m3, dimensions, palletizable, pallets, stackable, unit, ' +
+  'lead_time_days, status, sold_in';
+const COST_COLUMNS = `${SAFE_COLUMNS}, exw_price, supplier_id, sap_code_sa, sap_code_cn, sap_code_us, sap_code_uk`;
 
 type PriceBreakdown = {
   branch_id: string;
@@ -69,18 +81,31 @@ type RefRow = { id?: string; code?: string; name?: string; description?: string 
 // products_read (RLS) gates the row itself; compute_price() nulls out its
 // own cost columns for non-cost roles (see_costs, internal — same pattern
 // as v_branch_prices in i2); price_versions/audit_log RLS return empty
-// rather than an error for roles without read access. This page only
-// decides whether to render the *edit* controls (canManageProducts()) —
-// convenience; tmsi.products_write_pm (RLS) is the real boundary for the
-// Server Action itself.
+// rather than an error for roles without read access.
+//
+// exw_price (and supplier_id/SAP codes) are different: plain columns on
+// tmsi.products with no column-level protection — RLS only gates rows.
+// Caught live (sales.sa could read exw_price here even though
+// compute_price() nulls every cost figure derived from it): fixed by not
+// selecting those columns at all for non-cost roles, same predicate
+// (can_read_costs()) compute_price()'s own see_costs uses, mirroring how
+// v_selling_prices (i2) already excludes them from what a non-cost role's
+// view can return. This page only decides whether to render the *edit*
+// controls (canManageProducts()) — convenience; tmsi.products_write_pm
+// (RLS) is the real boundary for the Server Action itself.
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
+  const [{ data: canReadCosts }, canManage] = await Promise.all([
+    supabase.schema('tmsi').rpc('can_read_costs'),
+    canManageProducts(),
+  ]);
+
   const { data: product } = await supabase
     .schema('tmsi')
     .from('products')
-    .select('*')
+    .select(canReadCosts ? COST_COLUMNS : SAFE_COLUMNS)
     .eq('id', id)
     .maybeSingle<Product>();
 
@@ -91,7 +116,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const branchIds = Array.from(new Set([product.primary_branch, ...product.sold_in]));
 
   const [
-    canManage,
     { data: branches },
     { data: categories },
     { data: units },
@@ -101,7 +125,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     { data: auditEntries },
     priceResults,
   ] = await Promise.all([
-    canManageProducts(),
     supabase.schema('tmsi').from('branches').select('id, name').eq('active', true).order('id').overrideTypes<Branch[], { merge: false }>(),
     supabase.schema('tmsi').from('categories').select('id, name').order('id').overrideTypes<RefRow[], { merge: false }>(),
     supabase.schema('tmsi').from('units').select('code, name').order('code').overrideTypes<RefRow[], { merge: false }>(),
@@ -154,14 +177,18 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <span className="text-gray-500">Primary branch:</span> {product.primary_branch}
         </p>
         <p className="mt-1">
-          <span className="text-gray-500">EXW:</span> {product.exw_price} {product.currency} ·{' '}
           <span className="text-gray-500">Sold in:</span> {product.sold_in.join(', ') || '—'}
         </p>
         <p className="mt-1 text-gray-500">
-          HS {product.hs_code ?? '—'} · Weight {product.gross_weight_kg ?? '—'} kg · Unit {product.unit ?? '—'} · SAP
-          (SA/CN/US/UK) {product.sap_code_sa ?? '—'} / {product.sap_code_cn ?? '—'} / {product.sap_code_us ?? '—'} /{' '}
-          {product.sap_code_uk ?? '—'}
+          HS {product.hs_code ?? '—'} · Weight {product.gross_weight_kg ?? '—'} kg · Unit {product.unit ?? '—'}
         </p>
+        {canReadCosts && (
+          <p className="mt-1">
+            <span className="text-gray-500">EXW:</span> {product.exw_price} {product.currency} ·{' '}
+            <span className="text-gray-500">SAP (SA/CN/US/UK):</span> {product.sap_code_sa ?? '—'} /{' '}
+            {product.sap_code_cn ?? '—'} / {product.sap_code_us ?? '—'} / {product.sap_code_uk ?? '—'}
+          </p>
+        )}
       </div>
 
       <section className="mb-8">

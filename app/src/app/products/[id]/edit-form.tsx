@@ -13,6 +13,12 @@ import { updateProduct, type UpdateProductState } from './actions';
 const ITEM_TYPES = ['equipment', 'spare_part', 'option', 'service'];
 const STATUSES = ['draft', 'pending', 'active', 'review', 'inactive', 'discontinued'];
 
+// exw_price/supplier_id/SAP codes are optional here because the page only
+// selects them for callers with can_read_costs() — this form only ever
+// renders for canManageProducts() (admin/product_manager), which is
+// always a subset of that, so they're really always present when it
+// matters. The `?? ...` fallbacks below exist to satisfy the type, not
+// because a manager should ever actually see them missing.
 type Product = {
   id: string;
   name: string;
@@ -20,10 +26,10 @@ type Product = {
   category_id: string | null;
   item_type: string;
   parent_id: string | null;
-  supplier_id: string | null;
+  supplier_id?: string | null;
   origin_country: string | null;
   currency: string;
-  exw_price: number;
+  exw_price?: number;
   primary_branch: string;
   hs_code: string | null;
   gross_weight_kg: number | null;
@@ -35,10 +41,10 @@ type Product = {
   stackable: boolean | null;
   unit: string | null;
   lead_time_days: number | null;
-  sap_code_sa: string | null;
-  sap_code_cn: string | null;
-  sap_code_us: string | null;
-  sap_code_uk: string | null;
+  sap_code_sa?: string | null;
+  sap_code_cn?: string | null;
+  sap_code_us?: string | null;
+  sap_code_uk?: string | null;
   status: string;
   sold_in: string[];
 };
