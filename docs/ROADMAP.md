@@ -5,7 +5,21 @@ Folha de rota do projecto. **Regras de manutenção:** este ficheiro é enviado 
 no início de cada etapa; a sessão que fechar (ou alterar o âmbito de) uma etapa actualiza-o
 no mesmo passe (estado + data + desvios), commit + push — tal como o `STATE.md`.
 Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas ·
-`STATE.md` = estado corrente de runtime · `handover.md` = histórico (não seguir).
+`STATE.md` = estado corrente de runtime · `handover.md` = histórico (não seguir) ·
+`BACKLOG.md` = fila de trabalho priorizada do Pedro (ordem de sessões), este ficheiro
+absorve-a por etapa conforme cada item é iniciado/fechado.
+
+## Backlog e ordem de sessões (2026-09-05)
+
+`docs/BACKLOG.md` (colado pelo Pedro, verbatim) é a referência de trabalho corrente,
+substitui a lista da análise de 05/09. Ordem: **i9 (passwords sem email) → i10 (export
+Excel/PDF) → sessão técnica (smoke tests + lockfile) → auth/headers → code review → piloto
+→ L2/E4 informada pelo uso → restantes por procura.** Duas mudanças de prioridade face ao
+que este ficheiro assumia antes: **EOP despromovido de bloqueio a melhoria** (decisão do
+Pedro, i9 — o onboarding do piloto passa a depender de password temporária comunicada
+verbalmente pelo admin, não de email; o desvio EOP/quarentena da E5-VPS, linha abaixo,
+continua por cobrir mas já não bloqueia nada) e **export Excel/PDF promovido a crítico**
+(i10, antes nem listado aqui).
 
 ## Estado das etapas
 
@@ -14,10 +28,11 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅, i7 protocolo de verificação ✅, i8 dashboard ✅ | ✅ 05/09/2026 — **COMPLETA** |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅, i7 protocolo de verificação ✅, i8 dashboard ✅ | ✅ 05/09/2026 — **COMPLETA**; estendida pelo backlog: i9 (passwords sem email, migração 0006) em curso, i10 (export Excel/PDF) a seguir |
 | — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
 | — | Migração 0005 — correcção de câmbio no mesmo dia | ✅ 04/09/2026 |
-| E4 | Migração 0006 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
+| — | Migração 0006 — gestão de passwords sem email (i9) | em curso 05/09/2026 |
+| E4 | Migração 0007 (workflow de aprovação, regra 90 dias, notificações) — número avançado por 0006/i9 | por iniciar |
 | E5 | Operações e endurecimento — VPS ✅, homelab por iniciar | em curso |
 | E6 | Validação do piloto + preparação da migração para a empresa (gate: `VERIFICATION-PROTOCOL.md`) | por iniciar |
 
@@ -262,12 +277,14 @@ marcar entradas do mesmo dia superadas como tal, em vez de as mostrar como dupli
 inexplicadas. Cenário exacto do Pedro reproduzido e o ramo temporal (consulta histórica
 insensível a correcções de hoje) confirmados antes de fechar. Detalhe completo: `STATE.md`.
 
-## E4 — Migração 0006 — por iniciar
-A numeração avança três vezes: `0002` foi consumida pelo defeito real de RLS da i4, `0003`/`0004`
-pela protecção de custos ao nível da BD, `0005` pela correcção de câmbio no mesmo dia (nenhuma é
-a migração funcional da E4). Políticas de escrita por estado (quem aprova — questão L2 do
+## E4 — Migração 0007 — por iniciar
+A numeração avança quatro vezes: `0002` foi consumida pelo defeito real de RLS da i4,
+`0003`/`0004` pela protecção de custos ao nível da BD, `0005` pela correcção de câmbio no
+mesmo dia, `0006` pela gestão de passwords sem email (i9, `must_change_password` +
+`tmsi.mark_password_changed()`/`tmsi.admin_revoke_sessions()` — ver `STATE.md`) — nenhuma é
+a migração funcional da E4. Políticas de escrita por estado (quem aprova — questão L2 do
 handover, decisão do Pedro pendente), regra dos 90 dias, notificações. Nunca editar a
-0001/0002/0003/0004/0005 aplicadas. Backup + restauro provado antes de aplicar.
+0001/0002/0003/0004/0005/0006 aplicadas. Backup + restauro provado antes de aplicar.
 
 **Inclinação registada (i5, 2026-09-04), não uma decisão:** Branch Manager como aprovador
 provável — já tem RLS de leitura de custos con âmbito de filial (0001, `can_read_costs()`
