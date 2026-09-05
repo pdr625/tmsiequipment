@@ -14,7 +14,7 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅, i7 protocolo de verificação ✅, i8 dashboard ✅ | ✅ 04/09/2026 — **COMPLETA** |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅, i7 protocolo de verificação ✅, i8 dashboard ✅ | ✅ 05/09/2026 — **COMPLETA** |
 | — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
 | — | Migração 0005 — correcção de câmbio no mesmo dia | ✅ 04/09/2026 |
 | E4 | Migração 0006 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
@@ -184,19 +184,31 @@ limitada"); (b) a capacidade de criar overrides tinha `product_manager` marcado 
 restrito a um subconjunto diferente de `kind`/filial). Detalhe completo, célula a célula:
 `STATE.md`.
 
-### i8 — Dashboard (KPIs e margens por filial) — ✅ FECHADA 04/09/2026 — **E3 completa**
+### i8 — Dashboard (KPIs e margens por filial) — ✅ FECHADA 05/09/2026 (reaberta e corrigida no dia seguinte) — **E3 completa**
 `/dashboard`, gate `can_read_costs()` (já inclui `admin`). Cinco secções, todas lidas pelas
 mesmas vistas/funções que os ecrãs já existentes usam, nenhuma query nova a contornar as
 fronteiras 0003/0004: tiles de estado (`review` destacado), margem média por filial em barras
 (só produtos activos), frescura dos câmbios por moeda (mesmo desempate do `fx_rate()`, 0005),
 overrides activos, actividade recente do `audit_log`. Paleta categórica CVD-safe (hexes exactos
-do prompt) como CSS custom properties, `prefers-color-scheme` + `[data-theme]` ligados (sem
-toggle de tema na app ainda — defensivo), rótulos directos + tabela acessível por gráfico
-(séries 3/4 falham 3:1 no `surface` claro), paleta de estado própria (nunca reutilizada das
-séries) para `review`/câmbio velho. As 5 provas confirmadas — cálculo à mão de cada tile via
-`psql`, ramo de aviso traçado com o limiar temporariamente baixado (nunca dados falsos), CSS de
-dark mode confirmado no bundle servido em produção, ramo negado (`sales.sa`/`logistics.test`)
-sem qualquer agregado de custo alcançável. Detalhe completo: `STATE.md`.
+do prompt) como CSS custom properties, rótulos directos + tabela acessível por gráfico (séries
+3/4 falham 3:1 no `surface` claro), paleta de estado própria (nunca reutilizada das séries) para
+`review`/câmbio velho. As 5 provas confirmadas — cálculo à mão de cada tile via `psql`, ramo de
+aviso traçado com o limiar temporariamente baixado (nunca dados falsos), ramo negado
+(`sales.sa`/`logistics.test`) sem qualquer agregado de custo alcançável.
+
+⚠️ **Reaberta no dia seguinte — achado do Pedro no browser:** o cartão de gráfico do dashboard
+tinha `prefers-color-scheme`/`[data-theme]` ligados (implementados correctamente e confirmados
+em produção — ver F3 original, `STATE.md`), mas era o **único** elemento theme-aware de toda a
+app; numa máquina com o SO em modo escuro, só esse cartão mudava, o resto ficava claro —
+inconsistência, não tema. **Decisão do Pedro: app light-only por agora.** Blocos dark
+removidos de `.dashboard-charts` (não só desligados), com os hexes dark validados guardados em
+comentário no CSS para arranque futuro. Redeploy confirmado sem nenhum `prefers-color-scheme`/
+`data-theme` no bundle servido. Detalhe completo: `STATE.md`.
+
+📌 **«Dark mode global» — melhoria futura de baixa prioridade, sem etapa atribuída.** A app é
+light-only hoje, de propósito. A paleta dark dos gráficos do dashboard já está validada (esteve
+em produção, confirmada correcta) — um trabalho futuro de tema escuro a sério parte dela, não
+do zero.
 
 Com a i8 fechada, **o E3 está completo**. Próximo passo é decisão do Pedro entre a E5
 (operações, antes de utilizadores reais) e a E4/0006 (quando a decisão L2 fechar) — nenhuma das

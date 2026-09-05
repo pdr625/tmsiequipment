@@ -3,18 +3,41 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 8 (dashboard) — ✅ FECHADA. A E3 está completa.** Próximo: decisão
-do Pedro entre E5 (operações, antes de utilizadores reais) e E4/0006 (quando a decisão L2
-fechar) — nenhuma das duas arranca sem a primeira execução formal do
-`docs/VERIFICATION-PROTOCOL.md` (gate de produção, `docs/ROADMAP.md`). Ordem e critérios de
-saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i8) e as migrações 0003/0004/0005
-estão fechadas.
+**Etapa actual: E3, iteração 8 (dashboard) — ✅ FECHADA 2026-09-05 (dashboard light-only, dark
+mode global fica para melhoria futura). A E3 está completa.** Próximo: decisão do Pedro entre
+E5 (operações, antes de utilizadores reais) e E4/0006 (quando a decisão L2 fechar) — nenhuma
+das duas arranca sem a primeira execução formal do `docs/VERIFICATION-PROTOCOL.md` (gate de
+produção, `docs/ROADMAP.md`). Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`.
+E0, E1, E2, E3 (i1–i8) e as migrações 0003/0004/0005 estão fechadas.
 
-## E3, iteração 8 — Dashboard (KPIs e margens por filial) — ✅ FECHADA 2026-09-04 — **E3 completa**
+## E3, iteração 8 — Dashboard (KPIs e margens por filial) — ✅ FECHADA 2026-09-05 (reaberta e corrigida no dia seguinte) — **E3 completa**
 
-**Digest:** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:3cc4e108bc85eb6589e5547cb7e67042094ec4335483dce526426dd91e2bb68e`
-(`Created` 2026-09-04T22:41:08Z, commit `3e71bb1`, CI concluído 22:41:20Z — ordem consistente).
-**Footprint pós-deploy:** RAM available 144 MB; swap 1084/4095 MB (≈26%); disco 48%.
+**Digest actual (pós-correcção):** `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:3775da62ecfc16047b7eec92b7ea98cb277778825d8295b4771becf3b1b47da1`
+(`Created` 2026-09-05T09:34:59Z, commit `f972129`, CI concluído 09:35:09Z — ordem consistente).
+**Footprint pós-deploy:** RAM available 160 MB; swap 1108/4095 MB (≈27%); disco 48%.
+
+**Digest original da i8 (2026-09-04, substituído — ver correcção abaixo):**
+`sha256:3cc4e108bc85eb6589e5547cb7e67042094ec4335483dce526426dd91e2bb68e` (commit `3e71bb1`).
+
+**Reaberta em 2026-09-05 — diagnóstico do Pedro:** o cartão de gráfico do dashboard era o
+**único** elemento theme-aware de toda a app (correcto em si, ver F3 original abaixo) — o resto
+da app nunca teve dark mode nenhum. Numa máquina com preferência de tema escuro do SO, só esse
+cartão mudava de aparência, o resto ficava claro — lido como inconsistência/defeito, não como
+tema. **Decisão do Pedro:** app light-only por agora. Correcção: removidos os blocos
+`@media (prefers-color-scheme: dark)` e `:root[data-theme='dark']` de `.dashboard-charts`
+(`globals.css`) — não desactivados, removidos —, deixando só a paleta light fixa, com um
+comentário no CSS a registar os hexes dark que estiveram em produção e foram validados (F3
+original, prova 3), para servirem de ponto de partida quando a app tiver um tema real, em vez de
+os re-derivar do zero. Redeploy confirmado: o CSS servido em produção já não contém nenhuma
+ocorrência de `prefers-color-scheme` nem `data-theme` (verificado directamente no bundle).
+Nenhuma outra secção do dashboard foi tocada.
+
+**«Dark mode global» registado como melhoria futura de baixa prioridade** (`docs/ROADMAP.md`) —
+a paleta dark dos gráficos já está validada (ficou em produção e foi confirmada correcta antes
+desta reversão), por isso um trabalho futuro de dark mode a sério não parte do zero.
+
+---
+**Texto original do fecho da i8 (2026-09-04), mantido para o histórico das provas:**
 
 `/dashboard`, gate `can_read_costs()` apenas (admin já é o primeiro membro dessa própria função
 — um `isAdmin()` à parte só alargaria o gate, nunca o estreitaria). Cinco secções, todas lidas
@@ -61,7 +84,9 @@ ficheiro para os outros três agregados, em vez de arriscar um round-trip ao CI 
    o CSS realmente servido em produção (`/_next/static/chunks/*.css`) contém os três blocos
    exactos (`.dashboard-charts` base, `@media (prefers-color-scheme: dark)`, e
    `:root[data-theme='dark']`), com os hexes exactos do prompt em cada um. A confirmação visual
-   fica para o passo manual do Pedro.
+   fica para o passo manual do Pedro. **⚠️ Revertido em 2026-09-05 — ver a correcção no topo
+   desta secção: esta prova mostra que a implementação original estava correcta, não que o
+   dark mode continua activo hoje.**
 4. **Ramo negado:** `sales.sa` e `logistics.test` — `can_read_costs()` = `false` para ambos
    (logo `/dashboard` redirecciona, mesmo gate que a app usa); e, defesa em profundidade,
    `tmsi.v_branch_prices` (margem), `tmsi.price_overrides` e `tmsi.audit_log` devolvem `0` linhas
