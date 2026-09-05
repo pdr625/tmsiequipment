@@ -107,6 +107,15 @@ novo (i9). A troca da PRÓPRIA password (`/account/password`) é universal — *
 autenticado, sem distinção — por isso não é uma linha da matriz (não há papel que a BD trate
 diferente); testada uma única vez, não oito, no passo Y (secção 4.7).
 
+⁵ **Exports (.xlsx) e a vista de impressão (i10) seguem exactamente as mesmas fronteiras
+desta matriz — nunca uma linha nova.** `/prices/export` e `/products/export` fazem a mesma
+chamada a `tmsi.can_read_costs()` e leem exactamente as mesmas vistas
+(`tmsi.v_branch_prices`/`v_selling_prices`/`v_products`) e as mesmas colunas que os ecrãs
+`/prices`/`/products` já mostram — nunca uma coluna a mais do que a que essa página
+renderiza (`tmsi.compute_price()`/`v_branch_prices` devolvem colunas adicionais como
+`fx_used`/`duty`/`overrides[]` que a listagem nunca mostrou; o ficheiro também não as mostra).
+O ficheiro é a fronteira que se testa, não o ecrã — passo AA, secção 4.8.
+
 ## 4. Protocolo de teste por papel
 Para cada papel testado: um utilizador dedicado a testes (em produção: conta de teste real
 com o papel, **nunca** a conta pessoal de um colega), duas vias por teste — **browser**
@@ -208,6 +217,38 @@ Z. **Ramos negados centrais:** não-admin a invocar `tmsi.admin_revoke_sessions(
    (reset), actor = o próprio no sentido `true→false` (troca concluída) — nenhum valor de
    password em nenhum `old_row`/`new_row` (só a coluna booleana `must_change_password`,
    confirmado por leitura directa, não por assumção).
+
+### 4.8 Exports (.xlsx) e vista de impressão (i10, adicionado nesta revisão)
+AA. **O ficheiro é a fronteira, não o ecrã (restrição central do prompt da i10):** abrir o
+    `.xlsx` (é um zip — `unzip`/`grep` às strings internas, não só olhar as colunas no Excel)
+    de um papel sem `can_read_costs()` e confirmar **zero** ocorrências de `exw`, `sap_code`,
+    `supplier` nas strings do ficheiro. Um papel sem custos que peça, via o parâmetro
+    `branch` do endpoint, uma filial fora do seu âmbito ou tente forçar a vista de custos →
+    o ficheiro devolvido continua limitado ao que a RLS já dava (0 linhas fora do âmbito,
+    nunca uma coluna de custo) — o parâmetro não é autoridade, é sempre um filtro *sobre*
+    o que a vista já devolveu, nunca uma escolha de vista.
+BB. Valores de uma linha do export conferidos à mão contra o SQL directo à mesma vista —
+    o ficheiro não introduz cálculo nenhum, só lê `tmsi.v_branch_prices`/`v_selling_prices`/
+    `tmsi.v_products`, exactamente como os ecrãs equivalentes.
+CC. Vista de impressão (`/prices` apenas, `@media print`): cabeçalho (lista, âmbito, moeda,
+    data, utilizador) e rodapé (texto do `/NOTICE` do repositório — não o rodapé mais curto
+    do ecrã de login, um texto diferente para uma audiência diferente) visíveis só na
+    pré-visualização de impressão, nunca no ecrã normal; como papel sem custos, a mesma
+    vista sem as colunas de custo.
+DD. Memória: `docker stats` do `tmsi-app` durante uma geração real (o maior dataset
+    disponível) — dentro do `mem_limit` (192 MB), sem `OOMKilled` nos logs do container.
+
+**Nota de execução, i10:** AA/BB (dados) e a metade de RLS de AA foram confirmados
+directamente contra a base de dados (`BEGIN`/leitura directa, claims JWT reais) — provam que
+os dados que o ficheiro conteria estão correctos e que o parâmetro `branch` nunca escolhe a
+vista nem ultrapassa a RLS. **Não confirmados nesta sessão, por precisarem de uma sessão de
+browser real:** abrir o `.xlsx` real gerado pelo endpoint (o `grep` ao ficheiro tal como
+descrito em AA), CC (pré-visualização de impressão) e DD (memória durante uma geração via
+HTTP real) — tentativa de replicar uma sessão autenticada por `curl` (login via progressive
+enhancement de Server Actions do Next.js) feita e abandonada: `/login` é servida pré-renderizada
+estática (`x-nextjs-cache: HIT`), a submissão não chegou à Server Action real. Ficam para os
+passos manuais do Pedro (secção 6 do prompt da i10), que já incluíam abrir os exports reais e
+testar a impressão.
 
 ## 5. Regras de execução em produção
 - Executor: o administrador + uma segunda pessoa como testemunha para os testes do ramo
@@ -330,3 +371,33 @@ o padrão é byte-a-byte o mesmo de `banUser`/`unbanUser`/`inviteUser`, já prov
 para não-admin nas execuções da i3/protocolo — e a fronteira que importa de facto,
 `admin_revoke_sessions()`/`profiles_admin`, está confirmada acima independentemente desse
 gate da app).
+
+**Adenda, 2026-09-05 (i10) — re-execução PARCIAL, só os passos de export/impressão (AA–DD,
+secção 4.8 acima):** migrações 0001–0006 (i10 não trouxe migração nova); digest
+`sha256:8691c1a01f57dc8f294303b6b2cb0eb99f8ed51a913902d7b0e7892f0c203e9b`. Executor: agente,
+só BD (dados/RLS) — as provas que exigem ficheiro real/browser (o `grep` ao `.xlsx`, a
+pré-visualização de impressão, a memória durante uma geração HTTP real) não foram
+realizadas nesta adenda, ficam para o Pedro.
+
+Confirmado directamente contra a base de dados, com as mesmas colunas que as rotas de export
+seleccionam: `v_branch_prices`/`v_selling_prices` para T-0005/SA devolvem os mesmos valores
+(`min_price 1978.00, ref_price 2176.00`) por ambas as vistas, calculados à mão a partir de
+`total_cost_eur 890.00` e `margin 0.55` (override real, activo, não um dado de teste) —
+`890/(1-0.55) = 1977.78 → 1978.00`; `1978×1.1 = 2175.8 → 2176.00` (Postgres arredonda .5 para
+cima) — AA/BB confirmados ao nível dos dados. `sales.sa` a pedir a filial `TBM` (fora do seu
+âmbito) a `v_branch_prices`/`v_selling_prices` → `0` linhas nas duas, e uma leitura directa
+de `total_cost_eur`/`margin` por `sales.sa` na sua própria filial devolve `NULL`, não um erro
+nem um valor — confirma que o parâmetro `branch` do endpoint nunca teria autoridade nenhuma
+mesmo que a app tivesse um defeito, a RLS/vista já filtra antes de qualquer código nosso ver
+a linha. Sem regressões: `/`, `/login`, `/prices`, `/products`, `/prices/export`,
+`/products/export`, `/admin/users`, `/config`, `/overrides`, `/audit`, `/dashboard`,
+`/account/password`, `/auth/v1/health`, `/rest/v1/` — todos com o código esperado, sem
+sessão.
+
+**Achado de processo, registado no fecho:** duas falhas reais de CI antes de chegar a uma
+imagem válida (detalhe: `docs/STATE.md`) — uma tentativa própria de replicar uma sessão
+autenticada via `curl` (login por progressive enhancement de Server Actions) foi tentada e
+abandonada ao confirmar que `/login` é servida pré-renderizada estática
+(`x-nextjs-cache: HIT`), a submissão nunca chegando à Server Action real — não insistido
+mais, decisão consistente com a recusa já registada acima (i9) de replicar cookies internos
+do `@supabase/ssr` por fragilidade.
