@@ -74,16 +74,15 @@ não convidar colegas reais antes disso.
 achados de segurança + 3 de correcção funcional + 4 de manutenibilidade, todos fechados só em
 `app/src`, zero migração/infra/GoTrue/compose além do digest do deploy; `smoke.py` 27/27 duas
 vezes. Detalhe, mapa achado→commit→prova: `docs/STATE.md`.)
-**22. `forgot-password/actions.ts` — mesmo padrão de `Host` não validado do achado #1 da
-tarefa 6** *(achado durante a tarefa 6, não corrigido — fora do âmbito dos 9 originais)* —
-constrói o `redirectTo` do Supabase a partir do `Host` do pedido, sem allowlist; risco menor
-que o achado original (vai para uma chamada de API, não para um redirect de browser), mesma
-classe de problema.
-**23. `compute_price()`'s `errors[]` nunca chega ao ecrã** *(achado durante a tarefa 6, não
-corrigido)* — o motor tem o seu próprio array de "soft errors" (câmbio/fee/transporte/direito
-em falta) que nunca é lido por `products/[id]/page.tsx` nem está no tipo `PriceBreakdown`; um
-cálculo com dados em falta fica hoje sem indicação nenhuma no ecrã, diferente do `.error` de
-transporte do RPC que a tarefa 6 já corrigiu (achado #3).
+~~**22. `forgot-password/actions.ts` — mesmo padrão de `Host` não validado do achado #1 da
+tarefa 6**~~ ✅ **fechada 2026-09-05, tarefa 7** (medido ao vivo antes de corrigir: a
+exposição real já estava mitigada pela allowlist do próprio GoTrue — `SITE_URL`/
+`URI_ALLOW_LIST`, confirmado contra a fonte v2.189.0; corrigido na mesma, por
+defesa-em-profundidade. Detalhe: `docs/STATE.md`.)
+~~**23. `compute_price()`'s `errors[]` nunca chega ao ecrã**~~ ✅ **fechada 2026-09-05,
+tarefa 7** (inventário das 5 condições soft, array já vinha em todas as respostas do RPC —
+gap era só de tipo/apresentação; célula "Alert" mostra agora a lista de erros. Provado com
+fixture descartável, resíduo zero. Detalhe: `docs/STATE.md`.)
 
 ## 🟡 Médias — decisões tuas e melhorias com contexto
 

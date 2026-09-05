@@ -13,6 +13,114 @@ disponíveis para uma sessão futura de correcção, se/quando decidires prioriz
 critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
 
+## Tarefa 7 — Achados 22/23 (Host no forgot-password · errors[] do motor) — ✅ FECHADA 2026-09-05
+
+**Contexto (`docs/BACKLOG.md` itens 22/23):** fecha os 2 achados registados durante a tarefa 6
+(fora de âmbito lá). Só `app/src` — zero migrações, zero infra/GoTrue/vhost tocados.
+
+### Achado #22 — `forgot-password/actions.ts`, Host não validado
+
+**F0 — medido antes de corrigir, não assumido.** O ficheiro construía `origin` a partir de
+`(await headers()).get('host')`, alimentando o `redirectTo` de
+`supabase.auth.resetPasswordForEmail()` — que o `@supabase/auth-js` envia ao `/recover` do
+GoTrue. **Discrepância entre o achado e a realidade medida, reportada em vez de assumida:**
+o prompt desta tarefa descrevia isto como "pior do que o redirect do logout" (o link vai
+dentro de um email legítimo nosso — phishing). Medido ao vivo com `/admin/generate_link`
+(`type=recovery`) contra o código tal como estava, com um `redirect_to` forjado (a simular o
+que um `Host` forjado produziria): GoTrue **rejeitou** o valor e caiu para
+`GOTRUE_SITE_URL` (`https://tmsiequipment.duckdns.org`) — o link gerado nunca continha o
+domínio forjado. Confirmado contra a fonte real do GoTrue v2.189.0
+(`internal/utilities/request.go`, `GetReferrer`→`IsRedirectURLValid`: compara `Hostname()`
+via `url.Parse`, ou testa contra `URIAllowListMap` — nunca aceita um valor fora da allowlist,
+cai sempre para `SiteURL`). **A exposição real já estava mitigada pela allowlist do próprio
+GoTrue, mesmo sem este fix** — ao contrário da framing original da tarefa 5/7; a nota da
+tarefa 5 ("pelo menos passa pelo `SITE_URL`/`URI_ALLOW_LIST`") era a mais precisa das duas.
+
+**Fix aplicado na mesma** (commit `97ba9e4`) — depender só da validação de um sistema a
+jusante como única defesa contra um header não confiável é frágil por desenho (uma
+reconfiguração futura do `GOTRUE_SITE_URL`/`URI_ALLOW_LIST`, ou uma mudança de comportamento
+numa versão futura do GoTrue, tornaria isto explorável de um dia para o outro, em silêncio).
+Mesmo padrão do achado #1 da tarefa 6 (`1be40ef`): `origin` passa a
+`process.env.NEXT_PUBLIC_SUPABASE_URL!`, valor de build, nunca lido do pedido.
+
+**Varrimento (F0/F4):** grep exaustivo a `headers()\.get|request\.headers\.get|req\.headers\.get`
+em todo o `app/src`, antes e depois do fix — `forgot-password/actions.ts` era o **único**
+ficheiro com o padrão; zero ocorrências remanescentes pós-fix. Nada mais a registar no
+BACKLOG desta família.
+
+**Provas (F4):**
+1. Sweep final: zero ocorrências do padrão em `app/src` (comando acima, output vazio).
+2. Build correcto: `grep -rl tmsiequipment.duckdns.org /app/.next/` dentro do container
+   `tmsi-app` **desta imagem** confirma o valor de `NEXT_PUBLIC_SUPABASE_URL` realmente
+   embutido no bundle compilado, não assumido do `ci.yml` de memória.
+3. Fluxo normal intacto: `POST /auth/v1/recover` (de dentro do container, sem password
+   nenhuma) contra `logistics.test` → `200`; uma segunda tentativa imediata → `429` (o
+   próprio limite de frequência do GoTrue, `validateSentWithinFrequencyLimit` — comportamento
+   esperado, não uma falha).
+4. **Não tentado, por desenho:** invocar a Server Action `requestPasswordReset` directamente
+   por HTTP para replicar o forjar do `Host` pelo caminho exacto do browser — fabricar o
+   protocolo de Server Actions do Next.js continua desaconselhado (i9/i10, duas tentativas
+   abandonadas). O código já não lê `headers()` nenhum — é uma garantia estrutural (leitura
+   de código), não só empírica, de que um `Host` forjado não tem já nenhum caminho de código
+   para influenciar o resultado.
+
+### Achado #23 — `errors[]` do `compute_price()` nunca chegava ao ecrã
+
+**F0 — inventário real das 5 condições de erro "soft"** (contra `0001_initial_schema.sql`
+§7, `compute_price()` — cada uma usa um valor por omissão e o cálculo continua, nunca
+interrompe):
+1. `missing exchange rate` — `tmsi.fx_rate()` nulo para a moeda do produto ou da filial (sem
+   override `fx` activo, moeda ≠ EUR).
+2. `missing interco fee` — filial ≠ filial primária do produto, sem linha em
+   `tmsi.interco_fees` para o par (fornecedora, vendedora) (sem override `fee`).
+3. `missing transport tier / weight` — filial ≠ primária, tipo não `option`/`service`, sem
+   tier em `tmsi.transport_tiers` para a filial/peso (sem override `transport`).
+4. `missing customs rate for HS/zone` — filial ≠ primária, tipo não `option`/`service`, sem
+   linha em `tmsi.customs_rates` para o par (HS, zona) (sem override `duty`).
+5. `missing margin grid` — `tmsi.branch_margin()` nulo e não é uma opção a herdar a margem
+   do pai (sem override `margin`).
+
+Confirmado ao vivo (`row_to_json`) que o array `errors` **já vinha em todas as respostas do
+RPC** — nunca precisou de mudança na query; o gap era só de tipo TypeScript
+(`PriceBreakdown` não o declarava) e apresentação (a célula "Alert" mostrava só `r.alert`,
+que já valia o texto opaco `'error'` quando `errors` não estava vazio —
+`array_length(err,1) > 0 then 'error'`, 0001 §7 — indistinguível de `critical`/`warning`/
+`ok`, sem nunca mostrar qual condição falhou). Confirmado por consulta directa que **nenhum
+produto real actual** tem hoje um erro soft (0 linhas) — a prova exigiu um fixture
+descartável, como antecipado pelo prompt.
+
+**Fix** (commit `5c33021`): `PriceBreakdown` ganha `errors: string[] | null`; a célula
+"Alert" mostra a lista de `errors` (role="alert", vermelho) sempre que não vazia, caindo no
+`r.alert` antigo nos restantes casos. Nenhuma mudança ao cálculo — puramente apresentação.
+
+**Prova (F4), fixture descartável, resíduo zero:** `tmsi.hs_codes` código `999999` (sem
+`customs_rate` associada, único gap fácil de construir sem tocar em nenhuma linha
+partilhada — `interco_fees`/`transport_tiers`/`margin_grids` estavam **completamente**
+cobertos para as 4 filiais, sem gap nenhum a explorar sem mexer em dados reais) + produto
+descartável `T-9099` (`status='draft'`, filial primária `SA`, também vendido em `TBM`).
+`compute_price('T-9099','SA')` → `alert='ok', errors={}` (filial primária, sem duty); `compute_price('T-9099','TBM')` →
+`alert='error', errors={"missing customs rate for HS/zone"}` — exactamente uma condição
+isolada, replicado com claims JWT de uma sessão `finance` real (não só como `postgres`),
+confirmando que é isto que a página realmente recebe. `min_price` da filial `TBM` saiu
+artificialmente inflacionado (`duty_rate` a cair para `0` em silêncio) — a demonstração
+concreta de porque este achado importa. Fixture apagado no fim (`hs_codes`/`products` de
+volta a 5/13, contagens confirmadas); decisão registada: sem forma de coordenar um olhar
+síncrono do Pedro no browser antes de fechar a sessão, optei por provar e apagar já, deixando
+nota de que o fixture é trivial de reconstruir se algum dia quiser vê-lo ao vivo.
+
+**Deploy:** digest `sha256:8b466fa373...` → `sha256:9122dfa58c40add4da785bb85e9c4595336e0f88c78439b7283cb1fa0d259f18`,
+`scripts/smoke.py` **27/27** três vezes (pós-deploy, pós-fixture-criado, pós-fixture-apagado)
+— sem regressão nenhuma.
+
+**`VERIFICATION-PROTOCOL.md` — avaliado explicitamente, não alterado.** Achado #22 é da
+mesma família do achado #1 da tarefa 6 — a mesma conclusão de lá aplica-se sem precisar de
+repetir a análise: nenhum teste com letra existente cobre o alvo exacto do redirect do
+forgot-password. Achado #23: os testes A/B (breakdown do motor) verificam que os valores
+ficam preenchidos, nunca a coluna "Alert"/`errors[]` especificamente — nenhum teste existente
+cobre isto também. Nenhuma célula a actualizar nos dois casos.
+
+---
+
 ## Piloto — preparação do onboarding — ✅ achado corrigido 2026-09-05
 
 **Contexto:** ao preparar o guião passo-a-passo de onboarding do piloto (`docs/BACKLOG.md`
