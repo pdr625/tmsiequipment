@@ -8,16 +8,8 @@
 'use client';
 
 import { useActionState } from 'react';
+import { ErrorText } from '@/lib/error-text';
 import { createPriceOverride, createHsOverride, type OverrideActionState } from './actions';
-
-function ErrorText({ state }: { state: OverrideActionState }) {
-  if (!state || !('error' in state)) return null;
-  return (
-    <p role="alert" className="mt-1 text-xs text-red-600">
-      {state.error}
-    </p>
-  );
-}
 
 export function PriceOverrideForm({
   products,

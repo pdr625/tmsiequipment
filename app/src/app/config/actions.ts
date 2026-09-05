@@ -10,8 +10,9 @@
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageFinanceConfig, canManageOperationalConfig } from '@/lib/auth-guard';
+import type { ActionState } from '@/lib/action-state';
 
-export type ConfigActionState = { error: string } | { success: true } | undefined;
+export type ConfigActionState = ActionState;
 
 // Real gate first, caller's own session, before any write is attempted —
 // config_write (RLS) on each table is the actual boundary; this just

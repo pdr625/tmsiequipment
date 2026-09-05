@@ -10,8 +10,9 @@
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageAnyPriceOverride, isAdmin } from '@/lib/auth-guard';
+import type { ActionState } from '@/lib/action-state';
 
-export type OverrideActionState = { error: string } | { success: true } | undefined;
+export type OverrideActionState = ActionState;
 
 // Real gate first, caller's own session — tmsi.overrides_write/ref_write
 // (RLS) are the actual boundary; this only avoids a wasted round trip for

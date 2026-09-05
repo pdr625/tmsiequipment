@@ -8,6 +8,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { ErrorText } from '@/lib/error-text';
 import {
   addExchangeRate,
   updateIntercoFee,
@@ -17,15 +18,6 @@ import {
   updateSetting,
   type ConfigActionState,
 } from './actions';
-
-function ErrorText({ state }: { state: ConfigActionState }) {
-  if (!state || !('error' in state)) return null;
-  return (
-    <p role="alert" className="mt-1 text-xs text-red-600">
-      {state.error}
-    </p>
-  );
-}
 
 // Every editable row below uses the same technique: an empty <form> (just
 // the id, action and hidden primary-key inputs) sits in the first <td>,

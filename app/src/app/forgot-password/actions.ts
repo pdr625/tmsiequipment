@@ -9,8 +9,9 @@
 
 import { headers } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import type { ActionState } from '@/lib/action-state';
 
-export type RequestResetState = { error: string } | { success: true } | undefined;
+export type RequestResetState = ActionState;
 
 export async function requestPasswordReset(
   _prevState: RequestResetState,

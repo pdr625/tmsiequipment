@@ -8,6 +8,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import { ErrorText } from '@/lib/error-text';
 import {
   inviteUser,
   assignRole,
@@ -29,15 +30,6 @@ const ROLES = [
   'agent',
   'viewer',
 ];
-
-function ErrorText({ state }: { state: ActionState }) {
-  if (!state || !('error' in state)) return null;
-  return (
-    <p role="alert" className="mt-1 text-xs text-red-600">
-      {state.error}
-    </p>
-  );
-}
 
 export function InviteForm() {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(inviteUser, undefined);

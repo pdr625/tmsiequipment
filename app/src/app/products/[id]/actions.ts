@@ -10,8 +10,9 @@
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageProducts } from '@/lib/auth-guard';
+import type { ActionState } from '@/lib/action-state';
 
-export type UpdateProductState = { error: string } | { success: true } | undefined;
+export type UpdateProductState = ActionState;
 
 // String field: empty input -> null (not ''), matching how the columns
 // are actually nullable. Only used for optional text/reference columns.

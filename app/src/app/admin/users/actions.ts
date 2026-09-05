@@ -11,9 +11,10 @@ import { randomInt } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { isAdmin } from '@/lib/auth-guard';
+import type { ActionState as SharedActionState } from '@/lib/action-state';
 
-export type ActionState = { error: string } | { success: true } | undefined;
-export type ResetPasswordState = { error: string } | { success: true; generatedPassword?: string } | undefined;
+export type ActionState = SharedActionState;
+export type ResetPasswordState = SharedActionState<{ generatedPassword?: string }>;
 
 const GOTRUE_INTERNAL_URL = 'http://auth:9999';
 
