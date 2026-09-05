@@ -57,6 +57,7 @@ partir do desenho original. 16 correcções feitas à proposta inicial; detalhe 
 | Criar overrides | ✅ | ❌ | ✅ | ◐ transp./margem/coef, filial própria | ◐ só duty, qualquer filial | ❌ | ❌ | ❌ |
 | Ver valores de overrides de preço | ✅ | ✅ | ✅ | ◐ filial própria | ❌ | ❌ | ❌ | ✅ |
 | Auditoria global | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| Dashboard (acesso à página) | ✅ | ✅ | ✅ | ✅ ² | ❌ | ❌ | ❌ | ✅ |
 | Administração de utilizadores | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Artigos não-activos (draft/review/…) | ✅ | ✅ | ✅ | ◐ | ✅ | ❌ | ❌ | ✅ |
 
@@ -68,6 +69,14 @@ total, a margem e as fees vêm do `tmsi.compute_price()` (gate: `see_costs`, que
 pedida**, não a do produto) — por isso um `branch_manager` pode ver o EXW de um produto vendido
 em várias filiais mas só o `total_cost`/`margin` calculado para a sua própria filial. A célula
 usa ◐ para reflectir o caso mais restrito; testar os dois mecanismos separadamente (passos B/L).
+
+² **`/dashboard` (E3-i8) — gate da própria página, não uma nova regra.** `canReadDashboard()`
+verifica só `tmsi.can_read_costs()`, sem verificação de filial nenhuma — ao contrário da célula
+◐ de "Custos"/"Breakdown do motor" acima, o `branch_manager` entra na página sem restrição. O
+que aparece **dentro** do dashboard para esse papel continua condicionado pelas linhas próprias
+desta matriz (a margem por filial só mostra a sua, via `tmsi.v_branch_prices`/`compute_price()`)
+— o acesso à página em si não é mais restrito que o de `admin`/`finance`/`product_manager`/
+`viewer`. Testado nos passos U/V (secção 4.6).
 
 **Duas notas adicionais, não redutíveis a uma célula:**
 - **Assimetria em `price_overrides`:** `logistics` pode **criar** um override de `duty`
@@ -97,7 +106,10 @@ E. Auditoria global acessível, filtros funcionais.
 
 ### 4.2 Papel comercial (sales) — o ramo negado, o coração da demonstração
 F. Browser: listagem só com artigos activos do seu âmbito, sem colunas de custo; `/config`,
-   `/audit`, `/admin/users` inacessíveis (redirect).
+   `/audit`, `/admin/users`, `/dashboard` inacessíveis (redirect). `/overrides` **não**
+   redirecciona (é aberto a qualquer `authenticated` para a parte de HS — 0001 `ref_read`) mas
+   não mostra overrides de preço nem formulário de criação nenhum — não confundir "sem
+   redirect" com "sem protecção" neste caso específico.
 G. **API directa** (a prova que distingue este protocolo): pedido manual de `exw_price`,
    códigos SAP, fornecedor à tabela de produtos → **recusado pela base** (erro de
    privilégio); pedido às vistas → custos ausentes ou nulos, nunca valores.
@@ -130,6 +142,17 @@ R. Correcção de câmbio no mesmo dia → aceite; entrada superada visível com
 S. Convite: email chega; o link **sobrevive ao scanner** (só age com clique humano);
    definição de password e login funcionam.
 T. Reset de password: idem; a password antiga deixa de funcionar.
+
+### 4.6 Dashboard — agregados (E3-i8, adicionado nesta revisão do protocolo)
+U. **API:** `tmsi.can_read_costs()` confirmado para cada papel (nota ², secção 3); as vistas
+   que o dashboard lê (`tmsi.v_products`, `tmsi.v_branch_prices`, `tmsi.price_overrides`,
+   `tmsi.audit_log`) devolvem, para um papel sem `can_read_costs()`, exactamente as mesmas
+   linhas/colunas que os testes G–N já verificam para essas mesmas tabelas — o dashboard não
+   agrega o que essas vistas já não devolvam (restrição 3 do prompt da i8: agregados não são
+   fuga por agregação).
+V. **Browser:** como `admin`/`finance`, os números (tiles, margem por filial, overrides
+   activos, actividade recente) coerentes com os dados de teste conhecidos; como `sales.sa`
+   (ou outro papel sem `can_read_costs()`), `/dashboard` redirecciona.
 
 ## 5. Regras de execução em produção
 - Executor: o administrador + uma segunda pessoa como testemunha para os testes do ramo
