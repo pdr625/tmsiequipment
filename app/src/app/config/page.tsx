@@ -110,19 +110,20 @@ export default async function ConfigPage() {
   const hsDescription = (code: string) => hsCodes?.find((h) => h.code === code)?.description ?? '';
 
   // tmsi.fx_rate() (0001 §7, tie-break added by 0005) picks, per currency,
-  // the row with the latest effective_date and, among same-day entries,
-  // the latest created_at — exactly the query's own ordering above, so
-  // the first row seen per (currency, effective_date) group is the one
-  // the engine actually uses today; 0005 allows more than one entry per
-  // day specifically so a mistake can be corrected without waiting for
-  // tomorrow, so any other row in that group is a superseded attempt, not
-  // an error — shown as such rather than left unexplained.
+  // the ONE row with the latest effective_date <= today and, among
+  // same-day entries, the latest created_at — exactly the query's own
+  // ordering above, so per currency the first row seen with an
+  // effective_date not in the future is the one the engine actually uses
+  // today; every other row (an older date, a same-day entry beaten by a
+  // later correction, or a not-yet-effective future date) is superseded,
+  // not an error — shown as such rather than left unexplained.
+  const today = new Date().toISOString().slice(0, 10);
   const activeExchangeRateIds = new Set<number>();
-  const seenGroups = new Set<string>();
+  const seenCurrencies = new Set<string>();
   for (const r of exchangeRates ?? []) {
-    const groupKey = `${r.currency}-${r.effective_date}`;
-    if (!seenGroups.has(groupKey)) {
-      seenGroups.add(groupKey);
+    if (r.effective_date > today) continue;
+    if (!seenCurrencies.has(r.currency)) {
+      seenCurrencies.add(r.currency);
       activeExchangeRateIds.add(r.id);
     }
   }
