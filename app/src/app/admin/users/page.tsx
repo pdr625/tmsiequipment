@@ -53,11 +53,14 @@ export default async function AdminUsersPage() {
     cache: 'no-store',
   });
   const bannedIds = new Set<string>();
+  let banStatusError: string | null = null;
   if (gotrueRes.ok) {
     const body = (await gotrueRes.json()) as { users: GoTrueUser[] };
     for (const u of body.users) {
       if (u.banned_until) bannedIds.add(u.id);
     }
+  } else {
+    banStatusError = `Ban status unavailable — GoTrue admin API returned ${gotrueRes.status}`;
   }
 
   const rolesByUser = new Map<string, UserRole[]>();
@@ -84,6 +87,12 @@ export default async function AdminUsersPage() {
         </p>
       )}
 
+      {banStatusError && (
+        <p role="alert" className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+          {banStatusError}
+        </p>
+      )}
+
       <div className="space-y-6">
         {(profiles as Profile[])?.map((p) => {
           const userRoles = rolesByUser.get(p.user_id) ?? [];
@@ -94,8 +103,14 @@ export default async function AdminUsersPage() {
                 <div>
                   <span className="font-medium">{p.email}</span>
                   {p.full_name && <span className="ml-2 text-sm text-gray-500">{p.full_name}</span>}
-                  {banned && (
-                    <span className="ml-2 rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">disabled</span>
+                  {banStatusError ? (
+                    <span className="ml-2 rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
+                      ban status unknown
+                    </span>
+                  ) : (
+                    banned && (
+                      <span className="ml-2 rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">disabled</span>
+                    )
                   )}
                 </div>
                 <BanToggleButton userId={p.user_id} banned={banned} />
