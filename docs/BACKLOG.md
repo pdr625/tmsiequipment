@@ -65,6 +65,10 @@ dessa sessão — o espelho 1.14 já estava feito pela E5-HOMELAB, sinalização
 útil para recovery self-service; via TI a ponderar junto com o CPI.
 **8. Piloto com 2–3 colegas** *(depois de 1–4)* — onboarding por password temporária;
 recolha de feedback que informa a L2 e a i11+.
+**21. Tarefa 6 — Correcção dos 9 achados do code review** *(sessão VPS, imediatamente a
+seguir à tarefa 5)* — fecha os 2 achados de segurança, os 3 de correcção funcional e os 4 de
+manutenibilidade listados na tarefa 5 (`docs/STATE.md`), sem tocar em migrações/infra/GoTrue/
+compose; pré-condição para o piloto (8). Detalhe completo ao fechar: `docs/STATE.md`.
 
 ## 🟡 Médias — decisões tuas e melhorias com contexto
 
