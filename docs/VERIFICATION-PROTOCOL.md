@@ -423,3 +423,32 @@ abandonada ao confirmar que `/login` é servida pré-renderizada estática
 (`x-nextjs-cache: HIT`), a submissão nunca chegando à Server Action real — não insistido
 mais, decisão consistente com a recusa já registada acima (i9) de replicar cookies internos
 do `@supabase/ssr` por fragilidade.
+
+**Adenda, 2026-09-05 (tarefa 6) — re-execução PARCIAL, só as páginas/acções tocadas pelos 9
+achados (não uma nova execução completa dos 8 papéis — tarefa 6 não tocou RLS, roles nem
+lógica de visibilidade, só tratamento de erro/apresentação/duplicação em `app/src`):**
+migrações 0001–0006 (sem migração nova); digest
+`sha256:32c45cf2c98b21f5642cb5b2fd435359f1c7f82e6153f3df71b02aadfb64cb79`. Executor: agente
+(API/BD/container), Pedro (browser, sweep visual).
+
+`scripts/smoke.py` **27/27** duas vezes pós-deploy — cobre a maior parte da superfície
+automatizada da matriz (blocos G-J/A-B/O-R, ou seja grande parte de F/G/H/I/J/A/B/O/P/Q/R
+desta secção), sem regressão. Provas específicas dos 9 achados, ao vivo onde possível, por
+leitura de código onde não (GoTrue não pode ser derrubado de forma limpa; forçar um erro real
+do `compute_price()` ou invocar Server Actions por HTTP directo foram avaliados e evitados
+pelas mesmas razões já registadas nas adendas i9/i10) — detalhe completo, achado a achado,
+com o resultado exacto de cada prova: `docs/STATE.md`, secção "Tarefa 6". Nenhum teste com
+letra existente (A–Z) cobre os dois achados de segurança (#1 open redirect, #2 ban-status) —
+avaliado explicitamente, não há célula desta matriz a actualizar.
+
+Confirmado pelo Pedro (browser, sweep pós-deploy): `/admin/users` (bans), um detalhe de
+produto (breakdown), `/config` (FX "in use"), `/overrides` — sem mudança de ecrã além do
+pretendido. Sem regressões observadas em nenhum papel.
+
+**Gate de produção satisfeito para o estado actual** (migrações 0001–0006 + digest acima) —
+esta adenda cobre o pré-requisito de "re-execução formal antes de onboarding de utilizadores
+reais" registado no fecho da i9. O piloto (`docs/BACKLOG.md` item 8) pode avançar do lado
+técnico; o convite/atribuição de papel/reset de password de cada colega é, por desenho,
+acção do Pedro no próprio `/admin/users` (ver nota de segurança já estabelecida: sessões
+autenticadas reais e passwords de pessoas reais não são fabricadas nem manuseadas pelo
+agente).
