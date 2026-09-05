@@ -99,8 +99,47 @@ linha antes de poder limitar, dado a forma actual da vista; um `LIMIT` simples r
 Next.js renderiza mas não o custo do lado da BD. Decisão de desenho pendente (prioridade/
 timing/âmbito da correcção — mais do que UI, pode pedir repensar a vista), tua. Detalhe
 completo: `docs/STATE.md`.
-**15. Ensaio de restauro completo** (dump → ambiente limpo → app funcional) — o ensaio
-geral da E6; agendar antes da migração para a empresa.
+**~~15. Ensaio de restauro completo~~** — ✅ **FEITO 2026-09-06**, execução n.º 1 no homelab.
+**RTO medido 13 min 21 s** (camada de dados + API); RPO observado em horas. Os dados sobrevivem
+e voltam a servir com segredos novos — 38 POLICY, RLS e a fronteira de custos 0003/0004 todas
+intactas. O que **não** sobreviveu foi o procedimento: o restauro documentado produz uma BD
+meio-restaurada em silêncio, e a imagem não se consegue reapontar. Relatório completo, com o
+procedimento correcto provado: `docs/DISASTER-DRILL.md`. Sequelas → itens 21, 22 e 23.
+
+**21. Kit de desastre** — as lacunas de *documentação e portabilidade* achadas no ensaio
+(`docs/DISASTER-DRILL.md`, achados 5–8), agrupadas por serem todas a mesma coisa: os dados
+sobrevivem, o kit à volta deles não. Âmbito:
+1. **Reescrever o `DEPLOY.md` contra a produção real** — nginx no host (sem Kong, sem NPM),
+   deploy em `~/atelier-vps/tmsiequipment`, imagens por digest do GHCR — incluindo o
+   **procedimento de restauro correcto provado no ensaio** (`pg_restore -U supabase_admin`,
+   **sem** `--no-owner`) e o **passo de rebuild** do achado 3, enquanto a correcção do item 22
+   não existir.
+2. **Completar o `.env.example`** com TODOS os nomes de variáveis que a produção usa — só nomes
+   e comentários, **nunca valores**.
+3. **Versionar o vhost nginx** em `deploy/nginx/`, com nota de que a cópia operante é a do VPS.
+4. **Tornar o `smoke.py` portável:** `BASE` e a localização do ficheiro de credenciais por
+   variáveis de ambiente, com os valores actuais como default — continua igual em produção e
+   passa a poder correr num drill.
+5. **Escrow de segredos** — hoje o `.env` do VPS não existe em mais lado nenhum, e sem ele um
+   desastre real obriga a reconstruir segredos à mão antes de o restauro sequer começar.
+   Proposta **a desenhar neste item, não a executar**: cópia cifrada (`age` ou gpg simétrico,
+   passphrase só do Pedro, **nunca em ficheiro**) incluída no fluxo do backup off-site para o
+   homelab. **Decisão pendente do Pedro.**
+
+**22. Desprender a imagem do hostname** (achado 3 do ensaio). O URL do Supabase e a anon key
+estão compilados no build via `NEXT_PUBLIC_*`, sem override em runtime — restaurar noutro
+hostname exige refazer a imagem por CI. Barato de corrigir: a app usa o URL **só do lado do
+servidor** (confirmado — não está no bundle do cliente), portanto basta lê-lo de env de runtime.
+Fecha a classe toda: a mesma imagem passa a servir qualquer hostname.
+
+**23. Tornar o pacote GHCR privado** (achado 4; **decidido pelo Pedro 2026-09-06**). Hoje
+`ghcr.io/pdr625/tmsiequipment/tmsi-app` é descarregável **sem credencial nenhuma**, apesar de o
+repo ser privado e a licença proprietária. Exige permissões de `packages` na conta — não
+executável pelas sessões actuais.
+⚠️ **Antes ou imediatamente depois de virar a visibilidade:** confirmar que o VPS consegue
+autenticar-se no GHCR, senão o próximo `docker compose pull` da app parte. Sequela obrigatória:
+a recuperação passa a precisar de um token `read:packages` que **exista fora do VPS** — senão o
+desastre leva-o também. Liga ao ponto 5 do item 21 (escrow).
 
 ## ⚪ Baixas — registadas, sem urgência
 

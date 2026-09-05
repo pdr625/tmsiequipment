@@ -2186,8 +2186,17 @@ sessão, e se `JWT_SECRET`/`ANON_KEY`/`SERVICE_ROLE_KEY` apareceram (nesse caso,
   linhas `supabase_functions_admin`/`supabase_storage_admin` — ver secção 4). Uma reinstalação
   a partir de zero neste caminho já herda a correcção; não é preciso repetir manualmente.
 - **Backups:** `~/backups/tmsi/`, timer `tmsi-backup.timer` (`OnCalendar=03:30`).
-- **Restauro:** `docker exec -i supabase-db pg_restore -U postgres -d postgres` a partir do dump
-  mais recente em `~/backups/tmsi/` (o host não tem `pg_restore` instalado — usar o do container).
+- **Restauro (CORRIGIDO 2026-09-06 pelo ensaio de desastre — a linha anterior estava ERRADA):**
+  ```bash
+  docker exec -i supabase-db pg_restore -U supabase_admin -d postgres --clean --if-exists < <dump>
+  ```
+  ⚠️ **`-U postgres` NÃO serve** — nesta imagem o `postgres` não é superuser (`rolsuper=f`); é o
+  `supabase_admin`. Com `-U postgres` o restauro dá **441 erros** e deixa a BD meio-restaurada,
+  de forma plausível de descartar como «ruído normal».
+  ⚠️ **Nunca `--no-owner`** — poria as 23 tabelas `auth.*` no dono errado e o GoTrue morre a
+  arrancar com `relation "schema_migrations" already exists`, mensagem que não aponta para a
+  causa. Verificar depois: `auth.*` do `supabase_auth_admin`, `tmsi.*` do `postgres`.
+  (O host não tem `pg_restore` — usar o do container.) Provado em `docs/DISASTER-DRILL.md`.
 - **Postfix:** se `master.cf`/`main.cf` forem recriados do zero, o listener dedicado
   `172.20.40.1:smtp` (sem STARTTLS) e a regra ufw `172.20.40.1 25/tcp ALLOW IN 172.20.40.0/24`
   têm de ser reaplicados — ver secção 4 para o porquê e o conteúdo exacto.
@@ -2197,3 +2206,24 @@ sessão, e se `JWT_SECRET`/`ANON_KEY`/`SERVICE_ROLE_KEY` apareceram (nesse caso,
 
 Toda a sessão que altere o estado do TMSI actualiza este ficheiro no mesmo passe
 (commit + push), incluindo a Fase B deste prompt (secção 8 do prompt S1).
+
+## 9. Ensaio de restauro completo (item 15) — 2026-09-06
+
+Execução n.º 1, no **homelab** (cenário: «o VPS morreu»). Relatório completo:
+**`docs/DISASTER-DRILL.md`**. Resumo:
+
+- **RTO 13 min 21 s** até à camada de dados + API funcional (inclui dois restauros falhados e
+  diagnosticados). **RPO**: o `branch_manager.test`, criado depois das 03:30, não estava no dump.
+- **Sobreviveu tudo o que importa nos dados:** 38 POLICY, 8 funções `SECURITY DEFINER`, RLS por
+  linha (sales 7 / finance 13) e a fronteira de custos 0003/0004 — com `JWT_SECRET` e
+  `POSTGRES_PASSWORD` **gerados de raiz**, provando que os hashes bcrypt são independentes deles.
+  O motor calcula: `compute_price('T-0002','SA')` → `min_price 189.0`, internos mascarados para
+  `sales.sa`.
+- **Não sobreviveu o procedimento.** Dois defeitos no que estava escrito (`-U postgres`;
+  `--no-owner`), ambos silenciosos. §5 acima corrigida.
+- **A imagem está presa ao hostname de produção** (`NEXT_PUBLIC_*` compilados) → item 22.
+- **O pacote GHCR é público** → item 23 (decidido: tornar privado).
+- **O `.env` do VPS não existe em mais lado nenhum** → escrow, ponto 5 do item 21.
+- Ambiente totalmente desmontado e verificado; o parque do homelab voltou ao baseline exacto
+  (28 containers), com o domínio de produção apontado a `127.0.0.1` durante todo o ensaio para
+  garantir que não lhe tocava.
