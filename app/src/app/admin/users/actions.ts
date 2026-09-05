@@ -169,13 +169,21 @@ export async function resetPassword(_prevState: ResetPasswordState, formData: Fo
     return { error: 'Enter a password, or choose "Generate temporary password"' };
   }
 
+  // email_confirm: true only here, on the admin-forced reset — a freshly
+  // invited user has no confirmed email yet (GOTRUE_MAILER_AUTOCONFIRM is
+  // false, deliberately, for public signup) and would be stuck on "Email
+  // not confirmed" until the invite mail is delivered and clicked,
+  // defeating the verbal-handoff design this endpoint exists for. Setting
+  // it here is scoped to an action already gated by isAdmin() and an
+  // explicit target userId — it does not touch public signup's own
+  // confirmation requirement.
   const res = await fetch(`${GOTRUE_INTERNAL_URL}/admin/users/${userId}`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${process.env.SERVICE_ROLE_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ password, email_confirm: true }),
   });
 
   if (!res.ok) {
