@@ -59,8 +59,8 @@ headers do vhost. Provas ao vivo: brute-force controlado, password fraca recusad
 **5. Code review read-only da app** *(sessão VPS; relatório de achados triados, sem
 reescrita)* — caminhos de erro, segredos em logs, código morto, manutenibilidade; também
 prepara a entrega E6.
-**6. Limpeza da sinalização órfã no `VPS.md`** *(1 min, encaixa na próxima sessão VPS —
-p. ex. F0 da i9).*
+~~**6. Limpeza da sinalização órfã no `VPS.md`**~~ ✅ **fechada 2026-09-05, na i9** (F0
+dessa sessão — o espelho 1.14 já estava feito pela E5-HOMELAB, sinalização removida).
 **7. EOP / entregabilidade de email** *(decisão tua, sem pressa desde a i9)* — continua
 útil para recovery self-service; via TI a ponderar junto com o CPI.
 **8. Piloto com 2–3 colegas** *(depois de 1–4)* — onboarding por password temporária;
