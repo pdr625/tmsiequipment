@@ -9,11 +9,11 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 // Edge middleware has no next/headers cookies() — it reads/writes cookies
-// through NextRequest/NextResponse instead, a third cookie adapter distinct
-// from supabase-client.ts (browser) and supabase-server.ts (Server
-// Components/Route Handlers). Pattern matches @supabase/ssr's own
-// documented Next.js middleware example (setAll receiving both the cookie
-// list and the cache-control headers that must ride along with them).
+// through NextRequest/NextResponse instead, a cookie adapter distinct from
+// supabase-server.ts's (Server Components/Route Handlers). Pattern matches
+// @supabase/ssr's own documented Next.js middleware example (setAll
+// receiving both the cookie list and the cache-control headers that must
+// ride along with them).
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 

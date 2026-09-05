@@ -9,13 +9,13 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 // Server-side Supabase client (Server Components, Route Handlers, Server
-// Actions). Kept in its own module — importing `next/headers` from the same
-// file as the browser factory would pull a server-only module into any
-// Client Component that imports createSupabaseBrowserClient, which Next.js
-// rejects at build time.
+// Actions). Kept in its own module — `next/headers` is server-only and
+// Next.js rejects it at build time if pulled into a Client Component's
+// module graph, so this stays separate from supabase-middleware.ts's
+// NextRequest/NextResponse cookie adapter.
 //
-// Same production URL note as supabase-client.ts: NEXT_PUBLIC_SUPABASE_URL
-// is https://tmsiequipment.duckdns.org, served directly by nginx without Kong.
+// NEXT_PUBLIC_SUPABASE_URL is https://tmsiequipment.duckdns.org in
+// production, served directly by nginx without Kong.
 //
 // No middleware.ts yet (out of scope for the E1 scaffold), so a token
 // refresh triggered from a plain Server Component cannot write cookies back

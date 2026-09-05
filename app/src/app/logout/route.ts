@@ -16,13 +16,20 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 //
 // request.url reflects the app's internal bind (https://0.0.0.0:3000/...)
 // behind this proxy, not the public domain — the exact bug already caught
-// and fixed once in auth/confirm (E3-i1, docs/STATE.md) and avoided since
-// via the request's own Host header (forgot-password/actions.ts). Caught
-// live here too (curl -D- showed the internal address) before ever being
-// reported as done.
-export async function POST(request: Request) {
+// and fixed once in auth/confirm (E3-i1, docs/STATE.md). Caught live here
+// too (curl -D- showed the internal address) before ever being reported
+// as done.
+//
+// The Host header (once used here) isn't a safe substitute — it's
+// attacker-controlled with no allowlist, an open redirect — and
+// NextResponse.redirect() rejects a bare relative path outright
+// (validateURL does `new URL(url)` with no base, which throws for
+// anything not already absolute). NEXT_PUBLIC_SUPABASE_URL is already
+// this app's own public origin in production (supabase-server.ts) and
+// is a build-time value, not anything read off the request, so it's the
+// safe base to resolve `/login` against.
+export async function POST() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
-  const host = request.headers.get('host');
-  return NextResponse.redirect(`https://${host}/login`);
+  return NextResponse.redirect(new URL('/login', process.env.NEXT_PUBLIC_SUPABASE_URL!));
 }
