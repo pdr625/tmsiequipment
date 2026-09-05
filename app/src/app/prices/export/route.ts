@@ -31,7 +31,10 @@ type SellingPriceRow = {
 };
 
 function respond(buffer: Uint8Array, filename: string) {
-  return new NextResponse(buffer, {
+  // `as unknown as BodyInit`: see products/export/route.ts's identical comment —
+  // a type-checker/lib mismatch in this project's pinned TypeScript
+  // 7.0.2, not a runtime problem (Uint8Array is a spec-valid body).
+  return new NextResponse(buffer as unknown as BodyInit, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${filename}"`,

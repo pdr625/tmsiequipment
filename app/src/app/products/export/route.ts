@@ -76,7 +76,14 @@ export async function GET() {
 
   const filename = `tmsi-products-${generatedAt.toISOString().slice(0, 10)}.xlsx`;
 
-  return new NextResponse(buffer, {
+  // `as unknown as BodyInit`: a plain Uint8Array is a spec-valid Response body (and
+  // works correctly at runtime, in every runtime this app targets) but
+  // this project's pinned TypeScript 7.0.2 + @types/node combination
+  // doesn't structurally match it against BodyInit's ArrayBufferView
+  // member — confirmed by CI (TS2345) even after switching away from
+  // Node's Buffer specifically to rule that out. A type-checker/lib
+  // version mismatch, not a runtime bug.
+  return new NextResponse(buffer as unknown as BodyInit, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${filename}"`,
