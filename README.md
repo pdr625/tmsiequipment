@@ -34,7 +34,7 @@ compose files are copied to the company server and only the `.env` changes.
 LICENSE                  proprietary licence (read it)
 NOTICE                   short copyright notice
 README.md                this file
-.env.example             every variable the stack needs, with safe placeholders
+.env.example             superseded — points to deploy/supabase/.env.example, the real template
 supabase/
   migrations/            ordered SQL migrations — the single source of truth for the schema
   seed/                  fictitious test data only (never real TMSI prices)
@@ -55,8 +55,8 @@ database, not only in the UI.
 ## Local development
 
 ```bash
-cp .env.example .env            # fill in secrets
-# 1. Supabase self-hosted (official compose) — see deploy/DEPLOY.md
+cp deploy/supabase/.env.example deploy/supabase/.env   # fill in secrets
+# 1. Supabase self-hosted stack — see deploy/DEPLOY.md for the real, current architecture
 # 2. Apply migrations
 psql "$DATABASE_URL" -f supabase/migrations/0001_initial_schema.sql
 psql "$DATABASE_URL" -f supabase/seed/0001_test_data.sql   # optional, fictitious data

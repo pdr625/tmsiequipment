@@ -60,13 +60,13 @@ Everything below is checked against the real running production, not assumed.
 ## 2. Environment (`.env`)
 
 The real secrets file is `deploy/supabase/.env` (git-ignored, never committed). Its
-**complete** variable list lives in `.env.example` at the repo root — names and purpose
-only, never values (see that file). Do **not** trust the pre-2026-09-06 `.env.example` if
-you find an old checkout: it described a Kong-based `/supabase`-prefixed URL scheme that was
-never actually deployed here.
+**complete** variable list lives in `deploy/supabase/.env.example` — names and purpose only,
+never values (see that file). The root `.env.example` is superseded and just points here; do
+**not** trust an old checkout's root `.env.example` if you find one predating 2026-09-06: it
+described a Kong-based `/supabase`-prefixed URL scheme that was never actually deployed here.
 
 Runtime env actually reaching each container:
-- `db`/`auth`/`rest`: most of the 25 variables in `.env.example`, via `docker-compose.yml`'s
+- `db`/`auth`/`rest`: most of the 25 variables in `deploy/supabase/.env.example`, via `docker-compose.yml`'s
   `${VAR}` interpolation.
 - `tmsi-app`: **only `SERVICE_ROLE_KEY`** at runtime (plus `HOSTNAME`/`PORT` literals). It
   needs no other secret at runtime today — see §3 for why that's a real limitation, not a
