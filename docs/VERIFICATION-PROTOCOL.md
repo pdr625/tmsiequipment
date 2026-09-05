@@ -387,6 +387,20 @@ para não-admin nas execuções da i3/protocolo — e a fronteira que importa de
 `admin_revoke_sessions()`/`profiles_admin`, está confirmada acima independentemente desse
 gate da app).
 
+**Correcção, 2026-09-05 (preparação do piloto) — esta adenda tinha um GAP real, não só uma
+cobertura parcial admitida:** o único utilizador tocado acima, `logistics.test`, já estava
+confirmado (`email_confirmed_at` de 2026-09-04) — a prova nunca exercitou o caminho de um
+convite genuinamente fresco (`email_confirmed_at = null`), que é o cenário real de onboarding.
+Contra esse caminho, `resetPassword` como estava (só `{password}` ao GoTrue) deixava o
+utilizador preso em `400 "Email not confirmed"` mesmo com a password certa — bloqueio real,
+apanhado só ao testar com uma conta descartável genuinamente nova antes de escrever o guião de
+onboarding. Corrigido (`{password, email_confirm: true}`, commit `0c05ac4`) e re-provado ao
+vivo pelos dois caminhos — convite fresco (login passa a `200`) e `logistics.test`, já
+confirmado (comportamento inalterado, com o efeito colateral registado de
+`email_confirmed_at` ser reescrito para "agora" mesmo já estando confirmado). Digest
+`sha256:8b466fa373f473ef9ac94cb720e9110ea02170bf7908f94271fa220a2c77346a`, `smoke.py` 27/27.
+Detalhe completo: `docs/STATE.md`, secção "Piloto — preparação do onboarding".
+
 **Adenda, 2026-09-05 (i10) — re-execução dos passos de export/impressão (AA–DD, secção 4.8
 acima), completada em duas partes:** migrações 0001–0006 (i10 não trouxe migração nova);
 digest `sha256:8691c1a01f57dc8f294303b6b2cb0eb99f8ed51a913902d7b0e7892f0c203e9b`. Executores:

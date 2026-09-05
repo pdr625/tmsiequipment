@@ -13,6 +13,64 @@ disponíveis para uma sessão futura de correcção, se/quando decidires prioriz
 critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
 
+## Piloto — preparação do onboarding — ✅ achado corrigido 2026-09-05
+
+**Contexto:** ao preparar o guião passo-a-passo de onboarding do piloto (`docs/BACKLOG.md`
+item 8), testado ao vivo o mecanismo real (conta descartável, não uma leitura de código) antes
+de o documentar — e encontrado um bloqueio real que teria partido o primeiro colega novo.
+
+**Achado:** com `GOTRUE_MAILER_AUTOCONFIRM=false` (deliberado, é a fronteira do signup
+público), um utilizador recém-convidado (`inviteUser` → `/invite`) fica com
+`email_confirmed_at = null`. O reset de password por admin (`resetPassword`,
+`admin/users/actions.ts`) enviava só `{password}` ao endpoint `PUT /admin/users/{id}` do
+GoTrue — não confirma o email. Resultado: o colega recebe a password temporária, tenta entrar,
+e o GoTrue recusa com `400 "Email not confirmed"`, mesmo com a password certa. Exactamente a
+dependência do email que o mecanismo da i9 devia eliminar, reintroduzida pela porta do lado.
+
+**Lição registada:** a adenda W-Z do `VERIFICATION-PROTOCOL.md` (i9) só tinha testado esta
+chamada contra `logistics.test`, uma conta criada muito antes e já confirmada — nunca
+exercitou o caminho de um convite genuinamente fresco. A prova "passou" na altura porque o
+cenário testado não era o cenário real de onboarding.
+
+**Fix (commit `0c05ac4`):** `resetPassword` passa a enviar `{password, email_confirm: true}`
+— só nesta chamada, já protegida por `isAdmin()` + `userId` explícito. Não mexe em
+`GOTRUE_MAILER_AUTOCONFIRM` global nem na fronteira do signup público, que continua igual.
+
+**Provas ao vivo (duas, ambas com resíduo zero):**
+1. **Conta descartável nova** (`onboarding-proof2.test@example.test`) — `invite` (mirror de
+   `inviteUser`, incl. o insert em `tmsi.profiles`) → antes do fix, login devolvia `400
+   "Email not confirmed"` (confirmado num descartável anterior, apagado); com o fix, `reset`
+   com `email_confirm:true` → `email_confirmed_at` passa a preenchido → login `200` com
+   `access_token`. `must_change_password` actualizado para `true` na mesma linha (mirror do
+   segundo passo de `resetPassword`) — confirmado por `UPDATE ... RETURNING`. **Ramo do
+   middleware (redirect para `/account/password`) provado por leitura de código, não ao
+   vivo** — `middleware.ts` redirecciona sempre que `user && mustChangePassword &&
+   !isPublic && !isChangePasswordPath`, incondicional; fabricar cookies reais do
+   `@supabase/ssr` por `curl` continua desaconselhado (duas tentativas abandonadas, i9/i10).
+   Conta apagada no fim (`DELETE /admin/users/{id}`, cascata confirmada: zero linhas em
+   `auth.users` e `tmsi.profiles`).
+2. **`logistics.test`, já confirmado desde 2026-09-04** — reset com o fix para uma password
+   temporária nova → login `200` sem problema (comportamento inalterado do ponto de vista do
+   utilizador). **Efeito colateral real, registado, não escondido:** `email_confirmed_at`
+   **é reescrito para "agora"** pelo GoTrue sempre que `email_confirm:true` é enviado, mesmo
+   já estando confirmado — não preserva a data original de confirmação. Sem impacto de
+   comportamento (nada em `app/src` lê `email_confirmed_at`; login continua a funcionar
+   exactamente igual), mas é uma mudança de dado real, não hipotética. Password original
+   restaurada a seguir (capturada só por `$(cat ficheiro)` inline, nunca exibida), login
+   confirmado de volta com o valor restaurado — ficheiro de password não precisou de
+   actualização.
+
+**Deploy:** digest `sha256:32c45cf2...` → `sha256:8b466fa373f473ef9ac94cb720e9110ea02170bf7908f94271fa220a2c77346a`,
+`scripts/smoke.py` **27/27** (corrido duas vezes: logo após o deploy e de novo depois das duas
+provas ao vivo, incluindo a manipulação directa de `logistics.test`).
+
+**`VERIFICATION-PROTOCOL.md`:** a adenda i9 (W-Z) tinha um gap real, não apenas uma cobertura
+parcial admitida — nota acrescentada no próprio local (secção 7) a fechar esse gap
+especificamente, sem reabrir os restantes itens "por cobrir" dessa adenda (screenshots reais,
+gateway corporativo), que continuam como estavam.
+
+---
+
 ## Tarefa 6 — Correcção dos 9 achados do code review — ✅ FECHADA 2026-09-05
 
 **Contexto (`docs/BACKLOG.md` item 21):** fecha os 9 achados triados na tarefa 5, só em
