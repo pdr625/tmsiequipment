@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageProducts } from '@/lib/auth-guard';
+import { overrideStatus } from '@/lib/override-status';
 import { EditProductForm } from './edit-form';
 
 // Safe/ungated columns (tmsi.v_products, E3-0003/0004): id, name,
@@ -85,17 +86,6 @@ type PriceOverride = {
 type HsOverride = { scope_type: string; scope_id: string; hs_code: string; reason: string };
 type Branch = { id: string; name: string };
 type RefRow = { id?: string; code?: string; name?: string; description?: string };
-
-// today <= valid_from -> future; valid_to set and < today -> expired;
-// otherwise active — same classification /overrides/page.tsx uses,
-// mirroring tmsi.override_value()'s own date range (0001 §7), never a
-// new rule.
-function overrideStatus(validFrom: string, validTo: string | null): 'active' | 'expired' | 'future' {
-  const today = new Date().toISOString().slice(0, 10);
-  if (validFrom > today) return 'future';
-  if (validTo !== null && validTo < today) return 'expired';
-  return 'active';
-}
 
 // Everything a role should not see is decided by Postgres, not this page:
 // tmsi.v_products (E3-0003/0004) gates rows via tmsi.products_visible()

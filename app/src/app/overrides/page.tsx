@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageAnyPriceOverride, isAdmin } from '@/lib/auth-guard';
+import { overrideStatus } from '@/lib/override-status';
 import { PriceOverrideForm, HsOverrideForm } from './forms';
 
 type PriceOverride = {
@@ -26,18 +27,6 @@ type Branch = { id: string; name: string };
 type HsCode = { code: string; description: string | null };
 
 const KINDS = ['fx', 'fee', 'transport', 'duty', 'margin', 'coef'];
-
-// today <= valid_from -> future; valid_to set and < today -> expired;
-// otherwise active. tmsi.override_value() (0001 §7) evaluates the exact
-// same range for compute_price() itself — this mirrors that read-only
-// classification for display, never the actual decision of which
-// override applies to a calculation.
-function status(validFrom: string, validTo: string | null): 'active' | 'expired' | 'future' {
-  const today = new Date().toISOString().slice(0, 10);
-  if (validFrom > today) return 'future';
-  if (validTo !== null && validTo < today) return 'expired';
-  return 'active';
-}
 
 const STATUS_STYLE: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
@@ -106,7 +95,7 @@ export default async function OverridesPage() {
           </thead>
           <tbody>
             {priceOverrides?.map((o) => {
-              const s = status(o.valid_from, o.valid_to);
+              const s = overrideStatus(o.valid_from, o.valid_to);
               return (
                 <tr key={o.id} className="border-b border-gray-100">
                   <td className="py-2 pr-4">
