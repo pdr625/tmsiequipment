@@ -13,8 +13,16 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 // to let a flagged user sign out no matter what; a Server Action's POST
 // to the current page would be indistinguishable from any other POST
 // there at the middleware level.
+//
+// request.url reflects the app's internal bind (https://0.0.0.0:3000/...)
+// behind this proxy, not the public domain — the exact bug already caught
+// and fixed once in auth/confirm (E3-i1, docs/STATE.md) and avoided since
+// via the request's own Host header (forgot-password/actions.ts). Caught
+// live here too (curl -D- showed the internal address) before ever being
+// reported as done.
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
-  return NextResponse.redirect(new URL('/login', request.url));
+  const host = request.headers.get('host');
+  return NextResponse.redirect(`https://${host}/login`);
 }
