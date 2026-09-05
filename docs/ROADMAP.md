@@ -28,10 +28,10 @@ continua por cobrir mas já não bloqueia nada) e **export Excel/PDF promovido a
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅, i7 protocolo de verificação ✅, i8 dashboard ✅ | ✅ 05/09/2026 — **COMPLETA**; estendida pelo backlog: i9 (passwords sem email, migração 0006) em curso, i10 (export Excel/PDF) a seguir |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅, i7 protocolo de verificação ✅, i8 dashboard ✅ | ✅ 05/09/2026 — **COMPLETA**; estendida pelo backlog: i9 (passwords sem email, migração 0006) ✅ 05/09/2026 (mecanismo; browser pendente), i10 (export Excel/PDF) a seguir |
 | — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
 | — | Migração 0005 — correcção de câmbio no mesmo dia | ✅ 04/09/2026 |
-| — | Migração 0006 — gestão de passwords sem email (i9) | em curso 05/09/2026 |
+| — | Migração 0006 — gestão de passwords sem email (i9) | ✅ 05/09/2026 (mecanismo; provas de ecrã real pendentes do Pedro) |
 | E4 | Migração 0007 (workflow de aprovação, regra 90 dias, notificações) — número avançado por 0006/i9 | por iniciar |
 | E5 | Operações e endurecimento — VPS ✅, homelab por iniciar | em curso |
 | E6 | Validação do piloto + preparação da migração para a empresa (gate: `VERIFICATION-PROTOCOL.md`) | por iniciar |

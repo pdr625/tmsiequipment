@@ -3,12 +3,160 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E5-VPS (operações) — ✅ FECHADA 2026-09-05.** PAT rotado para deploy key
-dedicada; métricas TMSI expostas no `status.json`; desvio S/T continua por cobrir (bloqueado
-por acesso ao portal EOP, não por quarentena persistente — decisão do Pedro, fora desta
-sessão). Próximo: decisão do Pedro entre E5-HOMELAB (off-site + tile + T8, depende desta
-sessão), E4/0006 (pendente L2) ou o pedido de acesso EOP. Ordem e critérios de saída de cada
-etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i8) e as migrações 0003/0004/0005 estão fechadas.
+**Etapa actual: i9 — gestão de passwords sem email — ✅ FECHADA 2026-09-05 (parcial — ver
+abaixo).** Migração 0006 aplicada (`must_change_password` + `tmsi.mark_password_changed()`/
+`tmsi.admin_revoke_sessions()`); admin-forced reset (manual/gerada) em `/admin/users`; troca
+própria em `/account/password` com verificação server-side da password actual; middleware a
+impor a flag; tudo auditado. Digest
+`sha256:3dcff92b9b5577e29a7ef8c5dae248b61078a69837994b7cf77494abade8f946`. E4 avança para a
+migração 0007. Provas de mecanismo (API/BD) completas pelo agente; **as provas de ecrã real
+(W/X/Y do protocolo) ficam para o Pedro** — ver secção abaixo. Próximo: i10 (export Excel/PDF),
+por `docs/BACKLOG.md`. Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1,
+E2, E3 (i1–i8), E5-VPS e as migrações 0003/0004/0005/0006 estão fechadas.
+
+## i9 — Gestão de passwords sem email — ✅ FECHADA 2026-09-05 (mecanismo; browser pendente)
+
+**Contexto (decisão do Pedro, colada junto com o prompt desta sessão):** o onboarding do
+piloto deixa de depender de email — admin pode forçar reset (manual ou temporária gerada,
+nunca uma "default" fixa) com troca obrigatória no próximo login; qualquer utilizador
+autenticado pode mudar a própria password sem link de email. Consequência directa: **EOP
+despromovido de bloqueio a melhoria** (o desvio S/T da E5-VPS continua por cobrir mas já não
+bloqueia nada) e **export Excel/PDF (i10) promovido a crítico** — ambas reflectidas no
+`docs/BACKLOG.md` novo e no `docs/ROADMAP.md` realinhado (commit `0f95104`).
+
+**F0 — achado real, não silenciado:** o próprio prompt afirmava que "o espelho 1.14 [da
+deploy key `tmsiequipment` no `CREDENTIALS-INVENTORY.md`] está feito", como justificação
+para remover a sinalização órfã correspondente do `VPS.md` do dossier. **Falso, verificado
+por grep directo ao ficheiro** — só existem entradas até 1.13, nenhuma referência a
+`tmsiequipment`/`tmsi` em todo o `CREDENTIALS-INVENTORY.md`, e os commits mais recentes que o
+tocam são sobre câmaras/backups do homelab, não relacionados. A sinalização **não é órfã** —
+é uma tarefa real ainda por fazer. **Não removida** (ficaria a perder um TODO real em vez de
+limpar um resíduo); também não criada a entrada 1.14 por mim (fora do âmbito desta sessão —
+pertence à E5-HOMELAB, ainda por iniciar). Decisão do Pedro: ou a entrada 1.14 é criada
+numa sessão futura antes de remover a nota do `VPS.md`, ou a nota fica registada como
+está. Backlog item 6 mantém-se aberto, agora com esta nota anexada.
+
+**F1 — migração 0006, validada em `BEGIN`/`ROLLBACK` antes de aplicar para valer (backup
+fresco `~/backups/tmsi/tmsi-2026-09-05-pre-0006.dump` antes do DDL):**
+1. `tmsi.profiles.must_change_password boolean not null default false`.
+2. `profiles` entra no trigger de auditoria genérico (0001 §5) — tinha ficado de fora porque
+   nada escrevia nela fora do admin; agora a primeira escrita self-service exige a mesma
+   cobertura das outras 11 tabelas. `auth.uid()` (o que `tmsi.audit()` regista como actor) é
+   estado de sessão, não ligado ao dono da função — por isso continua correcto através da
+   fronteira `security definer` das duas funções abaixo: transição `false→true` = reset pelo
+   admin (actor = admin, `row_pk` = o utilizador alvo); `true→false` = troca concluída pelo
+   próprio (actor = o próprio). Nenhuma coluna de "tipo de evento" nova precisou de ser
+   inventada — a estrutura `old_row`/`new_row`/`actor` já chega. (`profiles` não tem coluna
+   `id` — o mesmo `row_pk` "linha inteira como texto" que `tmsi.settings`, PK por `key`, já
+   tinha; não é um efeito novo desta migração.)
+3. `tmsi.mark_password_changed()` — `security definer`, `search_path = tmsi, pg_temp`, limpa
+   a flag só da própria linha (`auth.uid()`) — deliberadamente estreita (uma política de
+   auto-escrita geral em `profiles` deixaria um não-admin editar `full_name`/`email`/`active`
+   também, fora de âmbito).
+4. `tmsi.admin_revoke_sessions(uuid)` — GoTrue v2.189.0 não tem endpoint de revogação de
+   sessão (confirmado por inspecção do código-fonte no incidente da i1, não assumido agora);
+   a única via é apagar directamente `auth.sessions` (cascata confirmada ao vivo para
+   `auth.refresh_tokens`/`auth.mfa_amr_claims` via `session_id`). Reverifica
+   `has_role('admin')` **dentro** da função — a `alter default privileges` da 0001 concede
+   `execute` a `authenticated` por omissão em qualquer função nova do schema, por isso sem
+   este `if` qualquer utilizador autenticado poderia revogar as sessões de qualquer outro.
+5. Prova funcional completa em `BEGIN`/`ROLLBACK` antes de aplicar para valer: admin marca a
+   flag (audit → admin); não-admin chama `admin_revoke_sessions` → `Forbidden`; admin chama →
+   sucesso; o próprio limpa a flag via `mark_password_changed()` (audit → o próprio);
+   não-admin chama `admin_revoke_sessions` **contra o seu próprio id** → `Forbidden` também.
+   `ROLLBACK` final confirmado, zero alteração permanente antes da aplicação real.
+
+**F2 — código:**
+- `/admin/users`: `ResetPasswordForm` (manual ou gerada — `crypto.randomInt`, ≥16 caracteres,
+  charset amplo, nunca um valor fixo), via `PUT /admin/users/{id}` (Admin API, mesmo padrão de
+  `banUser`/`unbanUser`), depois `must_change_password=true` (RLS `profiles_admin` já
+  permite, sessão do próprio admin) e `admin_revoke_sessions()`. A password gerada só existe
+  em estado React local (`useActionState`), nunca em log/BD/relatório — um refresh perde-a
+  por construção.
+- `/account/password`: `changePassword` — verifica a password actual com um cliente
+  descartável (`persistSession`/`autoRefreshToken` desligados, nunca toca nos cookies da
+  sessão real) a tentar `signInWithPassword`; só depois `updateUser` + `mark_password_changed`
+  RPC. Efeito colateral secundário, aceitável: fica uma sessão GoTrue extra, nunca usada, por
+  cada tentativa (não há endpoint "verificar sem emitir sessão"; expira sozinha).
+- `middleware.ts`/`supabase-middleware.ts`: `mustChangePassword` lido a cada pedido (RLS
+  `profiles_self`, uma leitura indexada); bloqueia tudo excepto `/account/password`,
+  `/reset-password` (a troca por email antiga também limpa a flag agora — `reset-password/
+  actions.ts` ganhou a mesma chamada a `mark_password_changed`, para não deixar um utilizador
+  marcado sem saída se preferir o link em vez do ecrã novo) e `/logout`.
+- `/logout` passou de Server Action ligada a `/` a Route Handler próprio — só assim a
+  middleware o consegue nomear explicitamente; um POST de Server Action é indistinguível de
+  qualquer outro POST à página actual ao nível da middleware.
+
+⚠️ **Bug real, apanhado ao testar antes de reportar como feito, não hipotético:** o
+`/logout/route.ts` inicial usava `NextResponse.redirect(new URL('/login', request.url))` —
+`request.url` num Route Handler reflecte o bind interno (`https://0.0.0.0:3000/...`) atrás
+deste proxy, não o domínio público. **Exactamente a mesma classe de bug já apanhada e
+corrigida uma vez em `auth/confirm` (E3-i1)** — a correcção estabelecida lá (derivar de
+`request.headers.get('host')`, como `forgot-password/actions.ts` já fazia) foi replicada
+aqui. Confirmado com `curl -D-` antes e depois: `location: https://0.0.0.0:3000/login` →
+`location: https://tmsiequipment.duckdns.org/login`. A `middleware.ts` continua a usar
+`new URL(path, request.url)` sem este problema — Edge Runtime resolve isto de forma diferente
+de um Route Handler comum, já registado desde a i1 e reconfirmado agora, não copiado às
+cegas.
+
+**F3 — deploy:** CI verde (dois commits, o da funcionalidade e o do fix do `/logout`) →
+imagem por digest `sha256:3dcff92b9b5577e29a7ef8c5dae248b61078a69837994b7cf77494abade8f946`
+(`Created` 2026-09-05T14:10:13Z) → `up -d --no-deps tmsi-app` → saudável. **Footprint
+pós-deploy:** RAM available 173 MB; swap ~1115/4095 MB (≈27%); disco 48% — sem regressão.
+
+**F4 — provas comportamentais, agente (API/BD) — utilizador de teste `logistics.test`, único
+tocado, estado 100% restaurado ao fim (password original de volta, flag `false`, sem flags
+noutras contas):**
+1. Admin define password nova via o mesmo endpoint Admin API que o código usa → antiga falha
+   (`400`), nova entra (`200`); `must_change_password` fica `true`, `audit_log` mostra o
+   admin real como actor.
+2. Verificação de password actual replicada directamente contra o GoTrue: errada → `400
+   invalid_credentials`, sem sessão nova; correcta → `200`, sessão emitida — o mecanismo
+   exacto que `changePassword` usa.
+3. **Achado arquitectural, registado com honestidade, não forçado a caber num "recusado"
+   que não seria verdade:** `PUT /auth/v1/user` do próprio GoTrue, com um access token
+   válido, muda a password **sem pedir a actual** — confirmado ao vivo. A fronteira real é
+   `/account/password` ser o único caminho de código desta app que chama esse endpoint para
+   o próprio utilizador — não uma regra do GoTrue. Documentado como risco aceite (a mesma
+   superfície que qualquer chamada directa à API sempre teve), não como defeito desta
+   entrega.
+4. Troca concluída → `mark_password_changed()` como o próprio → flag volta a `false`,
+   `audit_log` mostra o próprio como actor.
+5. Duas sessões reais vivas (uma de hoje, uma residual de 04/09) → `admin_revoke_sessions()`
+   mata as duas → o `refresh_token` capturado antes fica `refresh_token_not_found`.
+   **Limitação conhecida, não contornada:** um `access_token` já emitido continua válido até
+   ao seu `exp` (1h) — não testado por não haver forma de o testar sem esperar o prazo, só
+   registado como o prompt já antecipava.
+6. Não-admin a chamar `admin_revoke_sessions()`, incluindo contra o seu próprio id →
+   `Forbidden` as duas vezes (prova de F1, revalidada).
+7. Zero ocorrências de qualquer password real nos quatro `docker logs` (app/auth/rest/db) na
+   janela do teste; no `audit_log`, as duas ocorrências da string "password" encontradas são
+   o nome da coluna `must_change_password` (conteúdo integral inspeccionado, não só a
+   contagem) — nunca um valor.
+8. Sem regressões: `/`, `/prices`, `/products`, `/admin/users`, `/config`, `/overrides`,
+   `/audit`, `/dashboard`, `/forgot-password`, `/reset-password`, `/account/password`,
+   `/api/health`, `/auth/v1/health`, `/rest/v1/` — todos com o código esperado, sem sessão.
+
+**Por cobrir, explicitamente, não escondido — ficam para o Pedro (browser, passos manuais do
+prompt):** W/X ao nível do ecrã real em `/admin/users` (escolha manual/gerada, a password
+gerada só aparecer uma vez, um refresh não a repetir); Y ao nível do ecrã
+`/account/password` propriamente dito; o `isAdmin()` da Server Action `resetPassword` não foi
+re-testado com uma sessão de browser não-admin fabricada (replicar os cookies internos do
+`@supabase/ssr` via `curl` seria frágil — o padrão é byte-a-byte o mesmo de
+`banUser`/`unbanUser`/`inviteUser`, já provados recusados para não-admin nas execuções
+anteriores; a fronteira que importa de facto, `admin_revoke_sessions()`/`profiles_admin`,
+está confirmada de forma independente desse gate da app, acima).
+
+**Confirmação explícita (restrição 2 do prompt):** nenhuma password — real, de teste, ou
+gerada — apareceu neste relatório, no `STATE.md`, no `audit_log`, ou em qualquer `docker
+logs` inspeccionado. A única password usada nas provas (a de `logistics.test`) foi lida de
+`~/tmp/tmsi-sudo/logistics-test-password.txt` (chmod 600) para dentro de variáveis de shell,
+nunca impressa; a temporária gerada durante o teste foi apagada do scratchpad ao fechar a
+sessão de provas.
+
+**F5 — `docs/VERIFICATION-PROTOCOL.md`:** secção 3 (matriz + nota ⁴) e secção 4.7 (passos
+W–Z) novas; secção 7 ganhou uma adenda com o resultado desta re-execução parcial (só
+API/BD, âmbito e desvios explícitos). Commit `83bdbe5`.
 
 ## E5-VPS — Operações (EOP, deploy key, métricas) — ✅ FECHADA 2026-09-05
 
