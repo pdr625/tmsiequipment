@@ -55,7 +55,7 @@ partir do desenho original. 16 correcções feitas à proposta inicial; detalhe 
 | Criar/editar produtos | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Configuração (câmbios, fees, transporte, direitos, margens) | ✅ | ❌ | ✅ | ❌ | ◐ transporte/direitos | ❌ | ❌ | ❌ |
 | Criar overrides | ✅ | ❌ | ✅ | ◐ transp./margem/coef, filial própria | ◐ só duty, qualquer filial | ❌ | ❌ | ❌ |
-| Ver valores de overrides de preço | ✅ | ✅ | ✅ | ◐ filial própria | ❌ | ❌ | ❌ | ✅ |
+| Ver valores de overrides de preço | ✅ | ✅ | ✅ | ◐ filial própria | ◐ só `kind=duty` ³ | ❌ | ❌ | ✅ |
 | Auditoria global | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
 | Dashboard (acesso à página) | ✅ | ✅ | ✅ | ✅ ² | ❌ | ❌ | ❌ | ✅ |
 | Administração de utilizadores | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -78,12 +78,21 @@ desta matriz (a margem por filial só mostra a sua, via `tmsi.v_branch_prices`/`
 — o acesso à página em si não é mais restrito que o de `admin`/`finance`/`product_manager`/
 `viewer`. Testado nos passos U/V (secção 4.6).
 
-**Duas notas adicionais, não redutíveis a uma célula:**
-- **Assimetria em `price_overrides`:** `logistics` pode **criar** um override de `duty`
-  (`overrides_write`) mas **não pode ler** a tabela depois (`overrides_read` exige
-  `can_read_costs()`, que `logistics` não tem) — cria às cegas, sem confirmação visual
-  possível na tabela de overrides. Comportamento real da 0001, não introduzido pela i6;
-  registado aqui para não ser confundido com um defeito durante o teste do passo I/K.
+³ **Correcção feita na execução n.º 1 (2026-09-05) — a nota original desta secção estava
+errada, não apenas desactualizada.** O texto anterior dizia que `logistics` cria um override
+de `duty` "às cegas", sem conseguir voltar a lê-lo — falso. `tmsi.price_overrides` tem duas
+políticas RLS permissivas para o mesmo comando: `overrides_read` (`for select`) e
+`overrides_write` (**`for all`** — que em Postgres inclui `select`, não só escrita). Políticas
+permissivas combinam-se por **OR**, não por AND: mesmo sem `can_read_costs()`, a própria
+cláusula `USING` de `overrides_write` (`... or (has_role('logistics') and kind = 'duty')`)
+já basta para tornar essa linha visível a um `SELECT`. Verificado ao vivo (`BEGIN`/`ROLLBACK`):
+uma linha `kind='duty'` inserida por outra sessão ficou visível a `logistics`; uma linha
+`kind='margin'` (id 1, dado real) continuou invisível. **Logistics vê exactamente as linhas
+`duty` — de qualquer filial, sem restrição — e mais nenhuma.** Não é uma falha de segurança
+(vê apenas o que já está autorizado a escrever), mas o documento anterior descrevia o
+comportamento oposto — corrigido aqui, na matriz, e no passo K (secção 4.3).
+
+**Uma nota adicional, não redutível a uma célula:**
 - **`Artigos não-activos`** não é filtrado por estado nenhum para `admin`/`product_mgr`/
   `finance`/`logistics`/`viewer` — a única condição para estes cinco papéis é a visibilidade da
   linha em si (`tmsi.products_visible()`), sem cláusula de `status`. Só `branch_manager` (via
@@ -120,8 +129,9 @@ J. Artigos de outra filial → ausentes, mesmo pedidos por id directo.
 
 ### 4.3 Papéis operacionais (logistics / branch_manager / agent / viewer)
 K. logistics: vê HS/peso/dimensões e transporte; **não** vê custos/margens (browser e API);
-   pode criar um override de `duty` mas não vê depois os valores de overrides (nota da
-   secção 3) — confirmar que este é o comportamento esperado, não um erro de teste.
+   pode criar um override de `duty` e **vê essa linha depois** (só as de `kind=duty`, nunca
+   `margin`/`transport`/`coef` — nota ³, secção 3, corrigida na execução n.º 1); confirmar as
+   duas metades: `duty` visível, outro `kind` continua invisível.
 L. branch_manager: EXW e códigos SAP sem restrição de filial (uma vez o produto visível);
    custo total/margem calculados **só da sua filial** (nota ¹, secção 3); artigos de outras
    filiais conforme a matriz.
