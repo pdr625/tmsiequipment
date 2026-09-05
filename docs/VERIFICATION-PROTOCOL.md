@@ -22,7 +22,12 @@ e da rede, backups e recuperação, gestão de credenciais de infraestrutura.
 A aplicação tem **quatro camadas independentes**, todas verificadas por este protocolo:
 1. **Autenticação** — contas criadas só por administrador (auto-registo desactivado);
    sessões com expiração; links de email de uso único protegidos contra consumo automático
-   por scanners de correio corporativo (o link só age com um clique humano).
+   por scanners de correio corporativo (o link só age com um clique humano); troca da
+   própria password sempre com verificação da password actual, imposta pelo próprio GoTrue
+   (`GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD`, tarefa 4), não só pela app;
+   password mínima de 12 caracteres com quatro classes de carácter; tentativas de login
+   limitadas por IP em `/auth/v1/token` (tarefa 4 — o próprio GoTrue não impunha nenhum
+   limite a este endpoint).
 2. **Autorização por linha (RLS)** — cada consulta à base devolve apenas as linhas que o
    papel e o âmbito (filial/canal) do utilizador permitem; imposto pelo motor da base de
    dados, não pelo código da aplicação.

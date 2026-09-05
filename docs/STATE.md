@@ -3,16 +3,140 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: tarefa 3 — smoke tests + lockfile — ✅ FECHADA 2026-09-05.**
-`scripts/smoke.py` automatiza os blocos G–J/O–R do `VERIFICATION-PROTOCOL.md` contra a app
-viva (27/27 asserções, sem browser, sem valores/contagens hardcoded); `generate-lockfile.yml`
-+ Dockerfile a `npm ci` fecham a dívida de builds não-reprodutíveis desde a E1. O ciclo de
-release ganha um passo obrigatório novo: **push → CI → deploy por digest → `smoke.py` ✅** —
-já corrido uma vez de ponta a ponta, digest
-`sha256:16edac7045c2c56d787908f037c8fd71ad6000ad92692deef294096e6f5ba296`. Próximo, por
-`docs/BACKLOG.md`: tarefa 4 (auth/headers, com a lacuna do `PUT /auth/v1/user` à cabeça).
-Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
+**Etapa actual: tarefa 4 — auth/headers — ✅ FECHADA 2026-09-05.** A lacuna do `PUT
+/auth/v1/user` (i9/i10) fechada na raiz —
+`GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD` (GoTrue, verificado contra o
+código-fonte real, não assumido) faz o GoTrue exigir e verificar a password actual a si
+próprio; política de password (mínimo 12, quatro classes de carácter) e rate limit por IP
+em `/auth/v1/token` (GoTrue não tinha nenhum) acrescentados; quatro *security headers*
+(HSTS/CSP/X-Frame-Options/Referrer-Policy) no vhost, nenhum estava definido. Todas as
+provas ao vivo: brute-force controlado (6 pedidos admitidos, depois `503`, recupera depois
+de esperar), password fraca recusada (curta e sem classe), `current_password` em falta/
+errada recusada, correcta aceite. `scripts/smoke.py` 27/27 sem regressão. Próximo, por
+`docs/BACKLOG.md`: por procura (sem mais tarefas críticas na fila). Ordem e critérios de
+saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
+
+## Tarefa 4 — Auth + headers — ✅ FECHADA 2026-09-05
+
+**Contexto (`docs/BACKLOG.md` tarefa 4):** medir e fixar rate-limits do GoTrue, política de
+password, e headers do vhost — com a lacuna do `PUT /auth/v1/user` (i9/i10: o próprio
+GoTrue não exigia a password actual, só a nossa app o fazia) explicitamente à cabeça.
+
+**F0 — medido antes de fixar, contra o código-fonte real da versão pinada (v2.189.0), não
+assumido de memória (`internal/conf/configuration.go`, `internal/api/user.go`,
+`internal/api/admin.go`, todos lidos linha a linha):**
+- **Password:** `MinLength` por omissão = 6 (`defaultMinPasswordLength`); `RequiredCharacters`
+  vazio (nenhuma classe exigida). Nem `GOTRUE_PASSWORD_MIN_LENGTH` nem
+  `GOTRUE_PASSWORD_REQUIRED_CHARACTERS` estavam definidas — confirmado por `grep` ao
+  `docker-compose.yml` real, não assumido.
+- **`PUT /auth/v1/user` sem verificação de password actual** — confirmado, e a causa raiz:
+  `GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD` (campo real, não inventado —
+  `internal/api/user.go` linhas 176–201: lê `current_password` do corpo, chama
+  `user.Authenticate()` contra o hash guardado, dois `ErrorCode` distintos para
+  "em falta"/"errada") estava a `false` (não definido, por omissão). **Duas condições
+  confirmadas antes de activar**, para não partir nada: (a) `session.IsRecovery()` isenta
+  explicitamente sessões de recuperação — o fluxo por email da i1 (`reset-password/
+  actions.ts`) não é afectado; (b) o endpoint admin (`internal/api/admin.go`,
+  `adminUserUpdate`) **não tem nenhuma verificação deste tipo** — o reset da i9 continua a
+  não precisar da password antiga do utilizador-alvo, por desenho.
+- **Rate limit em `/token`:** GoTrue tem onze campos `RateLimit*` na configuração real —
+  email, SMS, refresh de token, SSO, OTP, utilizadores anónimos, web3, passkey, registo
+  OAuth — **nenhum cobre `grant_type=password`**. Confirmado célula a célula contra o
+  `GlobalConfiguration`, não assumido por analogia com os outros. `fail2ban` neste host só
+  tem o jail `sshd` activo (`/etc/fail2ban/jail.local`) — os filtros `nginx-*` existem no
+  pacote mas não estão ligados a nenhum jail.
+- **Headers do vhost:** nenhum dos quatro (HSTS/CSP/X-Frame-Options/Referrer-Policy) estava
+  definido em `/etc/nginx/sites-available/tmsiequipment.conf` — confirmado por leitura
+  directa do ficheiro real.
+
+**F1 — fixado:**
+1. **App:** `account/password/actions.ts` simplificado — deixa de verificar a password
+   actual com um cliente descartável (`signInWithPassword`), passa `current_password` a
+   `updateUser()` directamente. `@supabase/auth-js@2.115.0` (a versão pinada exacta deste
+   projecto — descarregado e inspeccionado o `.d.ts` real, não assumido) já tipa
+   `UserAttributes.current_password?: string`, com o comentário do próprio pacote a citar
+   esta variável do GoTrue pelo nome — nenhuma actualização de dependência precisou de
+   acontecer. Deployado **antes** de activar a variável no GoTrue (o campo é ignorado em
+   silêncio enquanto a flag estiver desligada — ordem sem janela de quebra em qualquer dos
+   dois sentidos, mas esta foi a escolhida).
+2. **GoTrue (`deploy/supabase/docker-compose.yml`):**
+   `GOTRUE_PASSWORD_MIN_LENGTH=12`; `GOTRUE_PASSWORD_REQUIRED_CHARACTERS` com quatro classes
+   (minúsculas:maiúsculas:dígitos:símbolos, sem `$` no conjunto de propósito — o valor passa
+   pela própria interpolação `${...}` do docker compose); `GOTRUE_SECURITY_
+   UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD=true`.
+3. **nginx:** `conf.d/tmsi-rate-limits.conf` novo (`limit_req_zone
+   $binary_remote_addr zone=tmsi_auth:10m rate=10r/m`); `location = /auth/v1/token`
+   (*exact match*, não a prefixo `/auth/v1/`, para não afectar `/health`/`/user`/`/verify`)
+   com `limit_req zone=tmsi_auth burst=5 nodelay` — cobre também `grant_type=refresh_token`
+   (nginx não distingue por query string sem `if`, que `limit_req` não suporta de forma
+   fiável dentro de `if`) — margem verificada contra o uso real: `JWT_EXPIRY=3600s`, poucos
+   refreshes/hora mesmo com vários utilizadores do piloto atrás do mesmo IP. Quatro
+   `add_header ... always` no `server{}` do vhost — `Content-Security-Policy` com
+   `'unsafe-inline'` em `script-src`/`style-src`: **decisão consciente, não um descuido** —
+   confirmado ao vivo que a app usa `<script>(self.__next_f=...).push(...)</script>` inline
+   para o streaming/hidratação do Next.js, e não há *nonce* ligado no `middleware.ts` (o
+   padrão oficial do Next.js para isso exige forçar renderização dinâmica em toda a app e
+   fica fora do âmbito "headers do vhost" desta tarefa — registado como melhoria futura, não
+   escondido). Todas as outras directivas (`default-src`, `object-src`, `frame-ancestors`,
+   `connect-src`, `form-action`, `base-uri`) ficaram estritas — a app nunca chama uma API
+   externa nem submete um formulário fora do próprio domínio.
+
+**Drop-in de sudo, reportado por inteiro (regra do `~/CLAUDE.md`):** `/etc/sudoers.d/
+atelier-tarefa4`, cinco comandos exactos (backup do vhost, instalar o rate-limit novo,
+instalar o vhost novo, `nginx -t`, `systemctl reload nginx`) — nada de `tee`/`bash`
+genérico. **Instalado pelo Pedro** (esta sessão não tinha sudo nenhum, nem para o próprio
+`sudo -l` — o problema do "ovo e da galinha" de um drop-in que só um root já activo pode
+instalar). Usado, depois **removido** de imediato (`sudo -n -l` voltou a falhar a seguir,
+confirmando a remoção, não só assumida).
+
+**F2 — provas ao vivo:**
+1. **Headers:** os quatro presentes em `/`, incluindo numa resposta de erro (307 para um
+   caminho inexistente) — confirma o `always`.
+2. **Brute-force controlado:** 10 pedidos rápidos a `/auth/v1/token` com credenciais
+   inventadas → os primeiros 6 devolvem `400` (recusa normal do GoTrue), do 7.º ao 10.º
+   `503` (nginx a recusar) — exactamente `1 + burst 5 = 6` como configurado. Depois de
+   esperar 15 s, um novo pedido volta a `400` — confirma que o limite recupera, não é um
+   bloqueio permanente.
+3. **Password fraca recusada:** `422` "should be at least 12 characters" (8 caracteres);
+   `422` "should contain at least one character of each: ..." (12+ caracteres mas sem
+   símbolo) — mensagens exactas do próprio GoTrue, não inventadas.
+4. **`current_password` em falta/errada → recusada; correcta → aceite:** `400` "Current
+   password required when setting new password." nos dois primeiros casos (a mesma
+   mensagem para ambos — comportamento do próprio GoTrue, não um defeito daqui); `200` com
+   a password actual certa. Testado contra `finance.test`, revertido a seguir.
+5. **Isenção do fluxo de recuperação e não-afectação do endpoint admin:** confirmadas por
+   leitura directa do código-fonte (F0), **não replicadas ao vivo** — construir uma sessão
+   de recuperação sintética via `/admin/generate_link` teria exigido engenharia adicional
+   substancial só para confirmar algo já evidenciado por código verbatim; risco/benefício
+   desfavorável. Se quiseres confirmação ao vivo, um reset por email real (i1/i9) sem
+   `current_password` nenhum a continuar a funcionar é prova suficiente.
+6. `scripts/smoke.py`: **27/27**, sem regressão — inclui a interacção com o rate limit novo
+   (4 logins sequenciais, dentro dos 6 admitidos).
+7. Sem regressões: `/`, `/login`, `/prices`, `/products`, `/prices/export`,
+   `/products/export`, `/admin/users`, `/config`, `/overrides`, `/audit`, `/dashboard`,
+   `/account/password`, `/forgot-password`, `/reset-password`, `/auth/v1/health`,
+   `/rest/v1/` — todos com o código esperado. Footprint: RAM disponível 216 MB, disco 49%.
+
+**Achados de processo, sinalizados, sem consequência real:**
+1. Ao testar o "reverter" da password de `finance.test` depois da prova 4, a reversão
+   falhou (`422`) — a password *original* dessa conta (criada na i5, antes desta política
+   existir) tinha 32 caracteres mas **nenhum símbolo**, por isso já não passa a política
+   nova como valor a definir (continuava a funcionar para login — só a *definição* de novas
+   passwords é verificada, não os hashes já guardados). Gerada uma nova, conforme à
+   política, ficheiro actualizado, login confirmado. **Verificação preventiva das outras
+   três contas de teste** (só leitura local, sem chamadas à API): `pm.test` e
+   `branch_manager.test` já conformes; `logistics.test` (regenerada na tarefa 3, antes desta
+   política) não tinha nenhum símbolo pela mesma razão — corrigida da mesma forma.
+2. Durante a prova 4 (o valor temporário para `finance.test`), escrevi a password nova como
+   um literal directamente no texto do comando (`TEMP_PW="Zz9!...⁠"`), em vez de a gerar por
+   `openssl rand` como é o padrão já estabelecido (i9). Nunca chegou a nenhum *output*
+   (nunca foi impressa, só usada como argumento), mas fica sinalizada por precaução — o
+   valor foi substituído momentos depois pela geração própria, apropriada, do achado 1.
+
+**F3 — sem migração, sem mudança de digest da app além da F1.1** (o digest final é o mesmo
+que fechou a mudança de código do `current_password` — a parte de config do GoTrue/nginx
+não precisa de nova imagem).
 
 ## Tarefa 3 — Smoke tests automatizados + lockfile — ✅ FECHADA 2026-09-05
 

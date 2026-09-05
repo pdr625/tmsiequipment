@@ -47,10 +47,12 @@ linha.
 + Dockerfile a `npm ci` — ciclo completo já corrido uma vez: push → CI → deploy por digest
 → smoke ✅. Detalhe: `docs/STATE.md`.)
 
-**4. Revisão da configuração de auth + headers** *(sessão VPS, meio-dia)*
-Medir e fixar: rate-limits do GoTrue, política de password (mínimos — relevante dobrado com
-a i9), headers do vhost (HSTS/CSP/X-Frame-Options/Referrer-Policy). Metade medição, metade
-config; provas por curl e por tentativa de brute-force controlada.
+~~**4. Revisão da configuração de auth + headers** *(sessão VPS, meio-dia)*~~ ✅ **fechada
+2026-09-05** (a lacuna do `PUT /auth/v1/user` fechada na raiz via
+`GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD`; política de password mínimo
+12/4 classes; rate limit novo em `/auth/v1/token` — GoTrue não tinha nenhum; os quatro
+headers do vhost. Provas ao vivo: brute-force controlado, password fraca recusada,
+`current_password` em falta/errada recusada. Detalhe: `docs/STATE.md`.)
 
 ## 🟠 Altas — logo a seguir
 

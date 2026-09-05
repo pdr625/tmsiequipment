@@ -26,6 +26,13 @@ passo obrigatório novo: **push → CI → deploy por digest → `python3 script
 já corrido uma vez de ponta a ponta contra o primeiro deploy `npm ci`. Detalhe:
 `docs/STATE.md`.
 
+**Tarefa 4 (auth/headers) — ✅ fechada 2026-09-05.** A lacuna do `PUT /auth/v1/user`
+(i9/i10) fechada na raiz, no próprio GoTrue
+(`GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD`); política de password
+(mínimo 12, quatro classes) e rate limit novo em `/auth/v1/token` (GoTrue não tinha
+nenhum); quatro *security headers* no vhost (nenhum estava definido). Detalhe:
+`docs/STATE.md`.
+
 ## Estado das etapas
 
 | Etapa | Título | Estado |
@@ -33,7 +40,7 @@ já corrido uma vez de ponta a ponta contra o primeiro deploy `npm ci`. Detalhe:
 | E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
 | E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
 | E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅, i7 protocolo de verificação ✅, i8 dashboard ✅ | ✅ 05/09/2026 — **COMPLETA**; estendida pelo backlog: i9 (passwords sem email, migração 0006) ✅ 05/09/2026 (mecanismo; browser pendente), i10 (export Excel/PDF) ✅ 05/09/2026 |
+| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅, i7 protocolo de verificação ✅, i8 dashboard ✅ | ✅ 05/09/2026 — **COMPLETA**; estendida pelo backlog: i9 (passwords sem email, migração 0006) ✅ 05/09/2026 (mecanismo; browser pendente), i10 (export Excel/PDF) ✅ 05/09/2026, tarefa 3 (smoke+lockfile) ✅ 05/09/2026, tarefa 4 (auth/headers) ✅ 05/09/2026 |
 | — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
 | — | Migração 0005 — correcção de câmbio no mesmo dia | ✅ 04/09/2026 |
 | — | Migração 0006 — gestão de passwords sem email (i9) | ✅ 05/09/2026 (mecanismo; provas de ecrã real pendentes do Pedro) |
