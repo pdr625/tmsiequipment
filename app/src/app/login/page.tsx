@@ -10,6 +10,7 @@
 import { useActionState } from 'react';
 import Link from 'next/link';
 import { signIn, type SignInState } from './actions';
+import { PROPRIETARY_NOTICE } from '@/lib/notice';
 
 const initialState: SignInState = undefined;
 
@@ -75,8 +76,9 @@ export default function LoginPage() {
       </div>
 
       <footer className="mt-8 max-w-sm text-center text-xs text-gray-500">
-        <p>© 2026 Pedro Alexandre. Proprietary software — authorised users only.</p>
-        <p>Unauthorised access or use is prohibited and may be prosecuted.</p>
+        {PROPRIETARY_NOTICE.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
       </footer>
     </div>
   );

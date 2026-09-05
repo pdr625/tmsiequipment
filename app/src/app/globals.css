@@ -7,6 +7,18 @@
 
 @import 'tailwindcss';
 
+/* Print landscape for the price list's print view (i10). No Tailwind
+ * utility reaches this — @page is a page-box at-rule, not a style
+ * applicable to an element/class, so it can't be a `print:` variant.
+ * The only printable screen today is /prices; scoped globally to @media
+ * print rather than to a class for that reason, not because it's meant
+ * to apply everywhere print is used in the future. */
+@media print {
+  @page {
+    size: landscape;
+  }
+}
+
 /* Dashboard chart tokens (E3-i8) — local block, only used under
  * .dashboard-charts. CVD-safe categorical palette, exact hexes and fixed
  * order from the i8 prompt §2.3, not chosen freely. Series 3/4 read below

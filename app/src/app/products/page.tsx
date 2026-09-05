@@ -50,6 +50,12 @@ export default async function ProductsPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Products</h1>
         <div className="flex items-center gap-4">
+          <a
+            href="/products/export"
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+          >
+            Export to Excel
+          </a>
           {canManage && (
             <Link
               href="/products/new"

@@ -7,6 +7,8 @@
 
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { NOTICE_TEXT } from '@/lib/notice';
+import { PrintButton } from './print-button';
 
 type BranchPriceRow = {
   product_id: string;
@@ -45,6 +47,9 @@ export default async function PricesPage({
   const { branch } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const { data: canReadCosts } = await supabase.schema('tmsi').rpc('can_read_costs');
   const viewName = canReadCosts ? 'v_branch_prices' : 'v_selling_prices';
 
@@ -62,16 +67,40 @@ export default async function PricesPage({
     .order('id')
     .overrideTypes<Branch[], { merge: false }>();
 
+  // i10: same metadata the .xlsx export carries in its own header block —
+  // shown here only for print (the screen already has the branch filter
+  // for scope, and no on-screen use for the rest).
+  const generatedAt = new Date();
+  const currencies = [...new Set((rows ?? []).map((r) => (r as { currency: string }).currency))].sort();
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Price list</h1>
-        <Link href="/" className="text-sm text-gray-600 underline">
-          Back
-        </Link>
+      <div className="mb-4 hidden print:block">
+        <h1 className="text-lg font-bold">TMSI Equipment — Price list</h1>
+        <p className="text-sm">Scope: {branch ?? 'All branches'}</p>
+        <p className="text-sm">Currency: {currencies.join(', ') || '—'}</p>
+        <p className="text-sm">
+          Generated: {generatedAt.toISOString()} by {user?.email}
+        </p>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-2">
+      <div className="mb-6 flex items-center justify-between print:hidden">
+        <h1 className="text-xl font-semibold">Price list</h1>
+        <div className="flex items-center gap-4">
+          <a
+            href={branch ? `/prices/export?branch=${branch}` : '/prices/export'}
+            className="rounded-md border border-gray-300 px-3 py-1 text-sm font-medium"
+          >
+            Export to Excel
+          </a>
+          <PrintButton />
+          <Link href="/" className="text-sm text-gray-600 underline">
+            Back
+          </Link>
+        </div>
+      </div>
+
+      <div className="mb-6 flex flex-wrap gap-2 print:hidden">
         <Link
           href="/prices"
           className={`rounded-md border px-3 py-1 text-sm ${!branch ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
@@ -158,6 +187,12 @@ export default async function PricesPage({
           </tbody>
         </table>
       )}
+
+      <div className="mt-6 hidden text-xs text-gray-500 print:block">
+        {NOTICE_TEXT.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+      </div>
     </div>
   );
 }

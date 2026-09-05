@@ -15,7 +15,8 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "@supabase/supabase-js": "2.115.0",
-    "@supabase/ssr": "0.12.5"
+    "@supabase/ssr": "0.12.5",
+    "exceljs": "4.4.0"
   },
   "devDependencies": {
     "typescript": "7.0.2",
