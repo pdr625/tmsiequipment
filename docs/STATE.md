@@ -3,17 +3,91 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: i10 — export Excel + vista de impressão — ✅ FECHADA 2026-09-05.**
-`/prices/export` e `/products/export` (mesmas vistas/RPC que as páginas equivalentes, mesmas
-colunas, nunca uma superset); vista de impressão em `/prices` (`@media print`, texto do
-`/NOTICE` no rodapé). Digest
-`sha256:8691c1a01f57dc8f294303b6b2cb0eb99f8ed51a913902d7b0e7892f0c203e9b`. Dados/RLS
-confirmados directamente contra a BD pelo agente; **provas de ecrã confirmadas pelo Pedro**
-— exports abertos nos dois papéis, impressão nos dois papéis, e a prova de ficheiro mais
-séria do prompt (`unzip`/`grep` ao `.xlsx` do `sales.sa`) com zero ocorrências de
-`exw`/`sap_code`/`supplier`. Próximo, por `docs/BACKLOG.md`: sessão técnica (smoke tests +
-lockfile). Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3
-(i1–i9), E5-VPS e as migrações 0003/0004/0005/0006 estão fechadas.
+**Etapa actual: tarefa 3 — smoke tests + lockfile — ✅ FECHADA 2026-09-05.**
+`scripts/smoke.py` automatiza os blocos G–J/O–R do `VERIFICATION-PROTOCOL.md` contra a app
+viva (27/27 asserções, sem browser, sem valores/contagens hardcoded); `generate-lockfile.yml`
++ Dockerfile a `npm ci` fecham a dívida de builds não-reprodutíveis desde a E1. O ciclo de
+release ganha um passo obrigatório novo: **push → CI → deploy por digest → `smoke.py` ✅** —
+já corrido uma vez de ponta a ponta, digest
+`sha256:16edac7045c2c56d787908f037c8fd71ad6000ad92692deef294096e6f5ba296`. Próximo, por
+`docs/BACKLOG.md`: tarefa 4 (auth/headers, com a lacuna do `PUT /auth/v1/user` à cabeça).
+Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
+e as migrações 0003/0004/0005/0006 estão fechadas.
+
+## Tarefa 3 — Smoke tests automatizados + lockfile — ✅ FECHADA 2026-09-05
+
+**Contexto:** duas dívidas antigas numa sessão (`docs/BACKLOG.md` tarefa 3) — nenhuma rede
+automatizada entre execuções formais do `VERIFICATION-PROTOCOL.md` (dependente de olhos
+humanos até agora) e builds não-reprodutíveis (`npm install` no Dockerfile desde a E1, sem
+`package-lock.json`, pendência registada nessa altura, ver acima).
+
+**F0:** python3 (3.12.3) e `jq`/`curl`/`docker` já confirmados no host (E0). Blocos G–J
+(secção 4.2/4.3, fronteiras do papel sem custos/de filial) e O–R (secção 4.4, integridade
+das regras de negócio) extraídos do `VERIFICATION-PROTOCOL.md` como o contrato exacto a
+automatizar — citados nos comentários do próprio `smoke.py`, não reinterpretados.
+
+**F1 — `scripts/smoke.py` (27/27 asserções ✅, detalhe secção acima "F1"):** login real
+(password grant) para `finance.test`/`pm.test`/`logistics.test`/`branch_manager.test` — sem
+conta admin de teste (só existe a do próprio Pedro, explicitamente fora do smoke por
+restrição do prompt) e sem `sales.sa`/`agent.apac` (evitados deliberadamente: a única forma
+seria ler o ficheiro combinado e ambíguo de passwords já ligado a um incidente conhecido,
+i6 — `logistics.test`/`branch_manager.test` já cobrem as mesmas fronteiras sem essa
+ambiguidade). Todas as escritas recusadas ficam sem residir por construção (RLS nega antes
+de qualquer linha existir); as duas escritas que têm de suceder para provar o efeito (P, R)
+ficam sem resíduo por `BEGIN`/`ROLLBACK` (P, efeitos em duas tabelas) ou por
+inserir-verificar-apagar via a própria API REST (R) — confirmado por leitura fresca depois
+em ambos os casos, não só por confiança no mecanismo.
+
+**Quatro bugs reais, apanhados a construir e testar o próprio smoke, todos no script, não
+na app (detalhe completo nos comentários do próprio `smoke.py`):**
+1. `psql -t` sozinho não suprime as tags de conclusão (`BEGIN`, `DO`) que a `psql` imprime
+   mesmo em modo tuplas-só quando o script tem comandos de controlo de transacção/blocos
+   `DO` — precisou também de `-q`. Sem isto, `int("BEGIN")` rebentava o parser do próprio
+   script.
+2. A ambiguidade "200/0 linhas" já conhecida deste projecto (i4/i5/i9) aplica-se
+   igualmente às verificações do próprio smoke — um `PATCH` recusado por RLS podia devolver
+   `200`/`204` sem corpo, indistinguível de um `200` com a linha realmente tocada;
+   `Prefer: return=representation` tornou a distinção explícita.
+3. Comparar `"949.0"` (JSON, sem zero à direita) com `"949.00"` (texto do `psql`, escala
+   preservada) como strings falha mesmo sendo o mesmo valor — corrigido para comparação
+   numérica.
+4. O próprio desempate da prova R (correcção no mesmo dia) precisava exactamente do mesmo
+   `effective_date desc, created_at desc` que `tmsi.fx_rate()` usa (0005) — sem o segundo
+   critério, apanhava uma entrada do mesmo dia já superada em vez da que `fx_rate()`
+   realmente devolveria; a própria BD já tinha duas entradas de CNY em 2026-09-04 de sessões
+   de teste anteriores, tornando o bug visível de imediato, não hipotético.
+
+**Achado lateral, corrigido em prossecução, não escondido:** `logistics.test` deixou de
+autenticar com a password do ficheiro (inalterado por hash/mtime desde a i9) — quase de
+certeza rodada pelos teus próprios testes de browser da i9 ao admin-reset, que nunca
+actualiza esse ficheiro. Reposta pelo mesmo procedimento Admin API já estabelecido
+(`~/tmp/tmsi-sudo/logistics-test-password.txt` actualizado, nunca mostrada).
+
+**Prova do ramo de falha do próprio smoke (restrição 4 do prompt):** uma asserção invertida
+localmente (`False` fixo em vez da condição real) → `❌` real + `exit 1` confirmados; nunca
+commitada, restaurada de imediato a seguir. **Idempotência:** três execuções seguidas,
+mesma forma de resultado, zero resíduo — confirmado tanto pelo próprio `ROLLBACK`/apagar de
+cada bloco como por uma contagem à parte na BD depois (`source='smoke-test'` = 0 linhas;
+nenhum produto com `price_versions` anómalo).
+
+**F2 — lockfile:** `generate-lockfile.yml` (`workflow_dispatch`, `contents: write` só nesse
+workflow — `ci.yml` mantém `contents: read`, intocado). Disparado pelo Pedro; o commit do
+lockfile (`d5465ed`) não chegou a accionar o `ci.yml` — o `GITHUB_TOKEN` por omissão de um
+workflow **não** dispara outros `on: push` (protecção anti-recursão da própria GitHub, não
+um defeito daqui); confirmado directamente na API de runs, não assumido. Sem consequência
+prática: o commit seguinte, o que muda o Dockerfile para `npm ci`, é um push normal (chave
+SSH do repo) e dispara o `ci.yml` como sempre. Dockerfile: `COPY package.json
+package-lock.json ./` + `RUN npm ci`, substitui `npm install`. Duas pendências antigas
+fechadas em linha, não apagadas (`STATE.md`, o registo original da E1; `ROADMAP.md`, a
+lista da E5-HOMELAB) — ambas com nota "✅ resolvida" a apontar para aqui.
+
+**F3 — ciclo completo corrido uma vez de ponta a ponta:** CI verde → imagem por digest
+`sha256:16edac7045c2c56d787908f037c8fd71ad6000ad92692deef294096e6f5ba296` (`Created`
+2026-09-05T17:10:27Z, primeira imagem construída com `npm ci` a sério) → saudável, RAM
+disponível 236 MB, mesmo tamanho de imagem que antes (294 MB — `npm ci` não mudou nenhuma
+dependência) → `python3 scripts/smoke.py` → **27/27 ✅**. Ciclo de release institucionalizado:
+`docs/ROADMAP.md` e `docs/VERIFICATION-PROTOCOL.md` (nota nova, antes da secção 5) passam a
+descrevê-lo como passo obrigatório.
 
 ## i10 — Export Excel + vista de impressão — ✅ FECHADA 2026-09-05
 

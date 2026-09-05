@@ -42,11 +42,10 @@ rodapé proprietário. Geração server-side (a chave e os dados nunca passam po
 externos). Prova: abrir o .xlsx real e conferir colunas por papel + cálculo à mão de uma
 linha.
 
-**3. Sessão técnica — smoke tests + lockfile** *(sessão VPS)*
-Smoke suite por papel (script no repo, corrível no CI e à mão): login por papel, ramos
-negados de leitura/escrita, motor com valor calculado, activação bloqueada, override
-aplica/expira — a automatização dos blocos G–J/O–R do protocolo. Lockfile: job de CI gera e
-commita `package-lock.json`, Dockerfile passa a `npm ci`. Uma sessão, duas dívidas fechadas.
+~~**3. Sessão técnica — smoke tests + lockfile** *(sessão VPS)*~~ ✅ **fechada 2026-09-05**
+(`scripts/smoke.py`, 27/27 asserções, blocos G–J/O–R automatizados; `generate-lockfile.yml`
++ Dockerfile a `npm ci` — ciclo completo já corrido uma vez: push → CI → deploy por digest
+→ smoke ✅. Detalhe: `docs/STATE.md`.)
 
 **4. Revisão da configuração de auth + headers** *(sessão VPS, meio-dia)*
 Medir e fixar: rate-limits do GoTrue, política de password (mínimos — relevante dobrado com

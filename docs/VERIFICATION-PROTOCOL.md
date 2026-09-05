@@ -250,6 +250,16 @@ estática (`x-nextjs-cache: HIT`), a submissão não chegou à Server Action rea
 passos manuais do Pedro (secção 6 do prompt da i10), que já incluíam abrir os exports reais e
 testar a impressão.
 
+📌 **Cobertura automatizada (tarefa 3, BACKLOG.md, 2026-09-05):** os blocos G–J (secção 4.2,
+fronteiras do papel sem custos/de filial) e O–R (secção 4.4, integridade das regras de
+negócio) têm agora cobertura automatizada por `scripts/smoke.py`, corrível em segundos
+contra a app viva, sem browser — ver `scripts/README.md` para o que cobre exactamente e
+porquê (nenhuma asserção com valores/contagens hardcoded, ver o cabeçalho do próprio
+script). **Isto não substitui a execução formal deste protocolo** (secção 7) — os passos de
+browser, ficheiro real e email continuam a exigir os passos manuais que só um humano pode
+dar; o smoke é a rede rápida entre execuções formais, corrível após cada deploy, não um
+substituto da própria execução assinada.
+
 ## 5. Regras de execução em produção
 - Executor: o administrador + uma segunda pessoa como testemunha para os testes do ramo
   negado (a demonstração à direcção vale mais com dois nomes).

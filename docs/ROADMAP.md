@@ -21,6 +21,11 @@ verbalmente pelo admin, não de email; o desvio EOP/quarentena da E5-VPS, linha 
 continua por cobrir mas já não bloqueia nada) e **export Excel/PDF promovido a crítico**
 (i10, antes nem listado aqui).
 
+**Tarefa 3 (smoke tests + lockfile) — ✅ fechada 2026-09-05.** O ciclo de release ganha um
+passo obrigatório novo: **push → CI → deploy por digest → `python3 scripts/smoke.py` ✅** —
+já corrido uma vez de ponta a ponta contra o primeiro deploy `npm ci`. Detalhe:
+`docs/STATE.md`.
+
 ## Estado das etapas
 
 | Etapa | Título | Estado |
