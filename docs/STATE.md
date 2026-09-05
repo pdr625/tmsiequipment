@@ -3,18 +3,19 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: i10 — export Excel + vista de impressão — ✅ FECHADA 2026-09-05 (parcial —
-ver abaixo).** `/prices/export` e `/products/export` (mesmas vistas/RPC que as páginas
-equivalentes, mesmas colunas, nunca uma superset); vista de impressão em `/prices`
-(`@media print`, texto do `/NOTICE` no rodapé). Digest
+**Etapa actual: i10 — export Excel + vista de impressão — ✅ FECHADA 2026-09-05.**
+`/prices/export` e `/products/export` (mesmas vistas/RPC que as páginas equivalentes, mesmas
+colunas, nunca uma superset); vista de impressão em `/prices` (`@media print`, texto do
+`/NOTICE` no rodapé). Digest
 `sha256:8691c1a01f57dc8f294303b6b2cb0eb99f8ed51a913902d7b0e7892f0c203e9b`. Dados/RLS
-confirmados directamente contra a BD pelo agente; **as provas que exigem ficheiro
-real/browser (grep ao `.xlsx`, pré-visualização de impressão, memória durante uma geração
-HTTP) ficam para o Pedro** — ver secção abaixo. Próximo, por `docs/BACKLOG.md`: sessão
-técnica (smoke tests + lockfile). Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`.
-E0, E1, E2, E3 (i1–i9), E5-VPS e as migrações 0003/0004/0005/0006 estão fechadas.
+confirmados directamente contra a BD pelo agente; **provas de ecrã confirmadas pelo Pedro**
+— exports abertos nos dois papéis, impressão nos dois papéis, e a prova de ficheiro mais
+séria do prompt (`unzip`/`grep` ao `.xlsx` do `sales.sa`) com zero ocorrências de
+`exw`/`sap_code`/`supplier`. Próximo, por `docs/BACKLOG.md`: sessão técnica (smoke tests +
+lockfile). Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3
+(i1–i9), E5-VPS e as migrações 0003/0004/0005/0006 estão fechadas.
 
-## i10 — Export Excel + vista de impressão — ✅ FECHADA 2026-09-05 (mecanismo/dados; ficheiro real pendente)
+## i10 — Export Excel + vista de impressão — ✅ FECHADA 2026-09-05
 
 **Contexto:** decisão do Pedro (05/09, `docs/BACKLOG.md` tarefa 2, promovida a crítica) — os
 utilizadores vêm do Excel, o export deixa de ser opcional.
@@ -107,32 +108,38 @@ idêntico à sessão anterior; disco 49% — sem regressão.
    `/products/export`, `/admin/users`, `/config`, `/overrides`, `/audit`, `/dashboard`,
    `/account/password`, `/auth/v1/health`, `/rest/v1/` — todos com o código esperado.
 
-**Por cobrir, explicitamente, não escondido — ficam para o Pedro (secção 6 do prompt, já
-previa isto):**
-- **Prova 2 do prompt, ao nível do ficheiro** (`unzip`/`grep` a um `.xlsx` real de um papel
-  sem custos, confirmando zero ocorrências de `exw`/`sap_code`/`supplier`) — a condição de
-  paragem mais séria do prompt está ligada a esta prova especificamente; não realizada nesta
-  sessão porque exige uma sessão de browser real autenticada.
-- **Vista de impressão** (pré-visualização real, cabeçalho/rodapé/paginação) — puramente
-  visual, sem equivalente de BD.
-- **Memória durante uma geração real** (`docker stats` durante um export HTTP de verdade) —
-  precisa de uma requisição autenticada real a acontecer.
-- Tentativa própria de obter uma sessão autenticada via `curl` (login por progressive
-  enhancement de Server Actions do Next.js, sem JavaScript) — a página `/login` revelou-se
-  servida pré-renderizada estática (`x-nextjs-cache: HIT` na resposta), a submissão nunca
-  chegando à Server Action real. Abandonada sem mais tentativas — mesma decisão já tomada na
-  i9 para não replicar os cookies internos do `@supabase/ssr` às cegas, risco de um falso
-  negativo/positivo maior do que o valor da prova.
+**Provas de browser confirmadas pelo Pedro (fecham os quatro pontos que tinham ficado por
+cobrir aqui):** exports reais abertos como admin (custos, valores certos) e como `sales.sa`
+(sem custos); impressão testada nos dois papéis. **Prova 2 do prompt, a condição de paragem
+mais séria — confirmada limpa:** `unzip -p tmsi-prices-*.xlsx xl/sharedStrings.xml | grep
+-iE "exw|sap_code|supplier"` no export do `sales.sa` → zero ocorrências. **Memória durante
+geração real:** não observada ao vivo com `docker stats` durante a própria prova do Pedro,
+mas confirmada retrospectivamente depois — `docker inspect` mostra `OOMKilled: false` desde
+o deploy desta imagem, sem nenhuma linha `oom`/`memory`/`heap` nos `docker logs` da janela
+em que o Pedro gerou os exports reais, e o consumo corrente (23.8 MiB/192 MiB, 12%) fica
+bem dentro do `mem_limit` — suficiente para fechar esta prova sem repetir o teste.
 
-**Incidente de processo, sinalizado, não escondido:** a meio da verificação do formato do
-ficheiro combinado de passwords de teste (`~/tmp/tmsi-sudo/test-users-passwords.txt`, sem
-etiquetas por utilizador), um comando meu imprimiu as duas passwords em claro no output desta
-sessão — a mesma classe de incidente já documentada uma vez neste projecto (i6 F1). Nunca
-chegou a uma mensagem visível ao Pedro nem foi reutilizado; contas fictícias `.test`, sem
-consequência real — não rotacionadas, à semelhança da decisão da i6 para o mesmo tipo de
-incidente. Não repetido: as provas seguintes usaram sempre `$(cat ficheiro)` capturado
-directamente para dentro do comando que o consome, nunca um passo intermédio que apenas
-imprime o conteúdo.
+Tentativa própria (agente) de obter uma sessão autenticada via `curl` (login por progressive
+enhancement de Server Actions do Next.js, sem JavaScript) — a página `/login` revelou-se
+servida pré-renderizada estática (`x-nextjs-cache: HIT` na resposta), a submissão nunca
+chegando à Server Action real. Abandonada sem mais tentativas — mesma decisão já tomada na
+i9 para não replicar os cookies internos do `@supabase/ssr` às cegas, risco de um falso
+negativo/positivo maior do que o valor da prova.
+
+**Incidente de processo — segunda recidiva, i6→i10, regra escrita como consequência:** a
+meio da verificação do formato do ficheiro combinado de passwords de teste
+(`~/tmp/tmsi-sudo/test-users-passwords.txt`, sem etiquetas por utilizador), um comando meu
+imprimiu as duas passwords em claro no output desta sessão — a mesma classe de incidente já
+documentada uma vez neste projecto (i6 F1). Nunca chegou a uma mensagem visível ao Pedro nem
+foi reutilizado; contas fictícias `.test`, sem consequência real — não rotacionadas, à
+semelhança da decisão da i6 para o mesmo tipo de incidente. **Duas recidivas do mesmo
+incidente levaram o Pedro a instituir uma regra escrita**, não deixar à memória da sessão
+seguinte: `~/atelier-vps/CLAUDE.md` ganhou a secção "TMSI — passwords de teste" — nunca
+`cat`/`echo`/`head`/`sed -n` a um ficheiro de password de teste como passo isolado; provas de
+BD/RLS por injecção de claims JWT no `psql` (sem password nenhuma); uma password real só
+dentro do mesmo comando que a consome (`$(cat ficheiro)` inline, nunca um passo prévio que só
+a mostra); sessões HTTP autenticadas reais (cookies) ficam sempre para o Pedro no browser,
+nunca fabricadas por `curl`.
 
 **F4 — `docs/VERIFICATION-PROTOCOL.md`:** nota ⁵ na matriz + secção 4.8 (passos AA–DD)
 novas; secção 7 ganhou uma adenda com o resultado desta re-execução parcial. Commit

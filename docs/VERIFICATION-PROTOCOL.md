@@ -372,12 +372,19 @@ para não-admin nas execuções da i3/protocolo — e a fronteira que importa de
 `admin_revoke_sessions()`/`profiles_admin`, está confirmada acima independentemente desse
 gate da app).
 
-**Adenda, 2026-09-05 (i10) — re-execução PARCIAL, só os passos de export/impressão (AA–DD,
-secção 4.8 acima):** migrações 0001–0006 (i10 não trouxe migração nova); digest
-`sha256:8691c1a01f57dc8f294303b6b2cb0eb99f8ed51a913902d7b0e7892f0c203e9b`. Executor: agente,
-só BD (dados/RLS) — as provas que exigem ficheiro real/browser (o `grep` ao `.xlsx`, a
-pré-visualização de impressão, a memória durante uma geração HTTP real) não foram
-realizadas nesta adenda, ficam para o Pedro.
+**Adenda, 2026-09-05 (i10) — re-execução dos passos de export/impressão (AA–DD, secção 4.8
+acima), completada em duas partes:** migrações 0001–0006 (i10 não trouxe migração nova);
+digest `sha256:8691c1a01f57dc8f294303b6b2cb0eb99f8ed51a913902d7b0e7892f0c203e9b`. Executores:
+agente (BD/dados/RLS) + Pedro (browser/ficheiro real).
+
+**Confirmado pelo Pedro (browser):** exports reais abertos como admin (custos, valores
+certos) e `sales.sa` (sem custos); impressão testada nos dois papéis (CC). **AA, a condição
+de paragem mais séria do prompt:** `unzip -p tmsi-prices-*.xlsx xl/sharedStrings.xml | grep
+-iE "exw|sap_code|supplier"` no export do `sales.sa` → **zero ocorrências** — confirmado, não
+disparado o incidente que o prompt previa. **DD (memória):** não observada ao vivo por
+`docker stats` durante a prova do Pedro, fechada retrospectivamente — `OOMKilled: false`
+desde este deploy, sem linhas `oom`/`memory`/`heap` em `docker logs` na janela em que os
+exports reais foram gerados, consumo corrente 23.8 MiB/192 MiB.
 
 Confirmado directamente contra a base de dados, com as mesmas colunas que as rotas de export
 seleccionam: `v_branch_prices`/`v_selling_prices` para T-0005/SA devolvem os mesmos valores
