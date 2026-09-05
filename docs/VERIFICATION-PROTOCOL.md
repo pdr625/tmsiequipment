@@ -59,6 +59,7 @@ partir do desenho original. 16 correcções feitas à proposta inicial; detalhe 
 | Auditoria global | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
 | Dashboard (acesso à página) | ✅ | ✅ | ✅ | ✅ ² | ❌ | ❌ | ❌ | ✅ |
 | Administração de utilizadores | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Reset de password (a outro utilizador) — i9, 0006 ⁴ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Artigos não-activos (draft/review/…) | ✅ | ✅ | ✅ | ◐ | ✅ | ❌ | ❌ | ✅ |
 
 ¹ **Duas fontes distintas, com regras diferentes.** O EXW e os códigos SAP/fornecedor vêm de
@@ -97,6 +98,14 @@ comportamento oposto — corrigido aqui, na matriz, e no passo K (secção 4.3).
   `finance`/`logistics`/`viewer` — a única condição para estes cinco papéis é a visibilidade da
   linha em si (`tmsi.products_visible()`), sem cláusula de `status`. Só `branch_manager` (via
   filial) e `sales`/`agent` (via `status='active'`, sempre) têm restrição adicional.
+
+⁴ **Reset de password (a outro utilizador) vs. troca da própria password — duas capacidades
+diferentes, só a primeira entra na matriz.** O reset a OUTRO utilizador (`/admin/users`, Admin
+API `updateUserById`) é admin-only, mesmo gate `has_role('admin')` da linha "Administração de
+utilizadores" acima — não é uma célula nova de facto, só nomeada à parte por ser um fluxo
+novo (i9). A troca da PRÓPRIA password (`/account/password`) é universal — **qualquer** papel
+autenticado, sem distinção — por isso não é uma linha da matriz (não há papel que a BD trate
+diferente); testada uma única vez, não oito, no passo Y (secção 4.7).
 
 ## 4. Protocolo de teste por papel
 Para cada papel testado: um utilizador dedicado a testes (em produção: conta de teste real
@@ -163,6 +172,42 @@ U. **API:** `tmsi.can_read_costs()` confirmado para cada papel (nota ², secçã
 V. **Browser:** como `admin`/`finance`, os números (tiles, margem por filial, overrides
    activos, actividade recente) coerentes com os dados de teste conhecidos; como `sales.sa`
    (ou outro papel sem `can_read_costs()`), `/dashboard` redirecciona.
+
+### 4.7 Gestão de passwords sem email (i9, migração 0006, adicionado nesta revisão)
+W. **Reset pelo admin, manual:** admin define uma password manual para um utilizador de
+   teste (`/admin/users` ou, na prova de API, o mesmo endpoint Admin API `PUT
+   /admin/users/{id}`) → a password antiga deixa de autenticar, a nova autentica →
+   `must_change_password=true` → navegação directa a outra rota qualquer → bloqueada pelo
+   middleware, redirecciona a `/account/password` (excepções: a própria rota, `/reset-password`,
+   `/logout`) → troca bem-sucedida → flag volta a `false`, navegação normal.
+X. **Reset pelo admin, gerada:** idem, mas a password vem de `crypto.randomInt` (>= 16
+   caracteres, charset amplo), mostrada uma única vez no ecrã do admin — **browser apenas**
+   (é estado React, não há API equivalente a testar: um refresh da página não a mostra outra
+   vez, por construção, nunca persistida).
+Y. **Troca da própria password (`/account/password`), universal — um papel só, não oito
+   (nota ⁴, secção 3):** password actual ERRADA → recusada no servidor
+   (`signInWithPassword` contra o GoTrue devolve `invalid_credentials`, sem sessão nova, sem
+   alteração); password actual CORRECTA → sucede, a password antiga deixa de autenticar
+   depois. **Achado arquitectural, não um defeito:** o endpoint do próprio GoTrue
+   (`PUT /auth/v1/user`) não tem nenhuma verificação de password actual embutida — confirmado
+   ao vivo, um pedido directo com um access token válido muda a password sem mais nenhuma
+   pergunta. A fronteira real é `/account/password`'s Server Action ser o único caminho de
+   código desta app que chama esse endpoint para o próprio utilizador — não uma regra do
+   GoTrue. Um XSS ou uma sessão deixada aberta que conseguisse chamar o GoTrue directamente
+   continuaria a conseguir mudar a password sem saber a antiga; risco aceite, registado, não
+   novo desta iteração (é a mesma superfície que qualquer chamada directa à API sempre teve).
+Z. **Ramos negados centrais:** não-admin a invocar `tmsi.admin_revoke_sessions()` →
+   `Forbidden` (verificado mesmo contra o próprio id do chamador, não só contra outro
+   utilizador — a função nunca confia no `isAdmin()` da camada da app); revogação de sessões
+   por reset do admin mata **todas** as sessões vivas do utilizador alvo (`auth.sessions`,
+   confirmado com duas sessões reais simultâneas) e o `refresh_token` correspondente fica
+   `refresh_token_not_found` a partir daí — **limitação conhecida, sem tentativa de
+   contornar:** um `access_token` já emitido continua válido até ao seu próprio `exp` (a
+   revogação impede um novo `refresh`, não invalida instantaneamente um token já em memória
+   no browser). `audit_log` da tabela `profiles`: actor = admin no sentido `false→true`
+   (reset), actor = o próprio no sentido `true→false` (troca concluída) — nenhum valor de
+   password em nenhum `old_row`/`new_row` (só a coluna booleana `must_change_password`,
+   confirmado por leitura directa, não por assumção).
 
 ## 5. Regras de execução em produção
 - Executor: o administrador + uma segunda pessoa como testemunha para os testes do ramo
@@ -246,3 +291,42 @@ repetiria a mesma quarentena já documentada na i3). **Não insistido mais** —
 (pedido de acesso ou de libertação à TI do tenant) é decisão do Pedro, fora desta sessão. O
 desvio (4) continua **por cobrir**, agora com uma causa mais precisa registada; primeiro item
 da E5 (`docs/ROADMAP.md`).
+
+**Adenda, 2026-09-05 (i9) — re-execução PARCIAL, só os blocos de auth afectados pela migração
+0006 (passos W–Z, secção 4.7 acima; não uma nova execução completa dos 8 papéis):** migrações
+0001–0006; digest `sha256:3dcff92b9b5577e29a7ef8c5dae248b61078a69837994b7cf77494abade8f946`.
+Executor: agente, só API/BD — as provas de browser (W/X com um utilizador de teste real,
+password gerada mostrada uma única vez) ficam para o Pedro, não realizadas nesta adenda.
+
+Contra o utilizador de teste `logistics.test@example.test` (o único tocado; estado
+100% restaurado ao fim — password original de volta, flag `false`, sem sessões extra):
+admin define password nova via o mesmo endpoint Admin API que `/admin/users` usa → antiga
+falha (`400`), nova entra (`200`) — W confirmado ao nível do mecanismo, não do ecrã;
+`must_change_password` fica `true`, `audit_log` mostra o admin real como actor; verificação
+de password actual replicada directamente contra o GoTrue — errada → `400
+invalid_credentials`, sem sessão; correcta → `200` — Y confirmado; achado arquitectural
+registado no passo Y (GoTrue não impõe isto por si, é a app); troca concluída → RPC
+`mark_password_changed()` como o próprio → flag volta a `false`, `audit_log` mostra o
+próprio como actor — Z (metade audit) confirmado. Sessões: duas sessões reais vivas (uma de
+hoje, uma residual de 04/09) → `admin_revoke_sessions()` mata as duas → o `refresh_token`
+capturado antes fica `refresh_token_not_found` — Z (metade revogação) confirmado, com a
+limitação do `access_token` já emitido registada, não testada por não haver forma de a
+testar sem esperar o `exp`. Não-admin a chamar `admin_revoke_sessions()`, incluindo contra o
+seu próprio id → `Forbidden` as duas vezes — Z (ramo negado) confirmado. Zero ocorrências de
+qualquer password real nos quatro `docker logs` (app/auth/rest/db) na janela do teste, e no
+`audit_log` (as duas ocorrências da string "password" encontradas são o nome da coluna
+`must_change_password`, não um valor — conteúdo integral inspeccionado, não só a contagem).
+Sem regressões: `/`, `/prices`, `/products`, `/admin/users`, `/config`, `/overrides`,
+`/audit`, `/dashboard`, `/forgot-password`, `/reset-password`, `/account/password`,
+`/api/health`, `/auth/v1/health`, `/rest/v1/` — todos com o código esperado, sem sessão.
+
+**Por cobrir nesta adenda (fica para o Pedro, browser, os passos manuais do prompt i9):**
+W/X ao nível do ecrã real (o admin a escolher manual vs. gerada em `/admin/users`, a
+password gerada só aparecer uma vez, um refresh não a repetir); Y ao nível do ecrã
+`/account/password` propriamente dito (não só do mecanismo replicado via API); o próprio
+`isAdmin()` da Server Action `resetPassword` não foi re-testado com uma sessão de browser
+não-admin fabricada (replicar os cookies internos do `@supabase/ssr` via `curl` é frágil;
+o padrão é byte-a-byte o mesmo de `banUser`/`unbanUser`/`inviteUser`, já provados recusados
+para não-admin nas execuções da i3/protocolo — e a fronteira que importa de facto,
+`admin_revoke_sessions()`/`profiles_admin`, está confirmada acima independentemente desse
+gate da app).
