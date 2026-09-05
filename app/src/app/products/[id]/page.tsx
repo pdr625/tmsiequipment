@@ -193,7 +193,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // fallback prices/page.tsx already uses for its view rows; bridged
   // through unknown since the inferred single-row shape and the real
   // setof-row array don't structurally overlap enough for a direct `as`.
-  const priceRows = priceResults.flatMap((r) => (r.data ?? []) as unknown as PriceBreakdown[]);
+  //
+  // priceResults lines up with branchIds by index (Promise.all preserves
+  // input order) — a real RPC error (missing fx_rate row, etc.) must not
+  // read the same as "no price for this branch" (empty data, no error), so
+  // it's tracked separately here rather than folded into priceRows via ??.
+  const priceRows = priceResults.flatMap((r) => (r.error ? [] : ((r.data ?? []) as unknown as PriceBreakdown[])));
+  const priceErrors = priceResults
+    .map((r, i) => (r.error ? { branchId: branchIds[i], message: r.error.message } : null))
+    .filter((e): e is { branchId: string; message: string } => e !== null);
   const seesCosts = priceRows.some((r) => r.total_cost_eur !== null);
 
   // Only scope_type='branch' actually reaches compute_price()'s duty
@@ -238,8 +246,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       <section className="mb-8">
         <h2 className="mb-2 text-sm font-semibold text-gray-700">Price by branch</h2>
-        {priceRows.length === 0 && <p className="text-sm text-gray-500">Not priced for any branch visible to you.</p>}
-        {priceRows.length > 0 && (
+        {priceRows.length === 0 && priceErrors.length === 0 && (
+          <p className="text-sm text-gray-500">Not priced for any branch visible to you.</p>
+        )}
+        {(priceRows.length > 0 || priceErrors.length > 0) && (
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-left text-gray-500">
@@ -288,6 +298,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                   </tr>
                 );
               })}
+              {priceErrors.map((e) => (
+                <tr key={`error-${e.branchId}`} className="border-b border-gray-100">
+                  <td className="py-2 pr-4">{e.branchId}</td>
+                  <td colSpan={seesCosts ? 6 : 4} role="alert" className="py-2 pr-4 text-red-700">
+                    Calculation error: {e.message}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}
