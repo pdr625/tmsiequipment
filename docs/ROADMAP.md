@@ -18,7 +18,7 @@ Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas
 | — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
 | — | Migração 0005 — correcção de câmbio no mesmo dia | ✅ 04/09/2026 |
 | E4 | Migração 0006 (workflow de aprovação, regra 90 dias, notificações) | por iniciar |
-| E5 | Operações e endurecimento | por iniciar |
+| E5 | Operações e endurecimento — VPS ✅, homelab por iniciar | em curso |
 | E6 | Validação do piloto + preparação da migração para a empresa (gate: `VERIFICATION-PROTOCOL.md`) | por iniciar |
 
 ## E0 — Infra backend — ✅ FECHADA 03/09/2026
@@ -276,15 +276,27 @@ própria filial. Variante a considerar: «quem edita não aprova» (separação 
 `finance`/`admin` que propõe uma mudança de câmbio/margem não seria quem a aprova). Continua
 em aberto, decisão do Pedro antes de desenhar a 0005.
 
-## E5 — Operações e endurecimento — por iniciar
-**Primeiro item, adicionado após a execução n.º 1 do `VERIFICATION-PROTOCOL.md` (2026-09-05):**
-resolver a quarentena Microsoft 365/EOP identificada na i3 e reconfirmada como desvio
-documentado nesta execução (S/T só testados com Gmail/Hotmail pessoais, sem Safe Links/ATP) —
-sem isto, o convite/reset de password para um utilizador real atrás de um gateway corporativo
-não está provado, só assumido.
-Restantes pendências herdadas da E0, por ordem: off-site do backup (o dump só existe no VPS) ·
-deploy key read-only a substituir o PAT de `~/.git-credentials` · tile no dashboard/
-status.json + métrica T8 · decisão sobre lockfile/pinagem definitiva das imagens da app.
+## E5 — Operações e endurecimento — EM CURSO (E5-VPS ✅ fechada 05/09/2026)
+
+### E5-VPS — ✅ FECHADA 05/09/2026
+Três frentes do lado do VPS (prompt E5-VPS), detalhe: `STATE.md`.
+1. **Quarentena EOP (desvio S/T) — tentado, não fechado.** Bloqueado por falta de acesso do
+   Pedro ao portal `security.microsoft.com` do tenant `@condat.fr`, não por quarentena
+   persistente. Continua por cobrir; caminho seguinte (acesso ou pedido à TI) é decisão do
+   Pedro, fora do âmbito de uma sessão VPS.
+2. **PAT → deploy key — ✅ fechado.** `~/.git-credentials` removido; `origin` do
+   `tmsiequipment` passou a SSH dedicado (`github-tmsiequipment`, deploy key **com** escrita —
+   corrigido de "read-only" para "write", a sessão precisa de escrever `STATE.md`/`ROADMAP.md`
+   a cada fecho, read-only não teria chegado). Provado com `git pull` + push real.
+3. **Métricas TMSI no `status.json` — ✅ fechado (parcial, por desenho).** `tmsi_containers_up`/
+   `tmsi_containers_total` e `tmsi_backup_age_h` expostos, prova ao vivo via túnel. Idade da
+   taxa de câmbio mais recente **dispensada** — exigiria o `vps-stats.service` (hoje sem
+   dependência de Postgres) ligar-se à BD, não "barato"; fica para quando fizer falta a sério.
+
+### E5-HOMELAB — por iniciar (depende da F3 da E5-VPS, já fechada)
+Off-site do backup (o dump só existe no VPS) · tile no dashboard do homelab a consumir as
+chaves `tmsi_*` novas do `status.json` · métrica T8 · decisão sobre lockfile/pinagem
+definitiva das imagens da app.
 Pode correr em paralelo com a E3; não bloqueia nem é bloqueada por ela.
 
 ## E6 — Validação do piloto + migração para a empresa — por iniciar

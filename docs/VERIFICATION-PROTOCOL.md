@@ -235,3 +235,14 @@ overrides que cria estava **errada**, não só desactualizada — `overrides_wri
 | Data | Versão (migrações + digest) | Executor(es) | Âmbito (papéis) | Resultado | Desvios/acções |
 |---|---|---|---|---|---|
 | 2026-09-05 | Migrações 0001–0005; digest `sha256:3775da62ecfc16047b7eec92b7ea98cb277778825d8295b4771becf3b1b47da1` | Pedro (browser) + agente (API) | admin, product_manager, finance, branch_manager, logistics, sales, agent, viewer — os 8 papéis da matriz | **OK — gate de produção satisfeito para o estado actual** (migrações 0001–0005 + digest acima) | (1) Protocolo tinha 2 defeitos reais, corrigidos antes/durante a execução (ver acima; commits `e9b1ab8`, `c01325a`). (2) Utilizador de teste `branch_manager.test@example.test` criado (não existia). (3) Sessão 3 (K–N, parte visual) dispensada pelo Pedro por tempo — coberta pela prova API, que é completa. (4) S/T testados só com Gmail+Hotmail (dois provedores reais, sem gateway corporativo) — a variante EOP/Safe-Links continua **por cobrir**, fica registada como pendência da E5 (quarentena Microsoft 365, já conhecida desde a i3). (5) Evidência do Pedro é verbal (chat), não screenshot — ver nota 1, secção 6. |
+
+**Adenda, 2026-09-05 (E5-VPS) — tentativa de fechar o desvio (4):** o passo manual pedia ao
+Pedro para libertar a quarentena EOP em `security.microsoft.com` (tenant `@condat.fr`) antes de
+um novo teste de reset de password. **Bloqueado num ponto anterior ao previsto pelo protocolo:**
+o Pedro confirmou **não ter acesso** (permissões/role) àquele portal para esse tenant — não é
+o caso de "a mensagem voltou à quarentena" que a secção 5 do protocolo antecipa, é não haver
+sequer acesso para verificar. Sem a libertação, não faz sentido disparar o reset de teste (só
+repetiria a mesma quarentena já documentada na i3). **Não insistido mais** — o caminho seguinte
+(pedido de acesso ou de libertação à TI do tenant) é decisão do Pedro, fora desta sessão. O
+desvio (4) continua **por cobrir**, agora com uma causa mais precisa registada; primeiro item
+da E5 (`docs/ROADMAP.md`).

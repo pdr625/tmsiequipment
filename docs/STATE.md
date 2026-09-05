@@ -3,25 +3,54 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: execução formal n.º 1 do `docs/VERIFICATION-PROTOCOL.md` — ✅ CONCLUÍDA
-2026-09-05, resultado OK. O gate de produção está satisfeito para o estado actual** (migrações
-0001–0005, digest `sha256:3775da62...`) — ver `docs/VERIFICATION-PROTOCOL.md` secções 6/7 para
-o registo completo. Próximo: decisão do Pedro entre E5 (operações, antes de utilizadores reais)
-e E4/0006 (quando a decisão L2 fechar) — qualquer alteração a RLS/vistas/privilégios ou release
-major exige nova execução do protocolo. Ordem e critérios de saída de cada etapa:
-`docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i8) e as migrações 0003/0004/0005 estão fechadas.
+**Etapa actual: E5-VPS (operações) — ✅ FECHADA 2026-09-05.** PAT rotado para deploy key
+dedicada; métricas TMSI expostas no `status.json`; desvio S/T continua por cobrir (bloqueado
+por acesso ao portal EOP, não por quarentena persistente — decisão do Pedro, fora desta
+sessão). Próximo: decisão do Pedro entre E5-HOMELAB (off-site + tile + T8, depende desta
+sessão), E4/0006 (pendente L2) ou o pedido de acesso EOP. Ordem e critérios de saída de cada
+etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i8) e as migrações 0003/0004/0005 estão fechadas.
 
-## E5-VPS — credencial de push rotada (PAT → deploy key), 2026-09-05
+## E5-VPS — Operações (EOP, deploy key, métricas) — ✅ FECHADA 2026-09-05
 
-O remote `origin` deste repo passou de HTTPS (`~/.git-credentials`, PAT genérico do
-`github.com`, pendência desde a E0) para SSH dedicado: alias `github-tmsiequipment` em
-`~/.ssh/config` (mesmo padrão já usado pelo `github-dossier`), chave `ed25519` sem passphrase
-(`~/.ssh/tmsiequipment_deploy`, chmod 600 — automação sem interacção, risco aceite: uma cópia
-da chave privada só escreve neste repo específico, sem mais nenhum privilégio; o risco anterior
-do PAT era maior, um único token genérico do `github.com` inteiro). Deploy key adicionada pelo
-Pedro no GitHub com **Allow write access** (necessário — esta sessão escreve
-`docs/STATE.md`/`ROADMAP.md` a cada fecho). Provado ao vivo: `git pull` e este próprio commit,
-por SSH. Este é esse push.
+**F1 — desvio S/T (email via gateway corporativo): tentado, não fechado.** Bloqueado antes do
+próprio passo da quarentena — o Pedro não tem acesso ao portal `security.microsoft.com` para o
+tenant `@condat.fr`. Não é o caso "mensagem voltou à quarentena" que o protocolo antecipa; não
+insistido mais. Caminho seguinte (pedido de acesso ou de libertação à TI do tenant) é decisão
+do Pedro. Registado: `docs/VERIFICATION-PROTOCOL.md` secção 7 (adenda) e
+`docs/audits/2026-09-05-verification-run-1/README.md`.
+
+**F2 — PAT → deploy key, fechado.** Inventário primeiro (restrição 1): dos três repos neste
+host, só o `origin` HTTPS deste (`tmsiequipment`) usava o PAT guardado em
+`~/.git-credentials`/`credential.helper=store` — `dossier` e `itinera-src` já usavam SSH com
+chave própria; o login GHCR (`~/.docker/config.json`) é independente; nenhum script referencia
+o PAT directamente (`grep` limpo). Remote mudado para SSH dedicado: alias
+`github-tmsiequipment` em `~/.ssh/config` (mesmo padrão do `github-dossier`), chave `ed25519`
+sem passphrase (`~/.ssh/tmsiequipment_deploy`, chmod 600 — automação sem interacção; risco
+aceite: a chave só escreve neste repo, um risco menor que o PAT genérico anterior). Deploy key
+adicionada pelo Pedro no GitHub com **Allow write access**. Provado ao vivo, não só `rc=0`:
+`git pull` + um push real (o commit `88b4a65`, por SSH). Só depois de confirmado que nada mais
+usava o PAT: `~/.git-credentials` removido, `credential.helper` desconfigurado globalmente.
+
+**F3 — métricas TMSI no `status.json`, fechado.** Backup timestamped do `vps-stats.sh` antes
+de editar. Duas chaves novas, convenção plana existente: `tmsi_containers_up`/
+`tmsi_containers_total` (contagem de `tmsi-app`/`supabase-auth`/`supabase-rest`/`supabase-db`
+via `docker inspect`, mesma filosofia defensiva do bloco `containers` já existente — nunca
+aborta o gerador) e `tmsi_backup_age_h` (idade em horas do dump mais recente em
+`~/backups/tmsi/`, `null` se a pasta estiver vazia). Corrido directamente como `pedro`
+(`/var/www/status` é `pedro:pedro`, sem precisar de `sudo`/`systemctl`) — prova real: `curl` a
+`http://10.13.13.254:8080/status.json` (túnel, não o ficheiro local) devolveu
+`tmsi_containers_up: 4, tmsi_containers_total: 4, tmsi_backup_age_h: 8.2` — plausível (dump
+das 03:30, medido às ~10:42). Chaves antigas (`updated`, `containers`, `ram_*`, `swap_*`,
+`disk_used_pct`, `cpu_pct`, `load1`, `uptime_s`) intactas.
+
+⚠️ **Métrica opcional dispensada, registada, não esquecida:** a idade da taxa de câmbio mais
+recente ficou fora — exigiria o `vps-stats.service` (`ProtectSystem=strict`, hoje sem
+dependência nenhuma de Postgres) ligar-se à BD via `docker exec ... psql`, uma dependência
+nova e mais frágil, não "barata" no sentido em que o prompt permitia dispensar. Fica para
+quando fizer falta a sério, não implementada por implementar.
+
+**Footprint pós-sessão:** RAM available 170 MB; swap 1112/4095 MB (≈27%); disco 48%. Sem
+deploys de app nesta sessão (fora de âmbito, confirmado).
 
 ## Execução formal n.º 1 — VERIFICATION-PROTOCOL.md — ✅ CONCLUÍDA 2026-09-05, resultado OK
 
