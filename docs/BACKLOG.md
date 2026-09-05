@@ -64,7 +64,10 @@ dessa sessão — o espelho 1.14 já estava feito pela E5-HOMELAB, sinalização
 **7. EOP / entregabilidade de email** *(decisão tua, sem pressa desde a i9)* — continua
 útil para recovery self-service; via TI a ponderar junto com o CPI.
 **8. Piloto com 2–3 colegas** *(depois de 1–4)* — onboarding por password temporária;
-recolha de feedback que informa a L2 e a i11+.
+recolha de feedback que informa a L2 e a i11+. Lado técnico pronto e testado ao vivo
+2026-09-05 (achado real corrigido antes do guião — reset de admin não confirmava email de
+convite fresco, `docs/STATE.md`); guião passo-a-passo em `docs/PILOT-ONBOARDING.md` — falta
+o Pedro executar com colegas reais.
 ~~**21. Tarefa 6 — Correcção dos 9 achados do code review**~~ ✅ **fechada 2026-09-05** (2
 achados de segurança + 3 de correcção funcional + 4 de manutenibilidade, todos fechados só em
 `app/src`, zero migração/infra/GoTrue/compose além do digest do deploy; `smoke.py` 27/27 duas
