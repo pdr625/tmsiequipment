@@ -30,12 +30,27 @@ type SellingPriceRow = {
   lead_time_days: number | null;
 };
 
+function respond(buffer: Buffer, filename: string) {
+  return new NextResponse(buffer, {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    },
+  });
+}
+
 // i10: exact same view/column choice as /prices — never a query that
 // reaches further than what that page's screen already shows. `branch`
 // scopes rows on top of whatever the view already returned; it never
 // picks the view or reaches past RLS (a sales/agent request for another
 // branch, or for the cost view, just gets 0 rows for that branch — the
 // query param carries no authority of its own).
+//
+// The two roles' fetches are two fully separate, literal `.from()`/
+// `.select()` calls (not one dynamic viewName/columns string branched
+// afterwards) — matching how every other page in this codebase queries
+// Postgrest, and avoiding a dynamic select-string union that postgrest-js's
+// return-type inference doesn't resolve cleanly.
 export async function GET(request: NextRequest) {
   const branch = request.nextUrl.searchParams.get('branch');
   const supabase = await createSupabaseServerClient();
@@ -48,31 +63,34 @@ export async function GET(request: NextRequest) {
   }
 
   const { data: canReadCosts } = await supabase.schema('tmsi').rpc('can_read_costs');
-  const viewName = canReadCosts ? 'v_branch_prices' : 'v_selling_prices';
-  const columns = canReadCosts
-    ? 'product_id, branch_id, currency, total_cost_eur, margin, min_price, ref_price, alert'
-    : 'product_id, name, branch_id, currency, min_price, ref_price, lead_time_days';
-
-  let query = supabase.schema('tmsi').from(viewName).select(columns);
-  if (branch) {
-    query = query.eq('branch_id', branch);
-  }
-  const { data: rows, error } = await query;
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
-
   const generatedAt = new Date();
-  const currencies = [...new Set((rows as { currency: string }[]).map((r) => r.currency))].sort();
+  const filename = `tmsi-prices-${branch ?? 'all'}-${generatedAt.toISOString().slice(0, 10)}.xlsx`;
 
-  const headers = canReadCosts
-    ? ['Product', 'Branch', 'Currency', 'Total cost (EUR)', 'Margin', 'Min price', 'Ref price', 'Alert']
-    : ['Product', 'Branch', 'Currency', 'Min price', 'Ref price', 'Lead time (days)'];
-  const widths = canReadCosts ? [14, 10, 10, 16, 10, 12, 12, 20] : [28, 10, 10, 12, 12, 16];
+  if (canReadCosts) {
+    let query = supabase
+      .schema('tmsi')
+      .from('v_branch_prices')
+      .select('product_id, branch_id, currency, total_cost_eur, margin, min_price, ref_price, alert')
+      .overrideTypes<BranchPriceRow[], { merge: false }>();
+    if (branch) {
+      query = query.eq('branch_id', branch);
+    }
+    const { data: rows, error } = await query;
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
 
-  const dataRows = canReadCosts
-    ? (rows as BranchPriceRow[]).map((r) => [
+    const currencies = [...new Set(rows.map((r) => r.currency))].sort();
+    const buffer = await buildXlsx({
+      sheetTitle: 'Price list',
+      reportTitle: 'TMSI Equipment — Price list',
+      scope: branch ?? 'All branches',
+      currency: currencies.join(', ') || '—',
+      generatedBy: user.email ?? user.id,
+      generatedAt,
+      headers: ['Product', 'Branch', 'Currency', 'Total cost (EUR)', 'Margin', 'Min price', 'Ref price', 'Alert'],
+      widths: [14, 10, 10, 16, 10, 12, 12, 20],
+      rows: rows.map((r) => [
         r.product_id,
         r.branch_id,
         r.currency,
@@ -81,16 +99,25 @@ export async function GET(request: NextRequest) {
         r.min_price,
         r.ref_price,
         r.alert,
-      ])
-    : (rows as SellingPriceRow[]).map((r) => [
-        `${r.name} (${r.product_id})`,
-        r.branch_id,
-        r.currency,
-        r.min_price,
-        r.ref_price,
-        r.lead_time_days,
-      ]);
+      ]),
+    });
+    return respond(buffer, filename);
+  }
 
+  let query = supabase
+    .schema('tmsi')
+    .from('v_selling_prices')
+    .select('product_id, name, branch_id, currency, min_price, ref_price, lead_time_days')
+    .overrideTypes<SellingPriceRow[], { merge: false }>();
+  if (branch) {
+    query = query.eq('branch_id', branch);
+  }
+  const { data: rows, error } = await query;
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  const currencies = [...new Set(rows.map((r) => r.currency))].sort();
   const buffer = await buildXlsx({
     sheetTitle: 'Price list',
     reportTitle: 'TMSI Equipment — Price list',
@@ -98,17 +125,9 @@ export async function GET(request: NextRequest) {
     currency: currencies.join(', ') || '—',
     generatedBy: user.email ?? user.id,
     generatedAt,
-    headers,
-    widths,
-    rows: dataRows,
+    headers: ['Product', 'Branch', 'Currency', 'Min price', 'Ref price', 'Lead time (days)'],
+    widths: [28, 10, 10, 12, 12, 16],
+    rows: rows.map((r) => [`${r.name} (${r.product_id})`, r.branch_id, r.currency, r.min_price, r.ref_price, r.lead_time_days]),
   });
-
-  const filename = `tmsi-prices-${branch ?? 'all'}-${generatedAt.toISOString().slice(0, 10)}.xlsx`;
-
-  return new NextResponse(buffer, {
-    headers: {
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-    },
-  });
+  return respond(buffer, filename);
 }
