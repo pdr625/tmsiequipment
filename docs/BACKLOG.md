@@ -31,7 +31,9 @@ a tentar navegar → bloqueado.
 (e) **O VERIFICATION-PROTOCOL ganha os testes destes fluxos no mesmo passe** (a matriz e a
 secção 4 mudam) + re-execução parcial dos blocos afectados.
 
-**2. i10 — Export Excel + PDF das listagens** *(sessão VPS)*
+~~**2. i10 — Export Excel + PDF das listagens** *(sessão VPS)*~~ ✅ **fechada 2026-09-05**
+(mecanismo — dados/RLS confirmados ao nível da BD; ficheiro real/impressão/memória pendentes
+do Pedro, browser real. Detalhe: `docs/STATE.md`.)
 Por papel: cada utilizador exporta exactamente o que vê (as fronteiras 0003/0004 aplicam-se
 ao ficheiro — um export de sales não contém custos, provado ao nível do conteúdo do
 ficheiro, não do ecrã). Excel (.xlsx) das listagens de preços e produtos; PDF orientado a

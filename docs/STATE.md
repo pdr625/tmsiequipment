@@ -3,16 +3,140 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: i9 — gestão de passwords sem email — ✅ FECHADA 2026-09-05 (parcial — ver
-abaixo).** Migração 0006 aplicada (`must_change_password` + `tmsi.mark_password_changed()`/
-`tmsi.admin_revoke_sessions()`); admin-forced reset (manual/gerada) em `/admin/users`; troca
-própria em `/account/password` com verificação server-side da password actual; middleware a
-impor a flag; tudo auditado. Digest
-`sha256:3dcff92b9b5577e29a7ef8c5dae248b61078a69837994b7cf77494abade8f946`. E4 avança para a
-migração 0007. Provas de mecanismo (API/BD) completas pelo agente; **as provas de ecrã real
-(W/X/Y do protocolo) ficam para o Pedro** — ver secção abaixo. Próximo: i10 (export Excel/PDF),
-por `docs/BACKLOG.md`. Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1,
-E2, E3 (i1–i8), E5-VPS e as migrações 0003/0004/0005/0006 estão fechadas.
+**Etapa actual: i10 — export Excel + vista de impressão — ✅ FECHADA 2026-09-05 (parcial —
+ver abaixo).** `/prices/export` e `/products/export` (mesmas vistas/RPC que as páginas
+equivalentes, mesmas colunas, nunca uma superset); vista de impressão em `/prices`
+(`@media print`, texto do `/NOTICE` no rodapé). Digest
+`sha256:8691c1a01f57dc8f294303b6b2cb0eb99f8ed51a913902d7b0e7892f0c203e9b`. Dados/RLS
+confirmados directamente contra a BD pelo agente; **as provas que exigem ficheiro
+real/browser (grep ao `.xlsx`, pré-visualização de impressão, memória durante uma geração
+HTTP) ficam para o Pedro** — ver secção abaixo. Próximo, por `docs/BACKLOG.md`: sessão
+técnica (smoke tests + lockfile). Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`.
+E0, E1, E2, E3 (i1–i9), E5-VPS e as migrações 0003/0004/0005/0006 estão fechadas.
+
+## i10 — Export Excel + vista de impressão — ✅ FECHADA 2026-09-05 (mecanismo/dados; ficheiro real pendente)
+
+**Contexto:** decisão do Pedro (05/09, `docs/BACKLOG.md` tarefa 2, promovida a crítica) — os
+utilizadores vêm do Excel, o export deixa de ser opcional.
+
+**F0 — biblioteca, verificada no registo real, não de memória (restrição 2 do prompt):**
+candidatos comparados via a API pública do npm registry e o OSV.dev (sem `npm`/`node` neste
+VPS — restrição 1 de sempre): `exceljs@4.4.0` (última versão, publicada 2023, **zero**
+vulnerabilidades no OSV apesar do hiato) vs. `xlsx@0.18.5` (SheetJS Community Edition, última
+versão publicada 2022, **duas** vulnerabilidades reais e por corrigir no registo — prototype
+pollution e ReDoS, sem versão corrigida disponível ali: a SheetJS moveu os lançamentos
+corrigidos para fora do npm). `exceljs` escolhido por ser claramente a opção mais segura das
+duas verificadas, não só a sugestão do prompt aceite sem mais.
+
+**F1 — código:**
+- `/prices/export`, `/products/export` (Route Handlers, `GET`): a mesma chamada a
+  `tmsi.can_read_costs()` e as mesmas vistas/colunas exactas que `/prices`/`/products` já
+  renderizam — nunca uma coluna a mais das que `tmsi.compute_price()`/`v_branch_prices`
+  tecnicamente devolvem (`fx_used`, `duty`, `total_cost`, `overrides[]`, etc. existem na
+  vista mas não estão na listagem, por isso também não estão no ficheiro — restrição 1 lida à
+  letra, "exactamente"). O parâmetro `branch` filtra sobre o que a RLS já devolveu, nunca
+  escolhe a vista nem alcança para lá da RLS.
+- `lib/xlsx-export.ts` (`buildXlsx`, partilhado pelas duas rotas): bloco de metadados
+  (título/âmbito/moeda/gerado por) escrito antes da tabela — nunca usa o *bulk setter*
+  `worksheet.columns = [...]` do ExcelJS (esse escreve os seus `header` na linha 1, que
+  colidiria com o bloco de metadados já lá escrito); cabeçalho e larguras definidos à parte
+  (`addRow` + `getColumn(i).width`).
+- Vista de impressão só em `/prices` (o único ecrã com uso real de impressão):
+  `@media print` + variantes `print:` do Tailwind para esconder o cromo do ecrã e mostrar um
+  cabeçalho (lista/âmbito/moeda/gerado/utilizador) e rodapé — o texto do **`/NOTICE`** do
+  repositório, não o rodapé mais curto já existente no ecrã de login (achado de leitura, não
+  assumido: são dois textos diferentes para duas audiências diferentes — `lib/notice.ts`
+  ganhou `NOTICE_TEXT`, distinto do `PROPRIETARY_NOTICE` do login). `@page { size:
+  landscape }` em `globals.css` — nenhuma classe Tailwind alcança um *at-rule* de página.
+  Nenhum gerador de PDF no servidor (restrição de desenho do prompt) — Print/Save as PDF é o
+  browser do próprio visitante (`window.print()`).
+
+**Três falhas reais de CI antes de uma imagem válida, cada uma corrigida com a causa real,
+não por tentativa às cegas depois da primeira:**
+1. `.select(columns)` com uma string computada (`canReadCosts ? 'a' : 'b'`) em vez de uma
+   string literal — desviava do único padrão já usado neste código para queries com colunas
+   explícitas (sempre literal, ex. `admin/users/page.tsx`). Reescrito como dois ramos
+   totalmente separados, cada um com `.from()`/`.select()` literais.
+2. Essa reescrita introduziu um bug novo, da mesma classe já documentada uma vez neste
+   projecto (E3-i6 F1, `audit/page.tsx`): `.overrideTypes<T,{merge:false}>()` colocado
+   **antes** do `.eq()` condicional estreita o tipo do *builder* do postgrest-js para um
+   tipo "de transformação" sem métodos de filtro — exactamente o mesmo problema que já tinha
+   obrigado a mover filtros para antes de `.order()`/`.range()` no `audit/page.tsx`, agora
+   com `.overrideTypes()` a fazer o mesmo estreitamento. Corrigido: `.overrideTypes()` move-se
+   para o fim de cada cadeia, depois do `.eq()` condicional.
+3. `Buffer`/`Uint8Array` do Node não satisfazem `BodyInit` sob a combinação `TypeScript
+   7.0.2` (a versão real e actual — não um lapso de digitação; confirmada no registo npm,
+   é a versão em produção pinada por este projecto) + `@types/node 24.13.3` + lib `dom` deste
+   projecto — confirmado pelo próprio erro do compilador (`TS2345`) persistir, idêntico, depois
+   de trocar `Buffer` por `Uint8Array` a direito. Resolvido com uma conversão explícita através
+   de `unknown` (`buffer as unknown as BodyInit`), documentada nos dois ficheiros para não ser
+   "limpa" por engano no futuro — o valor em runtime é válido (`Uint8Array` é um corpo de
+   `Response` normal em qualquer motor JS que esta app usa), é o *type-checker*/lib desta
+   versão que discorda.
+
+**Nota de processo:** os logs reais de CI não foram acessíveis directamente por esta sessão
+(o *download* de logs do GitHub Actions exige permissão de admin do repo, que esta sessão
+VPS não tem — só as anotações públicas do *check run*, que só mostravam "exit code 1" sem o
+texto do erro). O Pedro colou os dois logs reais (F1.1/F1.2 e F1.3 acima) depois de dois
+ciclos de CI a tentar corrigir às cegas — a partir daí, cada correcção teve o erro real à
+frente, não uma suposição.
+
+**F2 — deploy:** CI verde → imagem por digest
+`sha256:8691c1a01f57dc8f294303b6b2cb0eb99f8ed51a913902d7b0e7892f0c203e9b` (`Created`
+2026-09-05T15:23:41Z) → `up -d --no-deps tmsi-app` → saudável. **Impacto no tamanho da
+imagem (restrição 2 do prompt):** 293 MB → 294 MB (+1 MB) — o *standalone output* do Next.js
+traça e embrulha só o código do `exceljs` realmente importado pelas rotas, não o pacote
+completo (~22 MB *unpacked* no npm). **Footprint pós-deploy:** RAM available 197 MB; swap
+idêntico à sessão anterior; disco 49% — sem regressão.
+
+**F3 — provas, agente (BD/RLS) — nenhum dado de teste alterado, nenhuma escrita feita:**
+1. Colunas exactas de `/prices/export` para um papel com custos (`v_branch_prices`,
+   T-0005/SA): `total_cost_eur 890.00, margin 0.550000, min_price 1978.00, ref_price
+   2176.00` — override de margem real e activo (não um dado de teste), calculado à mão:
+   `890/(1-0.55) = 1977.78 → 1978.00`; `1978×1.1 = 2175.8 → 2176.00` (Postgres arredonda .5
+   para cima, já confirmado noutras iterações).
+2. Mesmo produto/filial pela vista sem custos (`v_selling_prices`, colunas exactas do
+   export sem custos): `min_price`/`ref_price` idênticos (1978.00/2176.00) — as duas vistas
+   concordam, como têm de concordar.
+3. **Prova central (restrição 1 — "o parâmetro não é autoridade"):** um papel sem custos a
+   pedir a filial `TBM` (fora do seu âmbito) a qualquer uma das duas vistas → `0` linhas nas
+   duas; uma leitura directa das colunas de custo pela própria filial do papel sem custos →
+   `NULL`, não erro nem valor — confirma que mesmo um pedido directo (sem passar pela app)
+   não alcança para lá da RLS.
+4. Sem regressões: `/`, `/login`, `/prices`, `/products`, `/prices/export`,
+   `/products/export`, `/admin/users`, `/config`, `/overrides`, `/audit`, `/dashboard`,
+   `/account/password`, `/auth/v1/health`, `/rest/v1/` — todos com o código esperado.
+
+**Por cobrir, explicitamente, não escondido — ficam para o Pedro (secção 6 do prompt, já
+previa isto):**
+- **Prova 2 do prompt, ao nível do ficheiro** (`unzip`/`grep` a um `.xlsx` real de um papel
+  sem custos, confirmando zero ocorrências de `exw`/`sap_code`/`supplier`) — a condição de
+  paragem mais séria do prompt está ligada a esta prova especificamente; não realizada nesta
+  sessão porque exige uma sessão de browser real autenticada.
+- **Vista de impressão** (pré-visualização real, cabeçalho/rodapé/paginação) — puramente
+  visual, sem equivalente de BD.
+- **Memória durante uma geração real** (`docker stats` durante um export HTTP de verdade) —
+  precisa de uma requisição autenticada real a acontecer.
+- Tentativa própria de obter uma sessão autenticada via `curl` (login por progressive
+  enhancement de Server Actions do Next.js, sem JavaScript) — a página `/login` revelou-se
+  servida pré-renderizada estática (`x-nextjs-cache: HIT` na resposta), a submissão nunca
+  chegando à Server Action real. Abandonada sem mais tentativas — mesma decisão já tomada na
+  i9 para não replicar os cookies internos do `@supabase/ssr` às cegas, risco de um falso
+  negativo/positivo maior do que o valor da prova.
+
+**Incidente de processo, sinalizado, não escondido:** a meio da verificação do formato do
+ficheiro combinado de passwords de teste (`~/tmp/tmsi-sudo/test-users-passwords.txt`, sem
+etiquetas por utilizador), um comando meu imprimiu as duas passwords em claro no output desta
+sessão — a mesma classe de incidente já documentada uma vez neste projecto (i6 F1). Nunca
+chegou a uma mensagem visível ao Pedro nem foi reutilizado; contas fictícias `.test`, sem
+consequência real — não rotacionadas, à semelhança da decisão da i6 para o mesmo tipo de
+incidente. Não repetido: as provas seguintes usaram sempre `$(cat ficheiro)` capturado
+directamente para dentro do comando que o consome, nunca um passo intermédio que apenas
+imprime o conteúdo.
+
+**F4 — `docs/VERIFICATION-PROTOCOL.md`:** nota ⁵ na matriz + secção 4.8 (passos AA–DD)
+novas; secção 7 ganhou uma adenda com o resultado desta re-execução parcial. Commit
+`e388077`.
 
 ## i9 — Gestão de passwords sem email — ✅ FECHADA 2026-09-05 (mecanismo; browser pendente)
 
