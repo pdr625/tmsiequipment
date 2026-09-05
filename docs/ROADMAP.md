@@ -225,6 +225,15 @@ cada migração que toque em RLS/vistas/privilégios e a cada release major. A E
 piloto + preparação da migração para a empresa) só avança depois da primeira execução formal
 deste protocolo — é o critério de entrada dessa etapa, não só uma recomendação.
 
+✅ **Gate satisfeito para o estado actual — execução n.º 1, 2026-09-05.** Migrações 0001–0005,
+digest `sha256:3775da62...`, resultado OK, os 8 papéis testados. Dois defeitos reais do
+próprio protocolo corrigidos durante a execução (`/dashboard` em falta; a nota sobre
+`logistics` não conseguir ler overrides de `duty` estava errada, não só desactualizada — vê
+essas linhas via `overrides_write`, uma política `for all`). Desvio documentado: os testes de
+email (S/T) só cobriram Gmail e Hotmail pessoais — a variante com gateway corporativo
+M365/EOP, a mesma quarentena identificada na i3, continua por cobrir. Detalhe completo:
+`STATE.md` e `docs/VERIFICATION-PROTOCOL.md` (secções 6/7).
+
 ## Migração 0003/0004 — protecção de custos ao nível da BD — ✅ FECHADA 04/09/2026
 Fecha a pendência da i4: RLS só protegia linhas, nunca colunas — um pedido manual à API,
 contornando a app, ainda lia `exw_price`/`sap_code_*`/`supplier_id`. O candidato simples do
@@ -268,7 +277,12 @@ própria filial. Variante a considerar: «quem edita não aprova» (separação 
 em aberto, decisão do Pedro antes de desenhar a 0005.
 
 ## E5 — Operações e endurecimento — por iniciar
-Pendências herdadas da E0, por ordem: off-site do backup (o dump só existe no VPS) ·
+**Primeiro item, adicionado após a execução n.º 1 do `VERIFICATION-PROTOCOL.md` (2026-09-05):**
+resolver a quarentena Microsoft 365/EOP identificada na i3 e reconfirmada como desvio
+documentado nesta execução (S/T só testados com Gmail/Hotmail pessoais, sem Safe Links/ATP) —
+sem isto, o convite/reset de password para um utilizador real atrás de um gateway corporativo
+não está provado, só assumido.
+Restantes pendências herdadas da E0, por ordem: off-site do backup (o dump só existe no VPS) ·
 deploy key read-only a substituir o PAT de `~/.git-credentials` · tile no dashboard/
 status.json + métrica T8 · decisão sobre lockfile/pinagem definitiva das imagens da app.
 Pode correr em paralelo com a E3; não bloqueia nem é bloqueada por ela.

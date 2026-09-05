@@ -3,12 +3,84 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E3, iteração 8 (dashboard) — ✅ FECHADA 2026-09-05 (dashboard light-only, dark
-mode global fica para melhoria futura). A E3 está completa.** Próximo: decisão do Pedro entre
-E5 (operações, antes de utilizadores reais) e E4/0006 (quando a decisão L2 fechar) — nenhuma
-das duas arranca sem a primeira execução formal do `docs/VERIFICATION-PROTOCOL.md` (gate de
-produção, `docs/ROADMAP.md`). Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`.
-E0, E1, E2, E3 (i1–i8) e as migrações 0003/0004/0005 estão fechadas.
+**Etapa actual: execução formal n.º 1 do `docs/VERIFICATION-PROTOCOL.md` — ✅ CONCLUÍDA
+2026-09-05, resultado OK. O gate de produção está satisfeito para o estado actual** (migrações
+0001–0005, digest `sha256:3775da62...`) — ver `docs/VERIFICATION-PROTOCOL.md` secções 6/7 para
+o registo completo. Próximo: decisão do Pedro entre E5 (operações, antes de utilizadores reais)
+e E4/0006 (quando a decisão L2 fechar) — qualquer alteração a RLS/vistas/privilégios ou release
+major exige nova execução do protocolo. Ordem e critérios de saída de cada etapa:
+`docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i8) e as migrações 0003/0004/0005 estão fechadas.
+
+## Execução formal n.º 1 — VERIFICATION-PROTOCOL.md — ✅ CONCLUÍDA 2026-09-05, resultado OK
+
+**Versão testada:** migrações 0001–0005; digest
+`ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:3775da62ecfc16047b7eec92b7ea98cb277778825d8295b4771becf3b1b47da1`.
+**Executores:** Pedro (browser) + agente (API). **Âmbito:** os 8 papéis da matriz — `admin`,
+`product_manager`, `finance`, `branch_manager`, `logistics`, `sales`, `agent`, `viewer`.
+**Resultado: OK — gate de produção satisfeito para o estado actual.** Registo completo,
+teste a teste: `docs/VERIFICATION-PROTOCOL.md` secção 6 (tabela) e secção 7 (entrada do
+registo). Evidência: `docs/audits/2026-09-05-verification-run-1/`.
+
+**F0 — dois defeitos reais no próprio protocolo, corrigidos antes/durante a execução
+(restrição 1 do prompt: o protocolo não se interpreta em silêncio):**
+1. `/dashboard` (E3-i8) não constava do documento — escrito depois da i7. Adicionada a linha
+   "Dashboard (acesso à página)" à matriz + passos U/V (secção 4.6). Commit `e9b1ab8`.
+2. **Achado durante o próprio teste K, não staleness — a nota anterior estava errada.**
+   O documento dizia que `logistics` cria um override de `duty` "às cegas", sem o conseguir
+   ler depois. Falso: `tmsi.price_overrides` tem duas políticas RLS permissivas para o mesmo
+   comando — `overrides_read` (`for select`) e `overrides_write` (**`for all`**, que em
+   Postgres abrange `select`, não só escrita). Políticas permissivas combinam-se por **OR**:
+   a própria cláusula `USING` de `overrides_write` já chega para tornar uma linha `kind='duty'`
+   visível a um `SELECT`, com ou sem `can_read_costs()`. Verificado ao vivo
+   (`BEGIN`/`ROLLBACK`): uma linha `duty` inserida por outra sessão ficou visível a
+   `logistics`; uma linha `margin` real (id 1) continuou invisível. **`logistics` vê
+   exactamente as linhas `duty`, de qualquer filial, e mais nenhuma** — não é falha de
+   segurança (só vê o que já está autorizado a escrever), mas o documento descrevia o
+   oposto. Corrigida a matriz (❌→◐), a nota, e o passo K. Commit `c01325a`.
+
+**F1 — utilizador de teste criado (não existia):** `branch_manager.test@example.test`, filial
+CORP, password em `~/tmp/tmsi-sudo/branch_manager-test-password.txt` (chmod 600, padrão da i2).
+
+**F1 — provas de API, todas OK, sem dados permanentes (`BEGIN`/`SAVEPOINT`/`ROLLBACK` em
+todos os testes):** os 8 papéis testados contra a matriz real. Destaques com cálculo à mão:
+teste C (correcção de câmbio USD→2.000000) — `fx_used 0.5, exw_local 725.00, interco 870.00,
+duty 14.79, total_cost 959.79, min_price 1655.00, ref_price 1821.00`, todos exactos; teste D
+(override `coef` 1.5 em T-0002/SA) — base `189.00/208.00` → override `283.00/311.00` (exacto)
+→ expirado, reverte a `189.00/208.00` (exacto). Teste Q confirmou um achado já conhecido (i6
+F0 #1, não novo): `price_overrides.created_by` não é imposto pela própria BD (aceita um UUID
+arbitrário do cliente) — mas `audit_log.actor` usa sempre `auth.uid()` real, independente do
+que vai em `created_by`, por isso o registo de autoria que interessa (a auditoria) continua
+inviolável mesmo quando o campo de conveniência não é. Um achado metodológico próprio: uma
+tentativa de ler `exw_price` directamente de `tmsi.products` (em vez de `tmsi.v_products`)
+falhou por privilégio de coluna **mesmo como admin** — confirma que a 0003 protege por coluna
+de forma incondicional (só a vista dá acesso), não só para papéis sem custo; foi um erro do
+meu próprio guião de teste, não um defeito da app.
+
+**F2 — provas de browser (Pedro), sessões 1/2/4 completas, sessão 3 dispensada por tempo:**
+sessão 1 (admin: `/prices`, breakdown em `/products/[id]`, filtro em `/audit`, `/dashboard`)
+OK — a instrução original do passo B (browser) estava ambígua e descrevia campos que o ecrã
+não mostra individualmente (câmbio/fee/direito), corrigida em tempo real para os nomes reais
+das colunas ("Total cost (EUR)"/"Margin" na tabela "Price by branch") antes de o Pedro
+confirmar — lição repetida da i5 (instruções de prova têm de nomear o ecrã real, não o
+conceito). Sessão 2 (`sales.sa`: listagem, quatro rotas redireccionadas, `/overrides` parcial)
+OK — "nenhum deixou entrar". Sessão 3 (K–N, confirmação visual de `logistics`/`branch_manager`/
+`agent`/`viewer`) **não realizada** — dispensada pelo Pedro por tempo; coberta na íntegra pela
+prova de API (F1), que não depende do browser. Sessão 4 (S/T, convite + reset de password) OK,
+com **dois** provedores de email reais (Gmail de teste **e Hotmail**) — mais cobertura do que
+pedido. **Nenhum dos dois cobre o gateway corporativo M365/EOP** que causou o bug real da i3
+(Hotmail/Outlook.com pessoal não tem Safe Links do Defender for Office 365, feature só de
+tenants empresariais) — regista-se como desvio documentado, não como cobertura completa;
+a variante EOP fica pendente, primeiro item da E5.
+
+**Evidência do Pedro é verbal (chat desta sessão), não screenshot** — a restrição 3 do prompt
+pedia screenshots; não foram anexados. Registado como está, sem fabricar evidência que não
+existe. Se um nível de prova mais forte for exigido (ex. para apresentação à direcção),
+repetir os passos de browser com captura de ecrã real antes dessa apresentação.
+
+**Sem alteração nenhuma de estado além dos dados de exercício, todos revertidos** — nenhum
+`COMMIT`, só `BEGIN`/`ROLLBACK` (excepto a criação do `branch_manager.test`, um fixture de
+teste permanente, não dado de exercício). Confirmado `git status` limpo nos dois repos antes
+do fecho.
 
 ## E3, iteração 8 — Dashboard (KPIs e margens por filial) — ✅ FECHADA 2026-09-05 (reaberta e corrigida no dia seguinte) — **E3 completa**
 

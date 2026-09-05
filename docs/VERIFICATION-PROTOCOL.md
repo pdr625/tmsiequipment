@@ -173,11 +173,65 @@ V. **Browser:** como `admin`/`finance`, os números (tiles, margem por filial, o
   do papel afectado — não só o teste que falhou.
 
 ## 6. Tabela de registo de uma execução
-| Teste | Papel | Via (browser/API) | Resultado esperado | Resultado obtido | OK/FALHA | Evidência (screenshot/log) |
+
+### Execução n.º 1 — 2026-09-05
+
+| Teste | Papel | Via | Resultado esperado | Resultado obtido | OK/FALHA | Evidência |
 |---|---|---|---|---|---|---|
-*(uma linha por teste A–T executado; anexar evidências datadas)*
+| A | admin/product_manager/finance | API | Listagem completa com custos e margens | `v_branch_prices` devolve 33 linhas com `total_cost_eur` preenchido, para os três papéis | OK | `api-tests-raw-log.txt` L518+ |
+| A | admin | Browser | Idem, no ecrã `/prices` | Confirmado pelo Pedro — colunas de custo visíveis | OK | verbal, sem screenshot (ver nota 1) |
+| B | admin/product_manager/finance | API | Breakdown do motor preenchido | `fx_used, fee, transport, duty_rate, duty, total_cost, margin, min_price` todos com valor, T-0005/SA, três papéis | OK | `api-tests-raw-log.txt` L518+ |
+| B | admin | Browser | Tabela "Price by branch", colunas "Total cost (EUR)" e "Margin" com número | Confirmado pelo Pedro (após correcção da instrução original, ambígua) — "sim, tudo com número — sem traços" | OK | verbal, sem screenshot |
+| C | finance | API | Editar câmbio (USD→2.000000) → preço recalcula para o valor calculado à mão antes do teste; audit regista o autor certo | Exacto: `fx_used 0.5, exw_local 725.00, interco 870.00, duty 14.79, total_cost 959.79, min_price 1655.00, ref_price 1821.00` — todos batem com o cálculo prévio; `audit_log.actor` = uid real da finance | OK | `api-tests-raw-log.txt` L610-640 |
+| D | finance | API | Criar override (coef 1.5, T-0002/SA) → preço muda para o valor calculado à mão; expirar → preço reverte à base | Base `189.00/208.00` → override `283.00/311.00` (exacto) → expirado `189.00/208.00` (exacto, reverteu) | OK | `api-tests-raw-log.txt` L641-693 |
+| E | admin/finance | API | Auditoria global acessível, filtros funcionam | admin 128 linhas; finance 128 linhas, filtro `table_name=price_overrides` → 4 | OK | `api-tests-raw-log.txt` L518+ |
+| E | product_manager | API | `product_manager` **excluído** de `audit_read` (matriz) | `count(*) from audit_log` = 0 | OK | `api-tests-raw-log.txt` L518+ |
+| E | admin | Browser | Filtro por tabela em `/audit` | Confirmado pelo Pedro | OK | verbal, sem screenshot |
+| F | sales.sa | Browser | Listagem restrita à filial, sem custos; `/config`,`/audit`,`/admin/users`,`/dashboard` redireccionam | Confirmado pelo Pedro — "tudo ok, nenhum deixou entrar" | OK | verbal, sem screenshot |
+| F | sales.sa | API | Idem via `v_products`/`v_branch_prices` | Custos `NULL`, não ausentes; branches fora do âmbito devolvem 0 linhas | OK | `api-tests-raw-log.txt` L1-56 |
+| F | sales.sa | Browser | `/overrides`: HS overrides visível (mesmo vazio), price overrides sem valores nem formulário | Confirmado pelo Pedro | OK | verbal, sem screenshot |
+| G | sales.sa | API | `SELECT exw_price`/`sap_code_sa`/`supplier_id` directo em `tmsi.products` → erro de privilégio | `ERROR: permission denied for table products` nas duas tentativas | OK | `api-tests-raw-log.txt` L17-24 |
+| H | sales.sa | API | Filtrar por coluna vetada (`exw_price > 100`) → erro, não silêncio | `ERROR: permission denied for table products` | OK | `api-tests-raw-log.txt` L27-29 |
+| I | sales.sa | API | Escrita em `products`/`price_overrides`/`exchange_rates` → negada | RLS a negar as três (`new row violates row-level security policy`) | OK | `api-tests-raw-log.txt` L32-41 |
+| J | sales.sa | API | Artigo com `sold_in` sem SA (T-9004) → ausente, mesmo por id directo | 0 linhas em `v_products` e `products` | OK | `api-tests-raw-log.txt` L44-53 |
+| K | logistics.test | API | HS/peso/transporte visíveis, custos não; cria `duty`; **lê** `duty` depois (não outros `kind`) — corrigido nesta execução | `v_products`: HS/peso ✅, EXW `NULL`; `transport_tiers`/`customs_rates` legíveis; `exchange_rates`/`interco_fees`/`margin_grids` = 0; override `duty` criado e **visível** depois; override `margin` (id 1, real) continua invisível; tentativa de criar `margin` → negada | OK (protocolo corrigido, ver commit `c01325a`) | `api-tests-raw-log.txt` L94-198 |
+| K | logistics.test | Browser | — | **Não executado** — sessão 3 dispensada pelo Pedro (tempo), coberto pela prova API acima | N/A | — |
+| L | branch_manager.test (CORP) | API | EXW/SAP sem restrição de filial; custo/margem só da filial pedida (CORP); escrita só transport/margin/coef na própria filial | EXW/SAP visíveis; `compute_price('T-0005','CORP')` com custos, `compute_price('T-0005','SA')` = 0 linhas; escreve `margin` em CORP, nega em SA e nega `duty` em CORP; `audit_log` acessível (128) | OK | `api-tests-raw-log.txt` L199-259 |
+| L | branch_manager.test | Browser | — | **Não executado** — idem | N/A | — |
+| M | agent.apac (canal APAC → filial TBM) | API | Só vê preço de venda da filial do seu canal, sem custos | Custos `NULL`; `compute_price('T-0004','TBM')` mostra min/ref; `compute_price('T-0004','LTD')` = 0 linhas; escrita negada; `audit_log`=0; dashboard gate=`false` | OK | `api-tests-raw-log.txt` L260-332 |
+| M | agent.apac | Browser | — | **Não executado** — idem | N/A | — |
+| N | viewer (conta real, não `.test`) | API | Visibilidade total sem âmbito, zero escrita | Custos visíveis em SA/CORP/LTD sem restrição; `overrides`=4, `audit_log`=128; escrita em `price_overrides` negada (erro), em `products` negada (0 linhas afectadas — nota 2) | OK | `api-tests-raw-log.txt` L333-388 |
+| N | viewer | Browser | — | **Não executado** — idem | N/A | — |
+| O | admin | API | Activar sem HS/peso/SAP → bloqueado; opção/serviço isento | T-8515 (equipment, sem HS) → `ERROR: Product T-8515 cannot be active without an HS code`; T-9004 (option, sem HS) → `UPDATE 1`, aceite | OK | `api-tests-raw-log.txt` L389-465 |
+| P | admin | API | Alterar EXW de artigo activo → `review` + nova versão | T-0005: `active/890.00` → `review/950.00`; `price_versions` 3→4, última versão com `exw_price 950.00`; revertido, confirmado de volta a `active/890.00` | OK | `api-tests-raw-log.txt` L389-465 |
+| Q | admin | API | Override sem motivo → recusado; autor sempre a sessão real (via auditoria) | `NULL` em `reason` → `ERROR: null value ... violates not-null constraint`; `created_by` **não** é imposto pela BD (aceitou um UUID falso — achado já conhecido/documentado, i6 F0 #1); mas `audit_log.actor` continua a ser o uid **real** da sessão, independente do que vai em `created_by` — o registo de autoria que importa (auditoria) é inviolável mesmo quando o campo de conveniência não é | OK (com nota) | `api-tests-raw-log.txt` L389-465, L466-485 |
+| R | finance | API | Correcção de câmbio no mesmo dia aceite; ramo histórico intacto | Segunda entrada USD/GBP no mesmo dia aceite, `fx_rate()` usa-a de imediato; `fx_rate('GBP','2025-11-01')` devolve a taxa original da seed | OK | `api-tests-raw-log.txt` L486-517 |
+| S | admin + Pedro | Browser | Convite chega; link sobrevive; password + login funcionam | Confirmado pelo Pedro, **dois** provedores reais (Gmail de teste e Hotmail) | OK — **ver desvio** | verbal, sem screenshot |
+| T | Pedro | Browser | Reset funciona; password antiga falha depois | Confirmado — "ok: pass antiga falhou" | OK | verbal, sem screenshot |
+| U | sales.sa/logistics.test/agent.apac | API | `can_read_costs()`=`false`; zero linhas em `v_branch_prices`(margem)/`price_overrides`/`audit_log` mesmo contornando o redirect | Confirmado para os três papéis | OK | `api-tests-raw-log.txt` (vários) |
+| U | admin/product_manager/finance/branch_manager/viewer | API | `can_read_costs()`=`true` (gate da página) | Confirmado para os cinco papéis | OK | `api-tests-raw-log.txt` (vários) |
+| V | admin | Browser | Números do dashboard coerentes com os dados conhecidos | Confirmado pelo Pedro | OK | verbal, sem screenshot |
+| V | sales.sa | Browser | `/dashboard` redirecciona | Confirmado pelo Pedro (bloco F, passo 6) | OK | verbal, sem screenshot |
+
+**Nota 1 — evidência do Pedro é verbal, não screenshot.** A restrição 3 do prompt pedia
+screenshots; a sessão decorreu por chat, sem anexos. Registado como está — nenhuma evidência
+fabricada. Se for exigido nível de prova mais forte (ex. para a direcção), repetir os passos de
+browser com captura de ecrã real.
+
+**Nota 2 — duas formas de negação distintas, ambas correctas.** `INSERT` negado por RLS devolve
+`ERROR: new row violates row-level security policy`; um `UPDATE` cujo `WHERE` aponta para uma
+linha que a política não deixa tocar devolve `UPDATE 0` (sem erro) — o padrão "200/0 linhas
+ambíguo" já identificado nesta sessão (i4/i5). Ambos são recusas correctas; distinguidos aqui
+para não serem confundidos com sucesso parcial.
+
+**Achado de processo, registado no fecho:** o próprio protocolo tinha dois defeitos reais,
+corrigidos antes/durante esta execução (restrição 1 do prompt) — `/dashboard` (E3-i8) não
+constava do documento (commit `e9b1ab8`); e a nota sobre `logistics` não conseguir ler
+overrides que cria estava **errada**, não só desactualizada — `overrides_write` é `for all`
+(inclui `select`), OR-combinada com `overrides_read`, tornando as linhas `duty` visíveis a
+`logistics` (commit `c01325a`, achado do teste K).
 
 ## 7. Registo de execuções do protocolo
 | Data | Versão (migrações + digest) | Executor(es) | Âmbito (papéis) | Resultado | Desvios/acções |
 |---|---|---|---|---|---|
-| *(primeira execução formal: por agendar)* | | | | | |
+| 2026-09-05 | Migrações 0001–0005; digest `sha256:3775da62ecfc16047b7eec92b7ea98cb277778825d8295b4771becf3b1b47da1` | Pedro (browser) + agente (API) | admin, product_manager, finance, branch_manager, logistics, sales, agent, viewer — os 8 papéis da matriz | **OK — gate de produção satisfeito para o estado actual** (migrações 0001–0005 + digest acima) | (1) Protocolo tinha 2 defeitos reais, corrigidos antes/durante a execução (ver acima; commits `e9b1ab8`, `c01325a`). (2) Utilizador de teste `branch_manager.test@example.test` criado (não existia). (3) Sessão 3 (K–N, parte visual) dispensada pelo Pedro por tempo — coberta pela prova API, que é completa. (4) S/T testados só com Gmail+Hotmail (dois provedores reais, sem gateway corporativo) — a variante EOP/Safe-Links continua **por cobrir**, fica registada como pendência da E5 (quarentena Microsoft 365, já conhecida desde a i3). (5) Evidência do Pedro é verbal (chat), não screenshot — ver nota 1, secção 6. |

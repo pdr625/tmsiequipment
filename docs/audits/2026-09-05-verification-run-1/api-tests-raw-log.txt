@@ -1,0 +1,693 @@
+=== SALES.SA (branch SA) ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a575b8b8-26bb-4c9b-a551-b09a73785b73", "role" : "authenticated"}
+(1 row)
+
+SET
+--- baseline: v_products shows costs as NULL, not absent ---
+   id   |           name            | status | exw_price | sap_code_sa 
+--------+---------------------------+--------+-----------+-------------
+ T-0001 | FoamMaster X1 unit (test) | active |           | 
+ T-0005 | Brush unit B3 (test)      | active |           | 
+(2 rows)
+
+SAVEPOINT
+--- G1: direct SELECT of exw_price on raw table -> ERROR expected ---
+ERROR:  permission denied for table products
+HINT:  Grant the required privileges to the current role with: GRANT SELECT ON tmsi.products TO authenticated;
+ROLLBACK
+SAVEPOINT
+--- G2: direct SELECT of sap_code_sa/supplier_id on raw table -> ERROR expected ---
+ERROR:  permission denied for table products
+HINT:  Grant the required privileges to the current role with: GRANT SELECT ON tmsi.products TO authenticated;
+ROLLBACK
+SAVEPOINT
+--- H: oracle via WHERE filter on a revoked column -> ERROR expected (not silently ignored) ---
+ERROR:  permission denied for table products
+HINT:  Grant the required privileges to the current role with: GRANT SELECT ON tmsi.products TO authenticated;
+ROLLBACK
+SAVEPOINT
+--- I1: INSERT into products -> RLS denial expected ---
+ERROR:  new row violates row-level security policy for table "products"
+ROLLBACK
+SAVEPOINT
+--- I2: INSERT into price_overrides -> RLS denial expected ---
+ERROR:  new row violates row-level security policy for table "price_overrides"
+ROLLBACK
+SAVEPOINT
+--- I3: INSERT into exchange_rates (config) -> RLS denial expected ---
+ERROR:  new row violates row-level security policy for table "exchange_rates"
+ROLLBACK
+SAVEPOINT
+--- J: product with sold_in NOT including SA (T-9004, active, sold_in={}) -> 0 rows expected ---
+ count 
+-------
+     0
+(1 row)
+
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK
+ROLLBACK
+=== SALES.SA continued: U (dashboard) + overrides/audit split ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a575b8b8-26bb-4c9b-a551-b09a73785b73", "role" : "authenticated"}
+(1 row)
+
+SET
+--- U1: can_read_costs() -> false expected (dashboard gate) ---
+ can_read_costs 
+----------------
+ f
+(1 row)
+
+--- U2: v_branch_prices margin, price_overrides, audit_log -> 0 rows expected (defense in depth) ---
+ count 
+-------
+     0
+(1 row)
+
+ count 
+-------
+     0
+(1 row)
+
+ count 
+-------
+     0
+(1 row)
+
+--- /overrides split: product_hs_overrides IS visible (ref_read, open to all authenticated) ---
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK
+=== LOGISTICS.TEST ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "1065ab1a-24f4-415a-b3f3-e0145694fa13", "role" : "authenticated"}
+(1 row)
+
+SET
+--- K1: HS/peso/dimensoes visible, costs NOT (v_products) ---
+   id   |         name         | hs_code | gross_weight_kg | exw_price | sap_code_sa 
+--------+----------------------+---------+-----------------+-----------+-------------
+ T-0005 | Brush unit B3 (test) | 960390  |           14.00 |           | 
+(1 row)
+
+--- K2: compute_price breakdown -> costs null, min/ref price still shown ---
+ fx_used | total_cost | margin | min_price | ref_price 
+---------+------------+--------+-----------+-----------
+         |            |        |   1978.00 |   2176.00
+(1 row)
+
+--- K3: transport_tiers/customs_rates config readable (can_read_operational) ---
+ count 
+-------
+    12
+(1 row)
+
+ count 
+-------
+    20
+(1 row)
+
+--- K4: exchange_rates/interco_fees/margin_grids -> can_read_costs only, logistics excluded ---
+ count 
+-------
+     0
+(1 row)
+
+ count 
+-------
+     0
+(1 row)
+
+ count 
+-------
+     0
+(1 row)
+
+SAVEPOINT
+--- K5: logistics CAN create a duty override (own restricted kind) ---
+ id | kind |  value   
+----+------+----------
+ 10 | duty | 0.050000
+(1 row)
+
+INSERT 0 1
+--- K6: ...but cannot read price_overrides afterward (documented asymmetry, not a bug) ---
+ count 
+-------
+     1
+(1 row)
+
+ROLLBACK
+SAVEPOINT
+--- K7: logistics CANNOT create a margin override (wrong kind for this role) ---
+ERROR:  new row violates row-level security policy for table "price_overrides"
+ROLLBACK
+--- U: dashboard gate for logistics ---
+ can_read_costs 
+----------------
+ f
+(1 row)
+
+ROLLBACK
+=== Follow-up: is the overrides_write FOR ALL policy also granting SELECT? ===
+BEGIN
+ id 
+----
+ 12
+(1 row)
+
+INSERT 0 1
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "1065ab1a-24f4-415a-b3f3-e0145694fa13", "role" : "authenticated"}
+(1 row)
+
+SET
+--- logistics SELECT on price_overrides, row exists with kind=duty, created by nobody it knows ---
+ id | product_id | kind 
+----+------------+------
+ 12 | T-0005     | duty
+(1 row)
+
+--- confirm can_read_costs() is indeed false for logistics (sanity) ---
+ can_read_costs 
+----------------
+ f
+(1 row)
+
+--- and a non-duty row (margin, id=1) should NOT be visible ---
+ id | kind 
+----+------
+(0 rows)
+
+ROLLBACK
+=== BRANCH_MANAGER.TEST (branch CORP) ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "7ae76c30-bf2c-4dd6-90a5-0b694ac7a3ba", "role" : "authenticated"}
+(1 row)
+
+SET
+--- L1: EXW/SAP unrestricted once product visible (T-0005, sold in SA/CORP/LTD - visible via sold_in intersect CORP) ---
+   id   |         name         | exw_price | currency | sap_code_us 
+--------+----------------------+-----------+----------+-------------
+ T-0005 | Brush unit B3 (test) |    890.00 | EUR      | US-90005
+(1 row)
+
+--- L2: total_cost/margin restricted to OWN branch (CORP) - compute_price for own branch shows costs ---
+ branch_id |             total_cost              | margin | min_price 
+-----------+-------------------------------------+--------+-----------
+ CORP      | 1383.278789200000000000000000000000 | 0.3500 |   2128.00
+(1 row)
+
+--- L3: compute_price for a DIFFERENT branch (SA, not own) -> costs null / no row (see_costs branch check) ---
+ branch_id | total_cost | margin | min_price 
+-----------+------------+--------+-----------
+(0 rows)
+
+--- L4: products of another branch not in own scope, e.g. T-0009 (primary SA, sold_in={SA} only, draft) -> not visible ---
+ count 
+-------
+     0
+(1 row)
+
+--- L5: dashboard access (page gate unconditional per matrix note 2) ---
+ can_read_costs 
+----------------
+ t
+(1 row)
+
+SAVEPOINT
+--- L6: can write transport/margin/coef override for OWN branch (CORP) ---
+ id | branch_id |  kind  
+----+-----------+--------
+ 13 | CORP      | margin
+(1 row)
+
+INSERT 0 1
+ROLLBACK
+SAVEPOINT
+--- L7: CANNOT write for a DIFFERENT branch (SA) even same allowed kind ---
+ERROR:  new row violates row-level security policy for table "price_overrides"
+ROLLBACK
+SAVEPOINT
+--- L8: CANNOT write duty (not an allowed kind for branch_manager) ---
+ERROR:  new row violates row-level security policy for table "price_overrides"
+ROLLBACK
+--- L9: audit_log accessible (unconditional per matrix, corrected in i7) ---
+ count 
+-------
+   128
+(1 row)
+
+ROLLBACK
+=== AGENT.APAC (channel APAC) ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "39253939-ad8c-40cd-8c38-833719574e89", "role" : "authenticated"}
+(1 row)
+
+SET
+ branch_id 
+-----------
+ TBM
+(1 row)
+
+--- M1: costs null (v_products) ---
+   id   | exw_price | sap_code_sa 
+--------+-----------+-------------
+ T-0004 |           | 
+(1 row)
+
+SAVEPOINT
+--- M2: direct SELECT of revoked column -> ERROR ---
+ERROR:  permission denied for table products
+HINT:  Grant the required privileges to the current role with: GRANT SELECT ON tmsi.products TO authenticated;
+ROLLBACK
+--- M3: sees selling price only for own channel branch, costs null ---
+ fx_used | total_cost | margin | min_price | ref_price 
+---------+------------+--------+-----------+-----------
+(0 rows)
+
+--- M4: other branch (not own channel) -> 0 rows ---
+ count 
+-------
+     0
+(1 row)
+
+SAVEPOINT
+--- M5: write denied ---
+ERROR:  new row violates row-level security policy for table "price_overrides"
+ROLLBACK
+--- M6: dashboard gate -> false ---
+ can_read_costs 
+----------------
+ f
+(1 row)
+
+--- M7: audit_log -> 0 rows ---
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK
+=== AGENT.APAC continued (correct own-channel branch: TBM) ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "39253939-ad8c-40cd-8c38-833719574e89", "role" : "authenticated"}
+(1 row)
+
+SET
+--- M3-corrected: own channel branch (TBM) -> min/ref shown, costs null ---
+ fx_used | total_cost | margin | min_price  | ref_price  
+---------+------------+--------+------------+------------
+         |            |        | 2397820.00 | 2637600.00
+(1 row)
+
+--- M4-corrected: a genuinely different branch (LTD, not TBM) -> 0 rows ---
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK
+=== VIEWER (real non-.test account, email redacted) ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "dc20f5ad-a0b8-424f-aee0-7114e95249c7", "role" : "authenticated"}
+(1 row)
+
+SET
+--- N1: full cost visibility, any branch, no scope restriction (T-0005 & across branches) ---
+   id   | exw_price | sap_code_sa 
+--------+-----------+-------------
+ T-0005 |    890.00 | SA-90005
+(1 row)
+
+ branch_id |         total_cost         |  margin  
+-----------+----------------------------+----------
+ SA        | 890.0000000000000000000000 | 0.550000
+(1 row)
+
+ branch_id |             total_cost              | margin 
+-----------+-------------------------------------+--------
+ CORP      | 1383.278789200000000000000000000000 | 0.3500
+(1 row)
+
+ branch_id |            total_cost            | margin 
+-----------+----------------------------------+--------
+ LTD       | 11155.16000000000000000000000000 | 0.3500
+(1 row)
+
+--- N2: overrides read (unconditional per i7 correction) ---
+ count 
+-------
+     4
+(1 row)
+
+--- N3: audit_log accessible ---
+ count 
+-------
+   128
+(1 row)
+
+--- N4: dashboard gate -> true ---
+ can_read_costs 
+----------------
+ t
+(1 row)
+
+SAVEPOINT
+--- N5: write denied (viewer is read-only everywhere) ---
+ERROR:  new row violates row-level security policy for table "price_overrides"
+ROLLBACK
+SAVEPOINT
+--- N6: cannot edit products either ---
+UPDATE 0
+ROLLBACK
+ROLLBACK
+=== O/P/Q/R retry, savepoint-per-statement, using v_products for cost columns ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "6ca94ec0-9d0a-4d8c-b09c-ac64ff288266", "role" : "authenticated"}
+(1 row)
+
+SET
+SAVEPOINT
+--- O1: activate T-8515 (missing hs_code) -> blocked with explicit error ---
+ERROR:  Product T-8515 cannot be active without an HS code
+CONTEXT:  PL/pgSQL function tmsi.check_activation_requirements() line 6 at RAISE
+ROLLBACK
+SAVEPOINT
+--- O2: option (T-9004, no hs_code) CAN be (re)activated - exception confirmed ---
+UPDATE 1
+ROLLBACK
+SAVEPOINT
+--- P1: baseline via v_products ---
+   id   | status | exw_price 
+--------+--------+-----------
+ T-0005 | active |    890.00
+(1 row)
+
+ count 
+-------
+     3
+(1 row)
+
+ROLLBACK
+SAVEPOINT
+--- P2: change EXW -> review + new version ---
+UPDATE 1
+ROLLBACK
+SAVEPOINT
+UPDATE 1
+   id   | status | exw_price 
+--------+--------+-----------
+ T-0005 | review |    950.00
+(1 row)
+
+ROLLBACK
+SAVEPOINT
+UPDATE 1
+ count 
+-------
+     4
+(1 row)
+
+ version | exw_price | note 
+---------+-----------+------
+       4 |    950.00 | 
+(1 row)
+
+ROLLBACK
+SAVEPOINT
+--- P3: confirm reverted ---
+   id   | status | exw_price 
+--------+--------+-----------
+ T-0005 | active |    890.00
+(1 row)
+
+ROLLBACK
+SAVEPOINT
+--- Q1: override NULL reason -> rejected ---
+ERROR:  null value in column "reason" of relation "price_overrides" violates not-null constraint
+ROLLBACK
+SAVEPOINT
+--- Q2: client-supplied created_by is NOT overridden by the DB itself (app-layer guarantee, not a DB constraint) ---
+ id |              created_by              
+----+--------------------------------------
+ 19 | 00000000-0000-0000-0000-000000000000
+(1 row)
+
+INSERT 0 1
+ROLLBACK
+ROLLBACK
+=== Q2 follow-up: does audit_log record the TRUE actor even if created_by is spoofed? ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "6ca94ec0-9d0a-4d8c-b09c-ac64ff288266", "role" : "authenticated"}
+(1 row)
+
+SET
+ id |              created_by              
+----+--------------------------------------
+ 20 | 00000000-0000-0000-0000-000000000000
+(1 row)
+
+INSERT 0 1
+                actor                 |   table_name    | action | row_pk 
+--------------------------------------+-----------------+--------+--------
+ 6ca94ec0-9d0a-4d8c-b09c-ac64ff288266 | price_overrides | INSERT | 20
+(1 row)
+
+ROLLBACK
+=== R: same-day exchange rate correction ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "2feab44b-13f3-419d-916d-908942ba2fff", "role" : "authenticated"}
+(1 row)
+
+SET
+SAVEPOINT
+--- R1: baseline fx_rate for GBP today ---
+  fx_rate  
+-----------
+ 10.000000
+(1 row)
+
+--- R2: second entry same day, different rate -> accepted, not a duplicate-key error ---
+INSERT 0 1
+ fx_rate  
+----------
+ 0.900000
+(1 row)
+
+ROLLBACK
+SAVEPOINT
+--- R3: historical date query unaffected by todays corrections (real seed data, 2025-11-01) ---
+ fx_rate  
+----------
+ 0.868900
+(1 row)
+
+ROLLBACK
+ROLLBACK
+=== A/B/E for admin, product_manager, finance ===
+--- ADMIN ---
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "6ca94ec0-9d0a-4d8c-b09c-ac64ff288266", "role" : "authenticated"}
+(1 row)
+
+SET
+A: listing with costs (v_branch_prices, count + sample)
+ count 
+-------
+    33
+(1 row)
+
+B: breakdown fields present for a sample row
+ branch_id |        fx_used         | fee | transport | duty_rate |           duty           |         total_cost         |  margin  | min_price 
+-----------+------------------------+-----+-----------+-----------+--------------------------+----------------------------+----------+-----------
+ SA        | 1.00000000000000000000 |   0 |         0 |         0 | 0.0000000000000000000000 | 890.0000000000000000000000 | 0.550000 |   1978.00
+(1 row)
+
+E: audit accessible + filter works
+ count 
+-------
+   128
+(1 row)
+
+ count 
+-------
+    11
+(1 row)
+
+ROLLBACK
+--- PRODUCT_MANAGER ---
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "7f360073-5bcb-486b-b909-690b8134766b", "role" : "authenticated"}
+(1 row)
+
+SET
+A: listing with costs
+ count 
+-------
+    33
+(1 row)
+
+B: breakdown fields present
+ branch_id |        fx_used         | fee |         total_cost         |  margin  | min_price 
+-----------+------------------------+-----+----------------------------+----------+-----------
+ SA        | 1.00000000000000000000 |   0 | 890.0000000000000000000000 | 0.550000 |   1978.00
+(1 row)
+
+E: audit -> MUST be 0 (product_manager excluded from audit_read)
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK
+--- FINANCE ---
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "2feab44b-13f3-419d-916d-908942ba2fff", "role" : "authenticated"}
+(1 row)
+
+SET
+A: listing with costs
+ count 
+-------
+    33
+(1 row)
+
+B: breakdown fields present
+ branch_id |        fx_used         | fee |         total_cost         |  margin  | min_price 
+-----------+------------------------+-----+----------------------------+----------+-----------
+ SA        | 1.00000000000000000000 |   0 | 890.0000000000000000000000 | 0.550000 |   1978.00
+(1 row)
+
+E: audit accessible + filter
+ count 
+-------
+   128
+(1 row)
+
+ count 
+-------
+     4
+(1 row)
+
+ROLLBACK
+=== C: edit exchange rate -> price recalculates, hand-calculated: fx_used 0.5, exw_local 725.00, interco 870.00, duty 14.79, total_cost 959.79, min_price 1655.00, ref_price 1821.00 ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "2feab44b-13f3-419d-916d-908942ba2fff", "role" : "authenticated"}
+(1 row)
+
+SET
+ id | currency | rate_per_eur 
+----+----------+--------------
+ 33 | USD      |     2.000000
+(1 row)
+
+INSERT 0 1
+ fx_rate  
+----------
+ 2.000000
+(1 row)
+
+        fx_used         |         exw_local          |            interco             |               duty                |             total_cost             |  margin  | min_price | ref_price 
+------------------------+----------------------------+--------------------------------+-----------------------------------+------------------------------------+----------+-----------+-----------
+ 0.50000000000000000000 | 725.0000000000000000000000 | 870.00000000000000000000000000 | 14.790000000000000000000000000000 | 959.790000000000000000000000000000 | 0.420000 |   1655.00 |   1821.00
+(1 row)
+
+--- audit records the edit with the correct actor ---
+                actor                 |   table_name   | action 
+--------------------------------------+----------------+--------
+ 2feab44b-13f3-419d-916d-908942ba2fff | exchange_rates | INSERT
+(1 row)
+
+ROLLBACK
+=== D: create override (coef 1.5, T-0002/SA), hand-calculated min_price 283.00, ref_price 311.00; then expire -> reverts to baseline 189.00/208.00 ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "2feab44b-13f3-419d-916d-908942ba2fff", "role" : "authenticated"}
+(1 row)
+
+SET
+--- D1: baseline ---
+ min_price | ref_price | overrides 
+-----------+-----------+-----------
+    189.00 |    208.00 | {}
+(1 row)
+
+--- D2: create override with reason + validity ---
+ id 
+----
+ 21
+(1 row)
+
+INSERT 0 1
+--- D3: price changes to the hand-calculated value ---
+ min_price | ref_price | overrides 
+-----------+-----------+-----------
+    283.00 |    311.00 | {coef}
+(1 row)
+
+--- D4: expire it (valid_to = yesterday) and confirm price reverts ---
+ERROR:  new row for relation "price_overrides" violates check constraint "price_overrides_check"
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK
+=== D4 retry: an override whose entire window is already in the past -> price reverts to baseline ===
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "2feab44b-13f3-419d-916d-908942ba2fff", "role" : "authenticated"}
+(1 row)
+
+SET
+INSERT 0 1
+--- expired override must NOT apply today: expect baseline 189.00/208.00, overrides {} ---
+ min_price | ref_price | overrides 
+-----------+-----------+-----------
+    189.00 |    208.00 | {}
+(1 row)
+
+--- but a historical query WITHIN its old validity window still picks it up (283.00/311.00) ---
+ min_price | ref_price | overrides 
+-----------+-----------+-----------
+    341.00 |    375.00 | {coef}
+(1 row)
+
+ROLLBACK
