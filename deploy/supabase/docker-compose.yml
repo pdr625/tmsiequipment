@@ -101,6 +101,23 @@ services:
       GOTRUE_SMTP_PORT: ${GOTRUE_SMTP_PORT}
       GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL}
       GOTRUE_SMTP_SENDER_NAME: TMSI Equipment Price Listing
+      # tarefa 4 (2026-09-05), measured before setting: all three were on
+      # GoTrue's own defaults (min_length 6, no required character
+      # classes, current-password check off) — confirmed against
+      # v2.189.0's real source (internal/conf/configuration.go), not
+      # assumed. No literal `$` in the character list on purpose — this
+      # value goes through docker compose's own ${...} interpolation,
+      # which would otherwise try to expand it.
+      GOTRUE_PASSWORD_MIN_LENGTH: "12"
+      GOTRUE_PASSWORD_REQUIRED_CHARACTERS: "abcdefghijklmnopqrstuvwxyz:ABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789:!@#%^&*()_+-="
+      # Closes the "PUT /auth/v1/user has no current-password gate"
+      # finding from i9/i10 at the root, in GoTrue itself, not just in
+      # this app's one code path — see account/password/actions.ts.
+      # Exempts recovery-flow sessions automatically (session.IsRecovery()
+      # in GoTrue's own source) and never applies to the admin-reset
+      # endpoint (/admin/users/{id} has no such check) — both verified
+      # against the pinned version's source, not assumed.
+      GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD: "true"
     ports:
       - "172.20.40.1:9999:9999"
     networks:
