@@ -7,8 +7,17 @@
 
 'use client';
 
-import { useActionState } from 'react';
-import { inviteUser, assignRole, removeRole, banUser, unbanUser, type ActionState } from './actions';
+import { useActionState, useState } from 'react';
+import {
+  inviteUser,
+  assignRole,
+  removeRole,
+  banUser,
+  unbanUser,
+  resetPassword,
+  type ActionState,
+  type ResetPasswordState,
+} from './actions';
 
 const ROLES = [
   'admin',
@@ -148,6 +157,71 @@ export function BanToggleButton({ userId, banned }: { userId: string; banned: bo
         {pending ? '…' : banned ? 'Reactivate' : 'Disable'}
       </button>
       <ErrorText state={state} />
+    </form>
+  );
+}
+
+// i9: admin-forced reset. "Generate" is the default and the one used in
+// this project's onboarding procedure — a temporary password never
+// re-shown after this render (no server-side storage, no logging; a page
+// refresh loses the React state along with it, by design).
+export function ResetPasswordForm({ userId }: { userId: string }) {
+  const [state, formAction, pending] = useActionState<ResetPasswordState, FormData>(resetPassword, undefined);
+  const [mode, setMode] = useState<'generate' | 'manual'>('generate');
+
+  return (
+    <form action={formAction} className="mt-2 border-t border-gray-100 pt-2">
+      <input type="hidden" name="user_id" value={userId} />
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex items-center gap-3 text-xs">
+          <label className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="mode"
+              value="generate"
+              checked={mode === 'generate'}
+              onChange={() => setMode('generate')}
+            />
+            Generate temporary password
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="mode"
+              value="manual"
+              checked={mode === 'manual'}
+              onChange={() => setMode('manual')}
+            />
+            Set manually
+          </label>
+        </div>
+        {mode === 'manual' && (
+          <input
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            placeholder="New password"
+            className="rounded-md border border-gray-300 px-2 py-1 text-xs"
+          />
+        )}
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium disabled:opacity-50"
+        >
+          {pending ? 'Resetting…' : 'Reset password'}
+        </button>
+      </div>
+      <ErrorText state={state} />
+      {state && 'success' in state && !state.generatedPassword && (
+        <p className="mt-1 text-xs text-green-700">Password reset. The user must change it at next login.</p>
+      )}
+      {state && 'success' in state && state.generatedPassword && (
+        <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs">
+          <p className="mb-1 font-medium text-amber-800">Shown once — copy it now, it will not be shown again:</p>
+          <code className="block break-all rounded bg-white px-2 py-1 font-mono">{state.generatedPassword}</code>
+        </div>
+      )}
     </form>
   );
 }

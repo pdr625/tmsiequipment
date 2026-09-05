@@ -25,5 +25,11 @@ export async function updatePassword(
     return { error: error.message };
   }
 
+  // i9: also a legitimate way to complete a forced reset (a flagged user
+  // who follows a recovery email link instead of using
+  // /account/password) — clears must_change_password (0006); a no-op if
+  // it was already false.
+  await supabase.schema('tmsi').rpc('mark_password_changed');
+
   redirect('/');
 }

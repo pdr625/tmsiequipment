@@ -8,7 +8,6 @@
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { isAdmin, pricingConfigReadAccess, canReadAuditLog } from '@/lib/auth-guard';
-import { signOut } from './actions';
 
 // Minimal authenticated home — middleware already guarantees a session
 // exists here. Further screens (app/README.md) are their own routes.
@@ -78,7 +77,13 @@ export default async function HomePage() {
             User administration
           </Link>
         )}
-        <form action={signOut}>
+        <Link
+          href="/account/password"
+          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+        >
+          Change password
+        </Link>
+        <form action="/logout" method="post">
           <button
             type="submit"
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"

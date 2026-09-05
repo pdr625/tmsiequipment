@@ -45,5 +45,20 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return { supabaseResponse, user };
+  // i9: the must_change_password gate needs this on every request, not
+  // just on pages that already fetch the profile — read via the same
+  // RLS-scoped client (profiles_self, 0001 §8: own row or admin), one
+  // indexed PK lookup, no new privilege surface.
+  let mustChangePassword = false;
+  if (user) {
+    const { data: profile } = await supabase
+      .schema('tmsi')
+      .from('profiles')
+      .select('must_change_password')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    mustChangePassword = profile?.must_change_password === true;
+  }
+
+  return { supabaseResponse, user, mustChangePassword };
 }
