@@ -132,14 +132,23 @@ hostname exige refazer a imagem por CI. Barato de corrigir: a app usa o URL **s�
 servidor** (confirmado — não está no bundle do cliente), portanto basta lê-lo de env de runtime.
 Fecha a classe toda: a mesma imagem passa a servir qualquer hostname.
 
-**23. Tornar o pacote GHCR privado** (achado 4; **decidido pelo Pedro 2026-09-06**). Hoje
-`ghcr.io/pdr625/tmsiequipment/tmsi-app` é descarregável **sem credencial nenhuma**, apesar de o
-repo ser privado e a licença proprietária. Exige permissões de `packages` na conta — não
-executável pelas sessões actuais.
-⚠️ **Antes ou imediatamente depois de virar a visibilidade:** confirmar que o VPS consegue
-autenticar-se no GHCR, senão o próximo `docker compose pull` da app parte. Sequela obrigatória:
-a recuperação passa a precisar de um token `read:packages` que **exista fora do VPS** — senão o
-desastre leva-o também. Liga ao ponto 5 do item 21 (escrow).
+~~**23. Tornar o pacote GHCR privado**~~ ✅ **fechada 2026-09-06** (achado 4; item 21 F1).
+Ordem rígida provada: login autenticado com o pacote ainda público (`tmsi-app` **e**
+`itinera`, mesma entrada partilhada `~/.docker/config.json`) → pacote tornado privado pelo
+Pedro → re-prova dos dois → ramo de falha (`unauthorized` sem credencial) → credencial
+restaurada, re-provado. Novo PAT `read:packages` (classic), criado pelo Pedro, introduzido
+só por ficheiro 600 descartado logo a seguir ao login — avança a rotação pendente do
+`CREDENTIALS-INVENTORY.md` (KI #9) do lado do pull. Detalhe: `docs/STATE.md`.
+
+**24. 4 segredos de produção ecoados no output do agente — rotação pendente** *(incidente
+2026-09-06, decisão do Pedro: aceitar o risco por agora)* — `POSTGRES_PASSWORD`,
+`JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` ficaram visíveis num comando mal escrito ao
+inventariar o `.env` para o item 21 (F3). Não usados nem reimpressos depois de detectado.
+Rodar os quatro juntos quando o Pedro decidir (`JWT_SECRET` invalida todas as sessões vivas;
+`ANON_KEY`/`SERVICE_ROLE_KEY` derivam dele; `POSTGRES_PASSWORD` exige reiniciar a stack).
+Detalhe: `docs/STATE.md`. `CREDENTIALS-INVENTORY.md` do dossier precisa da entrada
+correspondente — fora do que esta sessão VPS escreve directamente, texto preparado para o
+Pedro colar.
 
 ## ⚪ Baixas — registadas, sem urgência
 

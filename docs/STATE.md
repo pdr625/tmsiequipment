@@ -13,6 +13,34 @@ disponíveis para uma sessão futura de correcção, se/quando decidires prioriz
 critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
 
+## Incidente — 4 segredos de produção ecoados no output do agente — ⚠️ ABERTO 2026-09-06
+
+**O que aconteceu:** ao inventariar as variáveis reais do `.env` de produção para o item 21
+(F3, `.env.example`), um comando destinado a listar só NOMES de variáveis (`grep -v "^#"
+deploy/supabase/.env | grep "="`) foi corrido sem o `cut -d= -f1` que o comando equivalente
+em F0 tinha usado correctamente — os VALORES ficaram visíveis no output, incluindo
+`POSTGRES_PASSWORD`, `JWT_SECRET`, `ANON_KEY` (JWT completo) e `SERVICE_ROLE_KEY` (JWT
+completo). Sinalizado de imediato ao Pedro, não escondido nem minimizado.
+
+**Classificação, pela regra já estabelecida deste projecto:** um segredo ecoado é
+"exposto/queimado → rotação obrigatória" (mesma regra do `CREDENTIALS-INVENTORY.md` do
+dossier), independentemente de ser um valor de teste ou de produção — aqui são os quatro
+segredos-raiz da instância Supabase real, não descartáveis.
+
+**Decisão do Pedro, registada:** aceitar o risco por agora, resolver mais tarde — não rodar
+os quatro segredos de imediato (rodar `JWT_SECRET` invalida todas as sessões vivas e exige
+recompor `ANON_KEY`/`SERVICE_ROLE_KEY` a partir dele; `POSTGRES_PASSWORD` exige reiniciar a
+stack). **Não fechado** — fica registado como pendência real, não como incidente encerrado
+sem acção.
+
+**Nunca reimpressos nem reutilizados** depois do momento em que o erro foi detectado — a
+sessão não voltou a tocar-lhes. `docs/BACKLOG.md` ganha um item próprio (24) para a rotação
+pendente; `CREDENTIALS-INVENTORY.md` do dossier precisa da entrada correspondente, mas está
+fora do que esta sessão VPS pode escrever directamente (só `VPS.md`/`audits/*-vps*.md`/
+`CHANGELOG.md`) — texto preparado, para o Pedro colar.
+
+---
+
 ## Item 14 — Medição de volume nas listagens (`/products`, `/prices`) — ✅ MEDIDO 2026-09-05
 
 **Contexto (`docs/BACKLOG.md` item 14, escolhido por procura):** "nunca testado acima de 13
