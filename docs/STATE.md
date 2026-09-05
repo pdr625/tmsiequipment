@@ -3,21 +3,64 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: tarefa 4 — auth/headers — ✅ FECHADA 2026-09-05.** A lacuna do `PUT
-/auth/v1/user` (i9/i10) fechada na raiz —
-`GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD` (GoTrue, verificado contra o
-código-fonte real, não assumido) faz o GoTrue exigir e verificar a password actual a si
-próprio; política de password (mínimo 12, quatro classes de carácter) e rate limit por IP
-em `/auth/v1/token` (GoTrue não tinha nenhum) acrescentados; quatro *security headers*
-(HSTS/CSP/X-Frame-Options/Referrer-Policy) no vhost, nenhum estava definido. Todas as
-provas ao vivo: brute-force controlado (6 pedidos admitidos, depois `503`, recupera depois
-de esperar), password fraca recusada (curta e sem classe), `current_password` em falta/
-errada recusada, correcta aceite. `scripts/smoke.py` 27/27 sem regressão. Próximo, por
-`docs/BACKLOG.md`: por procura (sem mais tarefas críticas na fila). Ordem e critérios de
-saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
+**Etapa actual: tarefa 5 — code review read-only — ✅ FECHADA 2026-09-05.** 9 achados
+triados (`app/src`, 48 ficheiros, ~5.557 linhas), sem reescrita nenhuma — ver secção
+própria abaixo. Segredos em logs voltou **limpo** (zero `console.*` em `app/src`,
+`SERVICE_ROLE_KEY`/passwords geradas nunca logadas — confirmado por `grep`, não assumido).
+Próximo, por `docs/BACKLOG.md`: por procura — restam a decisão da i9/EOP (7, sem pressa) e
+o piloto (8, agora sem bloqueio das tarefas 1–4); os achados desta revisão ficam
+disponíveis para uma sessão futura de correcção, se/quando decidires priorizá-los. Ordem e
+critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
 
-## Tarefa 4 — Auth + headers — ✅ FECHADA 2026-09-05
+## Tarefa 5 — Code review read-only da app — ✅ FECHADA 2026-09-05
+
+**Contexto (`docs/BACKLOG.md` tarefa 5):** revisão só de leitura — caminhos de erro,
+segredos em logs, código morto, manutenibilidade — relatório de achados triados, sem
+reescrita nenhuma; prepara também a entrega E6.
+
+**Âmbito:** `app/src` completo (48 ficheiros, ~5.557 linhas), com verificação cruzada
+contra `supabase/migrations/*.sql` onde relevante.
+
+**Segredos em logs — limpo, confirmado por `grep`, não assumido:** zero chamadas
+`console.*` em todo o `app/src`; `SERVICE_ROLE_KEY` e passwords geradas nunca aparecem em
+nenhum caminho de log.
+
+**Nove achados, ordenados por severidade (relatados via `ReportFindings`, texto completo
+aí — resumo aqui):**
+1. 🔴 **`admin/users/page.tsx`** — a leitura do estado de ban ao GoTrue não tem ramo de
+   erro; se falhar, todos os utilizadores aparecem como activos em silêncio, incluindo os
+   realmente banidos.
+2. 🔴 **`logout/route.ts`** — o redirect usa o cabeçalho `Host` bruto sem lista de domínios
+   permitidos (open redirect potencial), ao contrário do fluxo de reset de password, que
+   pelo menos passa pelo `SITE_URL`/`URI_ALLOW_LIST` do GoTrue.
+3. 🟠 **`products/[id]/page.tsx`** — erros do `compute_price()` por filial são descartados
+   em silêncio (só `.data` é lido, nunca `.error`), indistinguível de "sem preço para esta
+   filial".
+4. 🟠 **`admin/users/actions.ts`** (`resetPassword`) — a actualização de
+   `must_change_password` não confirma que alguma linha foi mesmo afectada; um `UPDATE` de
+   zero linhas reporta sucesso na mesma.
+5. 🟡 **`config/page.tsx`** — o estado "in use" da listagem de câmbios marca uma linha por
+   grupo (moeda, data), mas `fx_rate()` só usa mesmo uma linha por moeda (a mais recente) —
+   linhas de dias mais antigos ficam também marcadas "in use", incorrectamente.
+6. 🟡 **`overrides/page.tsx`** vs. **`products/[id]/page.tsx`** — a classificação
+   activo/expirado/futuro de um override está duplicada verbatim nos dois ficheiros, risco
+   de desvio numa correcção futura.
+7. 🟡 **`products/new/actions.ts`** — `createProduct` usa `String(...)` para o `exw_price`
+   em vez de `Number(...)` (o padrão em todo o resto do código, incluindo o `updateProduct`
+   irmão) — sem validação, um pedido directo à API sem passar pelo `type="number"` do HTML
+   cai num erro de *cast* do Postgres em bruto.
+8. ⚪ **`admin/users/client-forms.tsx`** e ~10 ficheiros `actions.ts` — o padrão
+   `{error}|{success}|undefined` e o seu `ErrorText` estão redeclarados independentemente
+   em vez de viverem uma vez em `lib/`.
+9. ⚪ **`lib/supabase-client.ts`** — `createSupabaseBrowserClient` é código morto, nunca
+   importado nem chamado em nenhum sítio de `app/src` (esta app é toda Server
+   Components/Server Actions).
+
+**Decisão registada, não tomada por mim:** nenhum destes achados foi corrigido nesta
+sessão (a restrição do prompt é explícita — só relatório). Os dois primeiros (🔴) são os
+únicos com relevância de segurança directa; ficam disponíveis para entrarem no
+`docs/BACKLOG.md` como tarefa nova, a prioridade e calendário são decisão tua.
 
 **Contexto (`docs/BACKLOG.md` tarefa 4):** medir e fixar rate-limits do GoTrue, política de
 password, e headers do vhost — com a lacuna do `PUT /auth/v1/user` (i9/i10: o próprio

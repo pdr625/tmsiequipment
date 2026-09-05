@@ -33,6 +33,11 @@ já corrido uma vez de ponta a ponta contra o primeiro deploy `npm ci`. Detalhe:
 nenhum); quatro *security headers* no vhost (nenhum estava definido). Detalhe:
 `docs/STATE.md`.
 
+**Tarefa 5 (code review read-only) — ✅ fechada 2026-09-05.** 9 achados triados em
+`app/src` (48 ficheiros), sem reescrita nenhuma — 2 com relevância de segurança directa
+(ban-status silencioso, open redirect no logout), o resto correcção/manutenibilidade;
+segredos em logs voltou limpo. Prepara a entrega E6. Detalhe: `docs/STATE.md`.
+
 ## Estado das etapas
 
 | Etapa | Título | Estado |
@@ -341,6 +346,10 @@ Validação com utilizadores-piloto (dados sempre fictícios). Preparar: procedi
 migração (`git clone` + novo `.env` + `pg_restore` — destino: servidor da empresa),
 autorização escrita ao abrigo da licença, e o esclarecimento CPI art. L113-9 (questão do
 handover §7 — do Pedro, antes de qualquer transferência).
+
+📋 **Code review read-only (tarefa 5, 2026-09-05) já feita como preparação** — 9 achados
+triados em `app/src`, nenhum corrigido ainda (decisão de prioridade/calendário por tomar).
+Detalhe: `docs/STATE.md`.
 
 ## Questões abertas do Pedro (do handover §7 — não bloqueiam E1–E2)
 Moeda dos escalões de transporte TBM (T2) · periodicidade/mecanismo das taxas SAP (C2 —

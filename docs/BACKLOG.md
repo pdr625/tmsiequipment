@@ -56,9 +56,9 @@ headers do vhost. Provas ao vivo: brute-force controlado, password fraca recusad
 
 ## 🟠 Altas — logo a seguir
 
-**5. Code review read-only da app** *(sessão VPS; relatório de achados triados, sem
-reescrita)* — caminhos de erro, segredos em logs, código morto, manutenibilidade; também
-prepara a entrega E6.
+~~**5. Code review read-only da app**~~ ✅ **fechada 2026-09-05** (9 achados triados, sem
+reescrita nenhuma — 2 relevantes para segurança, o resto correção/manutenibilidade; segredos
+em logs voltou limpo. Detalhe: `docs/STATE.md`.)
 ~~**6. Limpeza da sinalização órfã no `VPS.md`**~~ ✅ **fechada 2026-09-05, na i9** (F0
 dessa sessão — o espelho 1.14 já estava feito pela E5-HOMELAB, sinalização removida).
 **7. EOP / entregabilidade de email** *(decisão tua, sem pressa desde a i9)* — continua
