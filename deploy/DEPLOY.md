@@ -171,9 +171,38 @@ before a restore can even begin.
 **Rule, going forward: re-encrypt the escrow every time `.env` changes.** A stale escrow is
 worse than none — it produces a confident, wrong reconstruction.
 
-*(This section is completed once the escrow itself exists — see BACKLOG item 21 point 5 and
-the corresponding entry in `docs/STATE.md` for the exact file name, cipher, and decryption
-steps, added in the same session that created it.)*
+**What it is:** `deploy/supabase/.env` plus the GHCR pull PAT (§8, extracted from
+`~/.docker/config.json`'s `ghcr.io` entry), concatenated into one plaintext file, symmetric-
+encrypted, then the plaintext shredded. `age -p` was the first choice (restriction-driven)
+but isn't installed on this VPS — fell back to `gpg -c` (AES256), so the file is `.gpg`, not
+`.age`, honestly reflecting the tool actually used rather than a name that would imply the
+wrong format.
+
+```bash
+gpg --batch --yes --symmetric --cipher-algo AES256 \
+  --passphrase-file <a 600 file with the passphrase, never displayed, shredded right after> \
+  --output ~/backups/tmsi/tmsi-secrets-<date>.gpg \
+  <plaintext combined file, also shredded right after>
+```
+
+Lives at `~/backups/tmsi/tmsi-secrets-<date>.gpg`, next to the dumps — the same nightly
+off-site pull (§4) picks it up with no changes needed on either side.
+
+**Known gap, disclosed rather than hidden:** the passphrase was supposed to never touch disk
+at all (this section's original design intent); in practice, with no live interactive
+terminal available to this session, it had to pass through a `chmod 600` file for `gpg
+--passphrase-file` to read — same constraint that already applies to every other real secret
+this kind of session handles (see the GHCR PAT in §8). The file was `shred -u -z`'d
+immediately after use. `shred`'s guarantees are themselves imperfect on some filesystems/SSDs
+— disclosed, not treated as equivalent to "never touched disk."
+
+**Decrypt to verify (never leave the plaintext lying around):**
+```bash
+umask 077
+gpg --output /tmp/tmsi-secrets-check.txt --decrypt ~/backups/tmsi/tmsi-secrets-<date>.gpg
+# confirm what you need, then:
+shred -u -z /tmp/tmsi-secrets-check.txt
+```
 
 ## 7. `smoke.py` against a drill or a second environment
 

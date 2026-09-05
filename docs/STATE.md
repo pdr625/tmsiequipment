@@ -13,6 +13,35 @@ disponíveis para uma sessão futura de correcção, se/quando decidires prioriz
 critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
 
+## Item 21 F5 — Escrow cifrado de segredos — ✅ FECHADO 2026-09-06
+
+**O quê:** `deploy/supabase/.env` + o PAT GHCR de pull (extraído de
+`~/.docker/config.json`), concatenados num único ficheiro, cifrados, texto simples destruído.
+`age -p` não está instalado nesta VPS — usado `gpg -c` (AES256) por omissão da restrição 6,
+ficheiro nomeado `.gpg`, não `.age` (nome honesto face à ferramenta real, não o literal do
+prompt). Fica em `~/backups/tmsi/tmsi-secrets-2026-09-06.gpg`, junto aos dumps — o mesmo
+pull nocturno do homelab (F4/off-site) já o apanha, sem alteração nenhuma dos dois lados.
+
+**Desvio registado, não escondido:** a passphrase devia nunca tocar disco (restrição 6). Sem
+terminal interactivo real disponível a esta sessão (`read -rs` não funciona neste ambiente —
+já confirmado no F1 para o token GHCR), teve de passar por um ficheiro `chmod 600` para o
+`gpg --passphrase-file` a ler — a mesma limitação que já se aplica a qualquer segredo real
+que uma sessão destas manuseia. `shred -u -z` imediatamente a seguir ao uso; a garantia do
+`shred` é ela própria imperfeita nalguns sistemas de ficheiros/SSD — reportado como está, não
+tratado como equivalente a "nunca tocou disco".
+
+**Prova por decifração, feita pelo Pedro** (restrição 6): `gpg --decrypt` para `/tmp`,
+confirmação visual de 2 nomes de variáveis (`POSTGRES_HOST`, `POSTGRES_PORT` — nunca valores
+no output), `shred -u -z` da cópia decifrada a seguir.
+
+**Passphrase:** escolhida e introduzida pelo Pedro (nunca gerada nem vista por esta sessão),
+guardada por ele em dois sítios fora desta VPS (Vaultwarden + foto no telemóvel) — nota do
+prompt respeitada: o servidor Vaultwarden vive nesta mesma VPS, por isso a cópia adicional
+(foto) evita a dependência circular de precisar da passphrase para ajudar a restaurar a
+própria máquina que a guarda.
+
+---
+
 ## Incidente — 4 segredos de produção ecoados no output do agente — ⚠️ ABERTO 2026-09-06
 
 **O que aconteceu:** ao inventariar as variáveis reais do `.env` de produção para o item 21
