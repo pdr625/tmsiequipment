@@ -8,7 +8,6 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 export type ChangePasswordState = { error: string } | undefined;
@@ -17,13 +16,22 @@ export type ChangePasswordState = { error: string } | undefined;
 // (reset-password/actions.ts, reached via a token nobody else has),
 // supabase.auth.updateUser() alone never confirms the caller already
 // knows the CURRENT password — a left-open or stolen session could set a
-// new one silently. Verified here, server-side, by attempting a real
-// sign-in with a throwaway client (persistSession/autoRefreshToken off,
-// same public URL + anon key as login/actions.ts's own signInWithPassword)
-// so the check never touches the real session's cookies. This does leave
-// one extra, unused GoTrue session behind per attempt (there is no
-// "verify without issuing a session" endpoint) — harmless (same user, own
-// credentials) and left to expire naturally; not worth a bespoke cleanup.
+// new one silently.
+//
+// tarefa 4: this used to be verified here, in app code, with a throwaway
+// signInWithPassword client. GoTrue itself now enforces it directly —
+// GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD (deploy/
+// supabase/docker-compose.yml), a real config field confirmed against
+// v2.189.0's own source (internal/conf/configuration.go,
+// internal/api/user.go), not assumed. It hashes-and-compares
+// current_password server-side, exempts recovery-flow sessions
+// automatically (session.IsRecovery()) so reset-password/actions.ts's
+// flow is unaffected, and never applies to the admin-reset endpoint
+// (internal/api/admin.go has no such check) — admin resets still don't
+// need the target's old password, by design (i9). @supabase/auth-js
+// 2.115.0's UserAttributes already types current_password?: string, so
+// no client upgrade was needed, just passing the field. One fewer
+// throwaway GoTrue session per attempt as a side benefit.
 export async function changePassword(
   _prevState: ChangePasswordState,
   formData: FormData,
@@ -37,25 +45,10 @@ export async function changePassword(
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user?.email) {
-    return { error: 'Not authenticated' };
-  }
-
-  const verifier = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
+  const { error: updateError } = await supabase.auth.updateUser({
+    password: newPassword,
+    current_password: currentPassword,
   });
-  const { error: verifyError } = await verifier.auth.signInWithPassword({
-    email: user.email,
-    password: currentPassword,
-  });
-  if (verifyError) {
-    return { error: 'Current password is incorrect' };
-  }
-
-  const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
   if (updateError) {
     return { error: updateError.message };
   }
