@@ -70,6 +70,7 @@ type PriceBreakdown = {
   ref_price: number | null;
   alert: string | null;
   overrides: string[] | null;
+  errors: string[] | null;
 };
 
 type PriceVersion = { id: number; version: number; currency: string; exw_price: number; changed_at: string; note: string | null };
@@ -275,7 +276,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     <td className="py-2 pr-4">
                       {r.ref_price ?? '—'} {r.currency}
                     </td>
-                    <td className="py-2 pr-4">{r.alert ?? '—'}</td>
+                    <td className="py-2 pr-4">
+                      {r.errors && r.errors.length > 0 ? (
+                        <span role="alert" className="text-red-700">
+                          {r.errors.join(', ')}
+                        </span>
+                      ) : (
+                        (r.alert ?? '—')
+                      )}
+                    </td>
                     <td className="py-2 pr-4">
                       {overriddenInputs.length === 0 ? (
                         '—'
