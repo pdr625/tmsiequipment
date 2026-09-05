@@ -11,6 +11,18 @@ e E4/0006 (quando a decisão L2 fechar) — qualquer alteração a RLS/vistas/pr
 major exige nova execução do protocolo. Ordem e critérios de saída de cada etapa:
 `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i8) e as migrações 0003/0004/0005 estão fechadas.
 
+## E5-VPS — credencial de push rotada (PAT → deploy key), 2026-09-05
+
+O remote `origin` deste repo passou de HTTPS (`~/.git-credentials`, PAT genérico do
+`github.com`, pendência desde a E0) para SSH dedicado: alias `github-tmsiequipment` em
+`~/.ssh/config` (mesmo padrão já usado pelo `github-dossier`), chave `ed25519` sem passphrase
+(`~/.ssh/tmsiequipment_deploy`, chmod 600 — automação sem interacção, risco aceite: uma cópia
+da chave privada só escreve neste repo específico, sem mais nenhum privilégio; o risco anterior
+do PAT era maior, um único token genérico do `github.com` inteiro). Deploy key adicionada pelo
+Pedro no GitHub com **Allow write access** (necessário — esta sessão escreve
+`docs/STATE.md`/`ROADMAP.md` a cada fecho). Provado ao vivo: `git pull` e este próprio commit,
+por SSH. Este é esse push.
+
 ## Execução formal n.º 1 — VERIFICATION-PROTOCOL.md — ✅ CONCLUÍDA 2026-09-05, resultado OK
 
 **Versão testada:** migrações 0001–0005; digest
