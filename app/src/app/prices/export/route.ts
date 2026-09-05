@@ -30,7 +30,7 @@ type SellingPriceRow = {
   lead_time_days: number | null;
 };
 
-function respond(buffer: Buffer, filename: string) {
+function respond(buffer: Uint8Array, filename: string) {
   return new NextResponse(buffer, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -51,6 +51,13 @@ function respond(buffer: Buffer, filename: string) {
 // afterwards) — matching how every other page in this codebase queries
 // Postgrest, and avoiding a dynamic select-string union that postgrest-js's
 // return-type inference doesn't resolve cleanly.
+//
+// `.overrideTypes()` goes LAST, after the conditional `.eq()` — the exact
+// bug this project already found once (docs/STATE.md, E3-i6 F1, in
+// audit/page.tsx): postgrest-js narrows to a filter-less builder type
+// once you cross into a "transform" stage, so a filter chained (or
+// reassigned) afterwards doesn't type-check. Filters always before that
+// narrowing call, never after.
 export async function GET(request: NextRequest) {
   const branch = request.nextUrl.searchParams.get('branch');
   const supabase = await createSupabaseServerClient();
@@ -70,12 +77,11 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .schema('tmsi')
       .from('v_branch_prices')
-      .select('product_id, branch_id, currency, total_cost_eur, margin, min_price, ref_price, alert')
-      .overrideTypes<BranchPriceRow[], { merge: false }>();
+      .select('product_id, branch_id, currency, total_cost_eur, margin, min_price, ref_price, alert');
     if (branch) {
       query = query.eq('branch_id', branch);
     }
-    const { data: rows, error } = await query;
+    const { data: rows, error } = await query.overrideTypes<BranchPriceRow[], { merge: false }>();
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
@@ -107,12 +113,11 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .schema('tmsi')
     .from('v_selling_prices')
-    .select('product_id, name, branch_id, currency, min_price, ref_price, lead_time_days')
-    .overrideTypes<SellingPriceRow[], { merge: false }>();
+    .select('product_id, name, branch_id, currency, min_price, ref_price, lead_time_days');
   if (branch) {
     query = query.eq('branch_id', branch);
   }
-  const { data: rows, error } = await query;
+  const { data: rows, error } = await query.overrideTypes<SellingPriceRow[], { merge: false }>();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }

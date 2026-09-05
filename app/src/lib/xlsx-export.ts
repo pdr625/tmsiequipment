@@ -30,7 +30,7 @@ export async function buildXlsx(opts: {
   headers: string[];
   widths: number[];
   rows: (string | number | null)[][];
-}): Promise<Buffer> {
+}): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = opts.generatedBy;
   workbook.created = opts.generatedAt;
@@ -65,5 +65,9 @@ export async function buildXlsx(opts: {
     printTitlesRow: `${headerRow.number}:${headerRow.number}`,
   };
 
-  return Buffer.from(await workbook.xlsx.writeBuffer());
+  // Node's Buffer (what writeBuffer() actually returns) doesn't satisfy
+  // DOM lib's BodyInit under this project's TS/@types/node combo — caught
+  // by CI, not assumed (TS2345, Buffer<ArrayBufferLike> vs BodyInit). A
+  // plain Uint8Array does, cleanly, with no generic-parameter mismatch.
+  return new Uint8Array(await workbook.xlsx.writeBuffer());
 }
