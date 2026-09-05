@@ -137,6 +137,10 @@ ao ecrã, distinto do achado #3 original.
 paragem (swap com 2,9 GB livres no momento do deploy). Sem drop-in de sudo necessário — nenhuma
 alteração de infra.
 
+**Confirmação do Pedro (sweep no browser) — 2026-09-05:** `/admin/users` (bans), um detalhe de
+produto (breakdown), `/config` (FX "in use") e `/overrides` — "tudo ok", nada mudou no ecrã
+além do pretendido pelos 9 achados.
+
 ---
 
 ## Tarefa 5 — Code review read-only da app — ✅ FECHADA 2026-09-05
