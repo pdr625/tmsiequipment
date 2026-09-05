@@ -63,11 +63,13 @@ em logs voltou limpo. Detalhe: `docs/STATE.md`.)
 dessa sessão — o espelho 1.14 já estava feito pela E5-HOMELAB, sinalização removida).
 **7. EOP / entregabilidade de email** *(decisão tua, sem pressa desde a i9)* — continua
 útil para recovery self-service; via TI a ponderar junto com o CPI.
-**8. Piloto com 2–3 colegas** *(depois de 1–4)* — onboarding por password temporária;
-recolha de feedback que informa a L2 e a i11+. Lado técnico pronto e testado ao vivo
-2026-09-05 (achado real corrigido antes do guião — reset de admin não confirmava email de
-convite fresco, `docs/STATE.md`); guião passo-a-passo em `docs/PILOT-ONBOARDING.md` — falta
-o Pedro executar com colegas reais.
+**8. Piloto com 2–3 colegas** *(ADIADO pelo Pedro, 2026-09-05 — decisão dele, não bloqueio
+técnico)* — onboarding por password temporária; recolha de feedback que informa a L2 e a
+i11+. Lado técnico pronto e testado ao vivo 2026-09-05 (achado real corrigido antes do guião
+— reset de admin não confirmava email de convite fresco, `docs/STATE.md`); guião
+passo-a-passo em `docs/PILOT-ONBOARDING.md`, pronto a usar quando o Pedro decidir avançar.
+**Decisão registada:** manter só utilizadores fictícios (`.test`) até ao deployment final —
+não convidar colegas reais antes disso.
 ~~**21. Tarefa 6 — Correcção dos 9 achados do code review**~~ ✅ **fechada 2026-09-05** (2
 achados de segurança + 3 de correcção funcional + 4 de manutenibilidade, todos fechados só em
 `app/src`, zero migração/infra/GoTrue/compose além do digest do deploy; `smoke.py` 27/27 duas
