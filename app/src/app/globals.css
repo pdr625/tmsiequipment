@@ -17,10 +17,24 @@
  * stale-exchange-rate badge) — a red, deliberately not reused from the
  * four categorical hexes above, always paired with icon + text, never
  * color alone.
- * Both `[data-theme]` and `prefers-color-scheme` are wired (prompt
- * §2.3): this app has no theme toggle today, so in practice only the
- * media query fires, but an explicit `data-theme` on a future toggle
- * wins in both directions without this block changing. */
+ *
+ * Light-only, deliberately (Pedro, 2026-09-05): this chart card was the
+ * only theme-aware element in an otherwise light-only app — on a machine
+ * with a dark OS preference it flipped on its own while every other page
+ * stayed light, which read as broken rather than themed. The dark
+ * `prefers-color-scheme`/`[data-theme]` blocks that used to live here
+ * are removed, not just disabled; global dark mode is a separate future
+ * improvement (docs/ROADMAP.md), not something this card should opt into
+ * alone. The dark values below are the ones that were live in
+ * production and confirmed correct (E3-i8 F3, CSS verified in the
+ * served bundle) — keep them as the starting point when the app gets a
+ * real theme, rather than re-deriving the palette from scratch:
+ *   --chart-surface: #1a1a19; --chart-text: #fcfcfb;
+ *   --chart-text-muted: #a9a79f; --chart-border: #333230;
+ *   --series-1: #3987e5; --series-2: #d95926;
+ *   --series-3: #199e70; --series-4: #c98500;
+ *   --state-warn-bg: #3a1512; --state-warn-text: #f2a89e;
+ *   --state-warn-border: #e2564a; */
 .dashboard-charts {
   --chart-surface: #fcfcfb;
   --chart-text: #1a1a19;
@@ -33,34 +47,4 @@
   --state-warn-bg: #fdeceb;
   --state-warn-text: #8a1710;
   --state-warn-border: #c4281e;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .dashboard-charts {
-    --chart-surface: #1a1a19;
-    --chart-text: #fcfcfb;
-    --chart-text-muted: #a9a79f;
-    --chart-border: #333230;
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-3: #199e70;
-    --series-4: #c98500;
-    --state-warn-bg: #3a1512;
-    --state-warn-text: #f2a89e;
-    --state-warn-border: #e2564a;
-  }
-}
-
-:root[data-theme='dark'] .dashboard-charts {
-  --chart-surface: #1a1a19;
-  --chart-text: #fcfcfb;
-  --chart-text-muted: #a9a79f;
-  --chart-border: #333230;
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --series-3: #199e70;
-  --series-4: #c98500;
-  --state-warn-bg: #3a1512;
-  --state-warn-text: #f2a89e;
-  --state-warn-border: #e2564a;
 }
