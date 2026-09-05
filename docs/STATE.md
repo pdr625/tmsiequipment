@@ -24,17 +24,25 @@ despromovido de bloqueio a melhoria** (o desvio S/T da E5-VPS continua por cobri
 bloqueia nada) e **export Excel/PDF (i10) promovido a crítico** — ambas reflectidas no
 `docs/BACKLOG.md` novo e no `docs/ROADMAP.md` realinhado (commit `0f95104`).
 
-**F0 — achado real, não silenciado:** o próprio prompt afirmava que "o espelho 1.14 [da
-deploy key `tmsiequipment` no `CREDENTIALS-INVENTORY.md`] está feito", como justificação
-para remover a sinalização órfã correspondente do `VPS.md` do dossier. **Falso, verificado
-por grep directo ao ficheiro** — só existem entradas até 1.13, nenhuma referência a
-`tmsiequipment`/`tmsi` em todo o `CREDENTIALS-INVENTORY.md`, e os commits mais recentes que o
-tocam são sobre câmaras/backups do homelab, não relacionados. A sinalização **não é órfã** —
-é uma tarefa real ainda por fazer. **Não removida** (ficaria a perder um TODO real em vez de
-limpar um resíduo); também não criada a entrada 1.14 por mim (fora do âmbito desta sessão —
-pertence à E5-HOMELAB, ainda por iniciar). Decisão do Pedro: ou a entrada 1.14 é criada
-numa sessão futura antes de remover a nota do `VPS.md`, ou a nota fica registada como
-está. Backlog item 6 mantém-se aberto, agora com esta nota anexada.
+**F0 — achado que, a meio da sessão, se revelou ser meu, não do prompt (correcção
+registada, não escondida):** o prompt afirmava que "o espelho 1.14 [da deploy key
+`tmsiequipment` no `CREDENTIALS-INVENTORY.md`] está feito", como justificação para remover a
+sinalização órfã correspondente do `VPS.md` do dossier. Um primeiro `grep` directo ao clone
+local do dossier neste VPS não encontrou 1.14 (só até 1.13) e concluí — errado — que a
+afirmação do prompt era falsa; ficou registado assim mais abaixo neste próprio documento
+(secção i9) e em commits já empurrados (`0f95104`, `ef2e9f7`). **Só estava errado o meu
+diagnóstico:** aquele clone local estava desactualizado, sem o push concorrente da
+**E5-HOMELAB** (outra sessão, a correr no homelab ao mesmo tempo), que já tinha criado 1.14 e
+deixado essa mesma sinalização explicitamente para "a próxima sessão do VPS" limpar — ou
+seja, esta. Só apareceu ao correr o `dossier-push.sh` (fetch + rebase automáticos) na F6,
+mais tarde nesta sessão. **Corrigido no próprio dossier antes do fecho:** 1.14 confirmado
+presente, sinalização removida do `VPS.md`, adenda escrita nos dois sítios (`VPS.md` e
+`CHANGELOG.md`) a explicar o lapso — commit do dossier `e4a5307`. **Lição registada:**
+`grep` a um clone local de um repo partilhado sem `git fetch` primeiro só prova o que esse
+clone tinha guardado, não o estado actual partilhado; a próxima vez que uma afirmação do
+prompt colidir com um documento do dossier, `fetch` primeiro, só depois concluir que o prompt
+está errado. Backlog item 6 fica fechado — não por mim ter feito o espelho, mas por já ter
+sido feito e a sinalização já ter sido limpa.
 
 **F1 — migração 0006, validada em `BEGIN`/`ROLLBACK` antes de aplicar para valer (backup
 fresco `~/backups/tmsi/tmsi-2026-09-05-pre-0006.dump` antes do DDL):**
