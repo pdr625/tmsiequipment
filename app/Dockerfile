@@ -18,8 +18,12 @@
 FROM node:24.20.0-alpine AS builder
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install
+# package-lock.json (tarefa 3, BACKLOG.md) generated on demand by the
+# generate-lockfile.yml workflow (workflow_dispatch, never on the VPS) and
+# committed straight to main — npm ci enforces it exactly, unlike npm
+# install, which had made every build since E1 non-reproducible.
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY . .
 

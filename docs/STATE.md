@@ -1422,6 +1422,10 @@ documentação/tipos reais do pacote (`@supabase/ssr@0.12.5`), não assumido de 
 (proibido nesta etapa). Decisão de pinagem definitiva (gerar o lockfile numa sessão futura,
 provavelmente ao lado do primeiro `npm install` real em CI) fica para a E5.
 
+✅ **Resolvida na tarefa 3 (2026-09-05)** — ver a secção dessa tarefa mais abaixo:
+`generate-lockfile.yml` (`workflow_dispatch`, `npm install` só ali, nunca no VPS) gera e
+commita `app/package-lock.json`; o Dockerfile passa a `npm ci`.
+
 **Decisão de arquitectura documentada no `Dockerfile`:** `NEXT_PUBLIC_SUPABASE_URL` e
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` entram como `ARG` de build no CI, não como env de runtime no
 deploy — o Next.js insere `NEXT_PUBLIC_*` no bundle do cliente **durante o build**, não à

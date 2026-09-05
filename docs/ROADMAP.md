@@ -312,9 +312,12 @@ Três frentes do lado do VPS (prompt E5-VPS), detalhe: `STATE.md`.
 
 ### E5-HOMELAB — por iniciar (depende da F3 da E5-VPS, já fechada)
 Off-site do backup (o dump só existe no VPS) · tile no dashboard do homelab a consumir as
-chaves `tmsi_*` novas do `status.json` · métrica T8 · decisão sobre lockfile/pinagem
-definitiva das imagens da app.
+chaves `tmsi_*` novas do `status.json` · métrica T8.
 Pode correr em paralelo com a E3; não bloqueia nem é bloqueada por ela.
+
+✅ **Lockfile/pinagem definitiva das imagens da app — resolvida na tarefa 3 (2026-09-05,
+sessão VPS), não precisou de esperar pela E5-HOMELAB:** `generate-lockfile.yml` gera e
+commita `app/package-lock.json`, Dockerfile passa a `npm ci`. Detalhe: `docs/STATE.md`.
 
 ## E6 — Validação do piloto + migração para a empresa — por iniciar
 ⚠️ **Gate de entrada (ver "Gate de produção" acima):** não arranca sem uma primeira execução
