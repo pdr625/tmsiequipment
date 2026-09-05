@@ -1,0 +1,54 @@
+# TMSI Equipment Price Listing
+# Copyright (c) 2026 Pedro Alexandre. All rights reserved.
+# PROPRIETARY AND CONFIDENTIAL — unauthorised use, copying, modification or
+# distribution is strictly prohibited. See LICENSE at the repository root.
+#
+# BACKLOG.md tarefa 3 F2 — the Dockerfile has used `npm install` since E1
+# (no lockfile, non-reproducible builds). This workflow is the ONLY place
+# that runs `npm install` for real: manual dispatch only, generates
+# app/package-lock.json and commits it straight to main. `contents: write`
+# is scoped to this one workflow — ci.yml (the workflow that actually
+# builds/pushes the app image) keeps `contents: read`, unchanged.
+#
+# Never runs on the VPS (restriction 1 of the prompt: no node/npm there).
+#
+# The Dockerfile switches from `npm install` to `npm ci` in a SEPARATE,
+# manual commit made only after this workflow's lockfile commit exists on
+# main — never in the same run, so `npm ci` is never exercised against a
+# lockfile that isn't actually merged yet.
+
+name: Generate lockfile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24.20.0'
+
+      - name: npm install (generates app/package-lock.json)
+        working-directory: app
+        run: npm install
+
+      - name: Commit lockfile to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/package-lock.json
+          if git diff --cached --quiet; then
+            echo "app/package-lock.json unchanged — nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore: generate app/package-lock.json (tarefa 3 F2)"
+          git push
