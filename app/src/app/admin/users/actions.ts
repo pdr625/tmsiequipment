@@ -187,12 +187,19 @@ export async function resetPassword(_prevState: ResetPasswordState, formData: Fo
   // Forces the change-password page at next request (middleware.ts); RLS
   // (profiles_admin, 0001 §8) permits this write for the admin's own
   // session — no service-role call needed here.
-  const { error: flagError } = await supabase
+  // .select() is required here: PostgREST returns 200/no-error on an
+  // update matching zero rows, so without it a stale/missing profile
+  // row would silently look identical to success.
+  const { data: flagRows, error: flagError } = await supabase
     .schema('tmsi')
     .from('profiles')
     .update({ must_change_password: true })
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .select();
   if (flagError) return { error: `Password set, but flag update failed: ${flagError.message}` };
+  if (!flagRows || flagRows.length === 0) {
+    return { error: 'Password set, but no matching profile found for this user — must_change_password was NOT set.' };
+  }
 
   // GoTrue's Admin API has no session-revocation endpoint (0006);
   // tmsi.admin_revoke_sessions() re-checks has_role('admin') itself.
