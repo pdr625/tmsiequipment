@@ -91,8 +91,14 @@ fixture descartável, resíduo zero. Detalhe: `docs/STATE.md`.)
 **11. CPI L113-9 por escrito** — pré-condição E6; condiciona a via TI (7).
 **12. Questões do handover §7**: moeda escalões TBM (T2) · taxas SAP (C2, manual no piloto).
 **13. Terceira perna do backup** (hoje 2 cópias/2 máquinas; liga a D-C/D-D do parque).
-**14. Paginação/pesquisa nas listagens** — quando o catálogo real chegar (nunca testado
-acima de 13 artigos; medir com dados de volume fictícios antes do piloto alargar).
+**14. Paginação/pesquisa nas listagens** — **medido 2026-09-05** (fixture descartável de 150
+produtos, resíduo zero): `/products` 148ms→717ms (13→163 artigos), `/prices` 159ms→909ms (33→333
+linhas), crescimento real e substancial, não uma suposição. Causa raiz não é só "falta
+`LIMIT`" — `v_products`/`v_branch_prices` avaliam `products_visible()`/`compute_price()` por
+linha antes de poder limitar, dado a forma actual da vista; um `LIMIT` simples reduz o que o
+Next.js renderiza mas não o custo do lado da BD. Decisão de desenho pendente (prioridade/
+timing/âmbito da correcção — mais do que UI, pode pedir repensar a vista), tua. Detalhe
+completo: `docs/STATE.md`.
 **15. Ensaio de restauro completo** (dump → ambiente limpo → app funcional) — o ensaio
 geral da E6; agendar antes da migração para a empresa.
 

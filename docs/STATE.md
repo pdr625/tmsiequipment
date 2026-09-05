@@ -13,6 +13,61 @@ disponíveis para uma sessão futura de correcção, se/quando decidires prioriz
 critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
 
+## Item 14 — Medição de volume nas listagens (`/products`, `/prices`) — ✅ MEDIDO 2026-09-05
+
+**Contexto (`docs/BACKLOG.md` item 14, escolhido por procura):** "nunca testado acima de 13
+artigos; medir com dados de volume fictícios antes do piloto alargar." Só medição — zero
+alteração de código nesta sessão, por desenho (o item pedia medir, não implementar; a
+correcção certa depende do que a medição mostrasse — ver Recomendação abaixo).
+
+**F0 — leitura do código real, não assumido.** Nem `/products` (`v_products`) nem `/prices`
+(`v_branch_prices`/`v_selling_prices`) têm `.limit()`/`.range()`/pesquisa — as duas fazem um
+`select` sem paginação nenhuma. `v_branch_prices` (0001 §7) faz `cross join lateral
+tmsi.compute_price(p.id, b.id)` — uma chamada PL/pgSQL real por cada par (produto, filial)
+visível, cada uma com vários sub-`select`s internos (fx_rate, interco_fees,
+transport_tiers, customs_rates, margin_grids) — não uma operação de conjunto barata.
+`v_products` filtra por `tmsi.products_visible()`, uma função aplicada linha a linha, não uma
+condição indexável.
+
+**Fixture descartável, resíduo zero:** 150 produtos sintéticos (`T-9200`..`T-9349`, `status
+'draft'` — não passa pelos requisitos de activação, 0001 §3 — código HS real, ciclando pelas
+4 filiais/moedas reais, cada um vendido em 2 filiais) inseridos, medidos, apagados. Contagem
+de produtos confirmada de volta a 13. **Efeito colateral real, registado, não escondido:**
+`audit_log` cresceu de 210 para 514 linhas (150 inserts + 150 deletes, trigger `FOR EACH
+ROW`) — não revertido, por desenho: apagar entradas de auditoria de actividade que realmente
+aconteceu seria pior do que a própria linha de teste lá ficar (mesmo princípio já aplicado a
+outras provas ao vivo desta sessão).
+
+**Medido (`EXPLAIN ANALYZE`, sessão `authenticated` com claims de `finance` reais, dentro de
+`BEGIN`/`ROLLBACK`, nunca como `postgres` sozinho — o objectivo é o custo que a app real
+paga):**
+
+| Vista | 13 produtos | 163 produtos (13 reais + 150 fixture) | Crescimento |
+|---|---|---|---|
+| `v_products` (`/products`) | 13 linhas, **148 ms** | 163 linhas, **717 ms** | ~4,8× o tempo para 12,5× as linhas |
+| `v_branch_prices` (`/prices`) | 33 linhas, **159 ms** | 333 linhas, **909 ms** | ~5,7× o tempo para ~10× as linhas |
+
+Crescimento sub-linear por linha (custo fixo por consulta amortiza), mas o tempo **absoluto**
+cresce de forma real e substancial — `/prices` já perto de 1 segundo só de execução na BD a
+163 produtos, sem contar a viagem PostgREST + a renderização do Next.js por cima (não
+medidas nesta sessão — só o tempo de execução na BD, a componente dominante nestas duas
+queries, mas não a única).
+
+**Recomendação, não implementada nesta sessão — decisão de desenho, não mecânica:** um
+`LIMIT`/`OFFSET` simples na query reduziria o volume renderizado pelo Next.js, mas **não**
+reduz o custo do lado da BD nestas duas vistas tal como estão — o Postgres continua a avaliar
+`products_visible()`/`compute_price()` para decidir QUAIS linhas qualificam antes de poder
+aplicar qualquer limite, dada a forma actual da query (função por linha, não uma condição
+indexável; `cross join lateral` não permite ao planeador "parar cedo"). Uma paginação real e
+eficaz precisaria de repensar a forma da vista/query (ex.: mover a visibilidade para uma
+condição `WHERE` indexável em vez de uma função por linha), não só adicionar `LIMIT` ao fim —
+âmbito maior do que esta medição, fica para o Pedro decidir prioridade/timing à luz destes
+números reais, não de uma suposição.
+
+**Sem regressão:** `scripts/smoke.py` 27/27 corrido depois da limpeza do fixture.
+
+---
+
 ## Tarefa 7 — Achados 22/23 (Host no forgot-password · errors[] do motor) — ✅ FECHADA 2026-09-05
 
 **Contexto (`docs/BACKLOG.md` itens 22/23):** fecha os 2 achados registados durante a tarefa 6
