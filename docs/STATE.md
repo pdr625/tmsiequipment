@@ -13,6 +13,132 @@ disponíveis para uma sessão futura de correcção, se/quando decidires prioriz
 critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
 
+## Tarefa 6 — Correcção dos 9 achados do code review — ✅ FECHADA 2026-09-05
+
+**Contexto (`docs/BACKLOG.md` item 21):** fecha os 9 achados triados na tarefa 5, só em
+`app/src` — zero migrações, zero infra/vhost/GoTrue/compose para além do digest do deploy.
+Pré-condição para o piloto (item 8).
+
+**Nota de numeração:** o prompt desta tarefa trocou a ordem dos achados 1/2 face ao relatório
+original da tarefa 5 (aqui: 1=ban-status, 2=open redirect; no prompt e nos commits desta
+tarefa: 1=open redirect, 2=ban-status). Os dois foram fechados na mesma sessão; a tabela
+abaixo usa o nome do ficheiro como chave, sem ambiguidade.
+
+**Mapa achado → commit → prova**, todos em `app/src`, nenhuma migração/infra tocada:
+
+1. **`logout/route.ts` — open redirect.** Verificado por leitura do código-fonte real do
+   Next.js (`response.ts`/`utils.ts`) que `NextResponse.redirect()` rejeita um caminho
+   relativo puro (`validateURL` faz `new URL(url)` sem base) — não era opção. Corrigido para
+   resolver `/login` contra `NEXT_PUBLIC_SUPABASE_URL` (valor de build, já usado por
+   `supabase-server.ts`/`supabase-middleware.ts`, igual à origem pública real desta app),
+   nunca mais a partir do `Host` do pedido. Commit `1be40ef`. **Prova ao vivo:** `curl -X
+   POST` directo ao container (`172.20.40.1:3001/logout`, contorna o *vhost matching* do
+   nginx) com `Host: evil.example.com` forjado devolve `Location:
+   https://tmsiequipment.duckdns.org/login` — idêntico ao pedido de controlo com o Host real.
+   Nota lateral, não corrigida (fora do âmbito): `forgot-password/actions.ts` constrói o
+   `redirectTo` do Supabase pelo mesmo padrão de `Host` não validado — registada em
+   `docs/BACKLOG.md` como achado novo, não corrigida nesta tarefa.
+2. **`admin/users/page.tsx` — falha silenciosa no estado de ban.** Uma falha do fetch ao
+   GoTrue Admin API (`gotrueRes.ok === false`) já não deixa `bannedIds` vazio em silêncio:
+   mostra um banner de aviso (mesmo estilo do `profilesError` já existente) e troca o badge de
+   cada utilizador por "ban status unknown" enquanto a leitura falhar. Commit `6b9a3f4`.
+   **Prova do ramo de erro: por leitura de código, não ao vivo** (GoTrue não pode ser
+   derrubado de forma limpa sem afectar toda a stack de auth, incluindo o piloto — risco
+   desproporcional ao valor da prova). O `if/else` é incondicional, sem caminho que deixe
+   `banStatusError` nulo quando `gotrueRes.ok` é falso. **Prova do ramo normal: ao vivo** —
+   `logistics.test` banido e desbanido via GoTrue Admin API (chamada de dentro do container,
+   `SERVICE_ROLE_KEY` nunca impresso), `banned_until` confirmado `null → 2126-08-12T… →
+   null`, sem resíduo. A confirmação visual do ecrã (badge a aparecer correctamente) fica para
+   a verificação do Pedro no browser, como habitual para sessões autenticadas.
+3. **`products/[id]/page.tsx` — erro de `compute_price()` engolido.** `priceRows` já não lê só
+   `.data`; um novo `priceErrors` capta `{branchId, message}` de qualquer chamada RPC com
+   `.error`, com uma linha própria na tabela (`role="alert"`, "Calculation error: …").
+   Commit `40938e3`. **Prova:** o motor de `compute_price()` (0001 §7) não costuma lançar
+   excepção Postgres real para dados em falta — tem o seu próprio array `errors[]` "soft" que
+   absorve a maioria dos casos (câmbio/fee/transporte/direito em falta) sem falhar o RPC; um
+   `.error` real do PostgREST exigiria um cenário mais raro (falha de sistema/permissão). Sem
+   forma limpa de o forçar ao vivo sem um estado persistido artificial — provado por leitura de
+   código; o caminho normal foi confirmado ao vivo pelo próprio `smoke.py` (bloco B, "engine
+   coherence" continua a bater API==BD depois do fix). **Achado novo, registado, não
+   corrigido:** o array `errors[]` do próprio `compute_price()` nunca chega a ser lido pela
+   página (nem está no tipo `PriceBreakdown`) — um "soft error" (ex.: câmbio em falta) fica
+   sem indicação nenhuma no ecrã hoje. Diferente do achado #3 original (que era sobre `.error`
+   do RPC, não sobre este array de dados) — registado em `docs/BACKLOG.md`, fora do âmbito
+   desta tarefa.
+4. **`admin/users/actions.ts` (`resetPassword`) — sucesso falso com 0 linhas.** O `UPDATE` de
+   `must_change_password` ganhou `.select()`; um array devolvido vazio agora é um erro
+   explícito ao admin. Commit `806cfad`. **Prova ao vivo:** `UPDATE … WHERE user_id =
+   '00000000…'` (garantidamente inexistente) como `authenticated` com claims de admin
+   injectadas por `psql` (sem password nenhuma), dentro de `BEGIN`/`ROLLBACK` — `UPDATE 0`,
+   `RETURNING` devolve `(0 rows)`, sem erro nenhum — exactamente a condição que o `if
+   (!flagRows || flagRows.length === 0)` agora apanha.
+5. **`config/page.tsx` — badge "in use" da FX errado.** Deixou de agrupar por
+   `(currency, effective_date)`; agora segue exactamente o critério do `tmsi.fx_rate()`
+   (0001 §7 + tie-break 0005): ignora datas futuras, primeira linha vista por moeda na mesma
+   ordenação da query (`currency, effective_date desc, created_at desc`). Commit `e4abbce`.
+   **Prova ao vivo, com os dados reais actuais:** CNY tem 3 datas distintas (4 linhas), USD
+   tem 2 datas (5 linhas, incluindo 4 no mesmo dia — o cenário da 0005), GBP tem 2 datas —
+   `select distinct currency, tmsi.fx_rate(currency) from tmsi.exchange_rates` devolve
+   exactamente uma linha por moeda (CNY=785, GBP=10, USD=1.1587), e essa linha é, em cada
+   caso, a primeira vista na ordenação da query — a lógica antiga marcaria 3 linhas "in use"
+   para o CNY (uma por data) em vez de 1.
+6. **Duplicação `overrideStatus()`/`status()` — extraída.** Novo
+   `app/src/lib/override-status.ts`; `overrides/page.tsx` e `products/[id]/page.tsx` importam
+   dali, funções locais removidas. Commit `f2c6983` (isolado do achado #3 no mesmo ficheiro
+   por *patch* manual, verificado byte-a-byte contra a versão combinada original antes de
+   committer). **Prova:** as duas implementações eram idênticas antes de extrair (confirmado);
+   a função extraída, corrida ao vivo contra os 4 `price_overrides` reais actuais, classifica
+   todos como `active` — igual ao que as duas versões antigas dariam para os mesmos dados.
+7. **`products/new/actions.ts` — `String()` → `Number()`.** Alinhado com `updateProduct`
+   (`Number(...) ?? 0`), com `if (!Number.isFinite(exw_price)) return { error: 'Invalid EXW
+   price' }` antes de qualquer chamada ao Supabase. Commit `2f9b92c`. **Prova:** `Number(
+   "abc")` → `NaN` → `Number.isFinite` → `false`, confirmado a correr dentro do próprio
+   container `tmsi-app` (mesmo runtime Node da app); chamar o Server Action em bruto por HTTP
+   para confirmar o caminho completo foi deliberadamente **não tentado** — fabricar o
+   protocolo de Server Actions do Next.js por `curl` está desaconselhado desde a i9/i10
+   (`~/CLAUDE.md`, duas tentativas abandonadas). A confirmação do formulário real fica para o
+   Pedro no browser.
+8. **`ActionState`/`ErrorText` duplicados — consolidados.** Novo
+   `app/src/lib/action-state.ts` (`ActionState<TSuccess = unknown>`) e
+   `app/src/lib/error-text.tsx`; os 5 ficheiros `actions.ts` com o padrão completo
+   `{error}|{success}` e os 3 `ErrorText` locais agora importam de `lib/`. Commit `f06752b`
+   (isolado do achado #4 em `admin/users/actions.ts` pelo mesmo método de *patch* manual).
+   **Discrepância corrigida vs. o desenho sugerido no prompt:** `TSuccess` por omissão tem de
+   ser `unknown`, não `Record<string, never>`/`Record<string, unknown>` — uma *index
+   signature* no ramo de sucesso partiria o `'error' in state` de que o `ErrorText` depende
+   para distinguir os dois ramos (`true & never = never`, tornando `{success:true}` não
+   construível). `unknown` é a identidade em intersecção (`X & unknown = X`), preserva os dois
+   ramos exactamente como estavam. Puramente tipo-a-tipo, sem mudança em runtime.
+9. **`lib/supabase-client.ts` — código morto removido.** Re-confirmado por `grep` próprio
+   (não só a revisão anterior) que `createSupabaseBrowserClient` não tinha nenhum uso; ficheiro
+   inteiro removido (não sobrava nada digno de preservar). Commit `5ccf1c6`. **Prova:** `grep`
+   final a `createSupabaseBrowserClient`/`supabase-client` em todo o `app/src` — zero
+   ocorrências (as três menções que restavam eram comentários de prosa noutros ficheiros,
+   actualizados no mesmo achado e no #1).
+
+**Deploy e regressão (F4):** commit `76c9f6a` — digest
+`sha256:c264c1194b66...` → `sha256:32c45cf2c98b21f5642cb5b2fd435359f1c7f82e6153f3df71b02aadfb64cb79`
+(imagem do CI, `Created` 2026-09-05T19:55Z), `docker compose up -d --no-deps tmsi-app`,
+container saudável, `scripts/smoke.py` **27/27** — corrido duas vezes (logo após o deploy e de
+novo no fim, depois de todas as provas ao vivo desta tarefa), sem regressão nenhuma nas duas.
+
+**VERIFICATION-PROTOCOL.md — avaliado explicitamente, não alterado:** nenhum dos achados #1/#2
+toca em nenhum teste com letra existente (A–T, nem W–Z da revisão da i9). O teste W menciona
+`/logout` só como rota de excepção do middleware, não testa o alvo do seu redirect; nenhum
+teste W–Z exercita o badge de ban-status do `/admin/users` (W–Z são sobre reset/troca de
+password, não sobre o toggle de ban). Não há teste existente a actualizar.
+
+**Achados novos, registados em `docs/BACKLOG.md`, não corrigidos nesta tarefa** (âmbito restrito
+aos 9 achados originais): (a) `forgot-password/actions.ts` com o mesmo padrão de `Host` não
+validado do achado #1 original; (b) o array `errors[]` do próprio `compute_price()` nunca chega
+ao ecrã, distinto do achado #3 original.
+
+**Recursos do VPS durante a tarefa:** disco 49%, RAM+swap disponível sempre acima do limiar de
+paragem (swap com 2,9 GB livres no momento do deploy). Sem drop-in de sudo necessário — nenhuma
+alteração de infra.
+
+---
+
 ## Tarefa 5 — Code review read-only da app — ✅ FECHADA 2026-09-05
 
 **Contexto (`docs/BACKLOG.md` tarefa 5):** revisão só de leitura — caminhos de erro,

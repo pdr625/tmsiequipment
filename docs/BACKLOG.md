@@ -65,10 +65,20 @@ dessa sessão — o espelho 1.14 já estava feito pela E5-HOMELAB, sinalização
 útil para recovery self-service; via TI a ponderar junto com o CPI.
 **8. Piloto com 2–3 colegas** *(depois de 1–4)* — onboarding por password temporária;
 recolha de feedback que informa a L2 e a i11+.
-**21. Tarefa 6 — Correcção dos 9 achados do code review** *(sessão VPS, imediatamente a
-seguir à tarefa 5)* — fecha os 2 achados de segurança, os 3 de correcção funcional e os 4 de
-manutenibilidade listados na tarefa 5 (`docs/STATE.md`), sem tocar em migrações/infra/GoTrue/
-compose; pré-condição para o piloto (8). Detalhe completo ao fechar: `docs/STATE.md`.
+~~**21. Tarefa 6 — Correcção dos 9 achados do code review**~~ ✅ **fechada 2026-09-05** (2
+achados de segurança + 3 de correcção funcional + 4 de manutenibilidade, todos fechados só em
+`app/src`, zero migração/infra/GoTrue/compose além do digest do deploy; `smoke.py` 27/27 duas
+vezes. Detalhe, mapa achado→commit→prova: `docs/STATE.md`.)
+**22. `forgot-password/actions.ts` — mesmo padrão de `Host` não validado do achado #1 da
+tarefa 6** *(achado durante a tarefa 6, não corrigido — fora do âmbito dos 9 originais)* —
+constrói o `redirectTo` do Supabase a partir do `Host` do pedido, sem allowlist; risco menor
+que o achado original (vai para uma chamada de API, não para um redirect de browser), mesma
+classe de problema.
+**23. `compute_price()`'s `errors[]` nunca chega ao ecrã** *(achado durante a tarefa 6, não
+corrigido)* — o motor tem o seu próprio array de "soft errors" (câmbio/fee/transporte/direito
+em falta) que nunca é lido por `products/[id]/page.tsx` nem está no tipo `PriceBreakdown`; um
+cálculo com dados em falta fica hoje sem indicação nenhuma no ecrã, diferente do `.error` de
+transporte do RPC que a tarefa 6 já corrigiu (achado #3).
 
 ## 🟡 Médias — decisões tuas e melhorias com contexto
 
