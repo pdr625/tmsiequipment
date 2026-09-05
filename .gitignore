@@ -21,6 +21,10 @@ dist/
 *.log
 npm-debug.log*
 
+# python (scripts/smoke.py)
+__pycache__/
+*.pyc
+
 # editors / OS
 .vscode/
 .idea/
