@@ -24,8 +24,10 @@ export async function createProduct(_prevState: CreateProductState, formData: Fo
   const name = String(formData.get('name') ?? '');
   const item_type = String(formData.get('item_type') ?? '');
   const primary_branch = String(formData.get('primary_branch') ?? '');
-  const exw_price = String(formData.get('exw_price') ?? '');
+  const exw_price = Number(formData.get('exw_price') ?? 0);
   const currency = String(formData.get('currency') ?? '');
+
+  if (!Number.isFinite(exw_price)) return { error: 'Invalid EXW price' };
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
