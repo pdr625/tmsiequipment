@@ -366,87 +366,208 @@ rollback;
 
 
 # ---------------------------------------------------------------------------
-# 4.4 R — same-day exchange-rate correction (0005, a real bug the Pedro
-# hit live). Self-contained rather than depending on a rate already
-# having been entered today (that's incidental — most days nobody has
-# touched /config yet when this suite runs): creates its own baseline +
-# correction for today under a currency that already has real historical
-# data, so the "historical query is unaffected" half has something real
-# to compare against. Both inserted rows are deleted afterward — a real
-# REST write, cleanly reverted, not a ROLLBACK (this one wants to prove
-# the rows really persist and are independently queryable mid-test, the
-# same shape as an admin using /config twice in one day for real).
+# 4.4 R — 0007's approval workflow. Supersedes the old direct-insert
+# same-day FX test (0005): tmsi.config_write on exchange_rates was
+# DROPPED by 0007, so a direct POST that used to succeed for finance now
+# correctly fails — asserted below as the new, intentional behaviour,
+# not a regression left unexplained. exchange_rates is one of the three
+# admin-only-approval types (0007 §1: no branch identity to hang BM
+# eligibility on) — smoke has no admin test account by design (see the
+# NOTE above TEST_USERS: "a tua conta pessoal nunca entra no smoke"), so
+# this block proves exactly what's provable without one: the direct-write
+# bypass is closed, a pending proposal is invisible to fx_rate(), and an
+# ineligible caller (finance, on their own proposal) is refused. Cleanup
+# is a plain superuser DELETE (docker exec as `postgres`, no claims) —
+# unrelated to the app-level admin role this suite deliberately avoids.
 # ---------------------------------------------------------------------------
-def block_fx_same_day_correction(token, claims_uuid):
-    # Same tie-break fx_rate() itself uses (0005: effective_date desc,
-    # created_at desc) — a naive query without the second key can pick a
-    # since-superseded same-day row instead of the one fx_rate() would
-    # actually return for that date, a real mismatch this suite's own
-    # required failure-branch proof (restriction 4) caught: this exact
-    # database already has two 2026-09-04 CNY rows from earlier testing.
+def block_proposal_workflow_exchange_rates(token, claims_uuid):
     candidates = psql_rows(
         "select currency, effective_date, rate_per_eur from tmsi.exchange_rates "
         "where effective_date < current_date order by effective_date desc, created_at desc limit 1;"
     )
     if not candidates:
-        check("R: same-day FX correction", True, "SKIP — no historical exchange rate to compare against")
+        check("R: approval workflow (exchange_rates)", True, "SKIP — no historical exchange rate to compare against")
         return
-    currency, hist_date, hist_rate = candidates[0]
+    currency, _hist_date, hist_rate = candidates[0]
     today = db_today()
+    correction_rate = str(float(hist_rate) + 1.0)
 
-    inserted_ids = []
-
-    def insert_today(rate):
-        status, created = http(
-            "POST",
-            f"{REST}/exchange_rates",
-            token=token,
-            body={"currency": currency, "rate_per_eur": rate, "effective_date": str(today), "source": "smoke-test"},
-            prefer="return=representation",
-        )
-        if status == 201 and isinstance(created, list) and len(created) == 1:
-            inserted_ids.append(created[0]["id"])
-            return True
-        return False
-
-    baseline_rate = str(float(hist_rate) + 1.0)
-    correction_rate = str(float(hist_rate) + 2.0)
-    baseline_ok = insert_today(baseline_rate)
-    check("R: first same-day rate accepted", baseline_ok, f"currency={currency}")
-    correction_ok = baseline_ok and insert_today(correction_rate)
+    status, _body = http(
+        "POST",
+        f"{REST}/exchange_rates",
+        token=token,
+        body={"currency": currency, "rate_per_eur": correction_rate, "effective_date": str(today), "source": "smoke-test"},
+    )
     check(
-        "R: a second same-day rate for the same currency is accepted (0005), not a duplicate-key error",
-        correction_ok,
+        "R: direct exchange_rates INSERT is refused even for finance (0007 dropped config_write)",
+        status in (401, 403),
+        f"http_{status}",
     )
 
-    if correction_ok:
-        status, fx_result = http("POST", f"{REST}/rpc/fx_rate", token=token, body={"p_currency": currency})
-        check(
-            "R: fx_rate() reflects the LATEST same-day entry, not the first one",
-            status == 200 and float(fx_result) == float(correction_rate),
-            f"fx_rate={fx_result} expected={correction_rate}",
-        )
+    status, before_fx = http("POST", f"{REST}/rpc/fx_rate", token=token, body={"p_currency": currency})
+    check("R: fx_rate() reachable before proposing", status == 200, f"http_{status}")
 
-        status, hist_fx = http(
-            "POST", f"{REST}/rpc/fx_rate", token=token, body={"p_currency": currency, "p_date": hist_date}
-        )
-        check(
-            "R: a historical-date query is insensitive to today's corrections (returns the period's own rate)",
-            status == 200 and float(hist_fx) == float(hist_rate) and float(hist_fx) != float(correction_rate),
-            f"historical={hist_fx} today_correction={correction_rate}",
-        )
+    status, created = http(
+        "POST",
+        f"{REST}/price_proposals",
+        token=token,
+        body={
+            "target_table": "exchange_rates",
+            "branch_id": None,
+            "payload": {"currency": currency, "rate_per_eur": correction_rate, "effective_date": str(today), "source": "smoke-test"},
+            "reason": "smoke: exchange_rates proposal workflow",
+            "proposed_by": claims_uuid,
+        },
+        prefer="return=representation",
+    )
+    proposal_ok = status == 201 and isinstance(created, list) and len(created) == 1
+    check("R: finance can propose an exchange_rates change", proposal_ok, f"http_{status}")
+    if not proposal_ok:
+        return
+    proposal_id = created[0]["id"]
 
-    if inserted_ids:
-        for rid in inserted_ids:
-            http("DELETE", f"{REST}/exchange_rates?id=eq.{rid}", token=token)
-        remaining = psql_rows(
-            f"select count(*) from tmsi.exchange_rates where id in ({','.join(str(i) for i in inserted_ids)});"
+    status, pending_fx = http("POST", f"{REST}/rpc/fx_rate", token=token, body={"p_currency": currency})
+    check(
+        "R: a pending proposal is invisible to fx_rate() — engine unchanged",
+        status == 200 and float(pending_fx) == float(before_fx),
+        f"before={before_fx} pending={pending_fx}",
+    )
+
+    status, _decide_body = http(
+        "POST",
+        f"{REST}/rpc/decide_price_proposal",
+        token=token,
+        body={"p_proposal_id": proposal_id, "p_decision": "approved", "p_reason": None},
+    )
+    check(
+        "R: an ineligible caller (finance, on their own exchange_rates proposal) is refused",
+        status >= 400,
+        f"http_{status}",
+    )
+
+    psql_rows(f"delete from tmsi.price_proposals where id = {proposal_id};")
+    remaining = psql_rows(f"select count(*) from tmsi.price_proposals where id = {proposal_id};")
+    check(
+        "R: no residue — the test proposal was deleted",
+        bool(remaining) and remaining[0][0] == "0",
+        f"remaining={remaining[0][0] if remaining else '?'}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# 4.4 S — 0007's approval workflow, full flow via price_overrides (a
+# branch-scoped type — branch_manager.test can approve, unlike
+# exchange_rates above, so this is where the complete propose->approve->
+# effect proof and the wrong-branch/reject proofs actually live).
+# Overrides rather than margin_grids deliberately: an override is a new,
+# independently deletable row, never an in-place edit of a live branch's
+# real config — cleanup here can't corrupt a real tier's margin even if
+# a later step fails, unlike mutating tmsi.margin_grids directly would.
+# ---------------------------------------------------------------------------
+def block_proposal_workflow_overrides(finance_token, finance_uuid, bm_token, bm_uuid):
+    own_branches = {r[0] for r in psql_rows(f"select branch_id from tmsi.user_roles where user_id = '{bm_uuid}' and role = 'branch_manager' and branch_id is not null;")}
+    if not own_branches:
+        check("S: approval workflow (price_overrides)", True, "SKIP — branch_manager.test has no branch_id role row")
+        return
+    own_branch = sorted(own_branches)[0]
+    own_branches_sql = ",".join(f"'{b}'" for b in own_branches)
+    other_candidates = psql_rows(
+        f"select id from tmsi.branches where active and id not in ({own_branches_sql}) limit 1;"
+    )
+    product_candidates = psql_rows("select id from tmsi.products where status = 'active' and item_type = 'equipment' limit 1;")
+    if not other_candidates or not product_candidates:
+        check("S: approval workflow (price_overrides)", True, "SKIP — no other active branch or active equipment product found")
+        return
+    other_branch = other_candidates[0][0]
+    product_id = product_candidates[0][0]
+    today = db_today()
+
+    def compute_margin(branch_id):
+        status, result = http("POST", f"{REST}/rpc/compute_price", token=finance_token, body={"p_product": product_id, "p_branch": branch_id})
+        row = result[0] if isinstance(result, list) and result else None
+        return status, (float(row["margin"]) if row and row.get("margin") is not None else None)
+
+    status, baseline_margin = compute_margin(own_branch)
+    check("S: compute_price reachable for the own-branch baseline", status == 200 and baseline_margin is not None, f"http_{status}")
+    if baseline_margin is None:
+        return
+    proposed_margin = round(baseline_margin + 0.05, 4)
+
+    def propose(branch_id, margin, reason):
+        status, created = http(
+            "POST",
+            f"{REST}/price_proposals",
+            token=finance_token,
+            body={
+                "target_table": "price_overrides",
+                "branch_id": branch_id,
+                "payload": {
+                    "product_id": product_id, "branch_id": branch_id, "kind": "margin", "value": margin,
+                    "reason": reason, "valid_from": str(today), "valid_to": None,
+                },
+                "reason": reason,
+                "proposed_by": finance_uuid,
+            },
+            prefer="return=representation",
         )
-        check(
-            "R: no residue — every row this test inserted was deleted",
-            bool(remaining) and remaining[0][0] == "0",
-            f"inserted={len(inserted_ids)} remaining={remaining[0][0] if remaining else '?'}",
-        )
+        return (created[0]["id"] if status == 201 and isinstance(created, list) and created else None)
+
+    own_id = propose(own_branch, proposed_margin, "smoke: price_overrides approval-flow proposal")
+    other_id = propose(other_branch, proposed_margin, "smoke: price_overrides wrong-branch proposal")
+    reject_id = propose(own_branch, proposed_margin, "smoke: price_overrides reject-flow proposal")
+    check(
+        "S: finance can propose price_overrides changes",
+        bool(own_id and other_id and reject_id),
+        f"own={own_id} other={other_id} reject={reject_id}",
+    )
+    if not (own_id and other_id and reject_id):
+        for pid in (own_id, other_id, reject_id):
+            if pid:
+                psql_rows(f"delete from tmsi.price_proposals where id = {pid};")
+        return
+
+    status, pending_margin = compute_margin(own_branch)
+    check(
+        "S: a pending price_overrides proposal is invisible to compute_price()",
+        status == 200 and pending_margin == baseline_margin,
+        f"before={baseline_margin} pending={pending_margin}",
+    )
+
+    status, _body = http("POST", f"{REST}/rpc/decide_price_proposal", token=bm_token, body={"p_proposal_id": other_id, "p_decision": "approved", "p_reason": None})
+    check("S: branch_manager approving a proposal OUTSIDE their branch is refused", status >= 400, f"http_{status}")
+
+    status, _body = http("POST", f"{REST}/rpc/decide_price_proposal", token=bm_token, body={"p_proposal_id": own_id, "p_decision": "approved", "p_reason": "smoke: approved"})
+    check("S: branch_manager approving a proposal for their OWN branch succeeds", status in (200, 204), f"http_{status}")
+    status, after_margin = compute_margin(own_branch)
+    check(
+        "S: full propose -> approve -> effect — compute_price() now reflects the approved override",
+        status == 200 and after_margin == proposed_margin,
+        f"expected={proposed_margin} got={after_margin}",
+    )
+
+    status, _body = http("POST", f"{REST}/rpc/decide_price_proposal", token=bm_token, body={"p_proposal_id": reject_id, "p_decision": "rejected", "p_reason": None})
+    check("S: rejecting a price_overrides proposal without a reason is refused", status >= 400, f"http_{status}")
+    status, _body = http("POST", f"{REST}/rpc/decide_price_proposal", token=bm_token, body={"p_proposal_id": reject_id, "p_decision": "rejected", "p_reason": "smoke: not needed"})
+    check("S: rejecting with a reason succeeds", status in (200, 204), f"http_{status}")
+    status, still_margin = compute_margin(own_branch)
+    check(
+        "S: a rejected proposal never reaches compute_price() — value unchanged from the approved one",
+        status == 200 and still_margin == proposed_margin,
+        f"expected={proposed_margin} got={still_margin}",
+    )
+
+    materialized = psql_rows(f"select materialized_id from tmsi.price_proposals where id = {own_id};")
+    if materialized and materialized[0][0] and materialized[0][0] != "":
+        psql_rows(f"delete from tmsi.price_overrides where id = {materialized[0][0]};")
+    for pid in (own_id, other_id, reject_id):
+        psql_rows(f"delete from tmsi.price_proposals where id = {pid};")
+    remaining_proposals = psql_rows(f"select count(*) from tmsi.price_proposals where id in ({own_id},{other_id},{reject_id});")
+    status, restored_margin = compute_margin(own_branch)
+    check(
+        "S: no residue — proposals and the materialized override were deleted, compute_price() back to baseline",
+        remaining_proposals and remaining_proposals[0][0] == "0" and status == 200 and restored_margin == baseline_margin,
+        f"remaining={remaining_proposals[0][0] if remaining_proposals else '?'} margin={restored_margin} baseline={baseline_margin}",
+    )
 
 
 def main():
@@ -475,7 +596,8 @@ def main():
     block_activation_guard(tokens["product_manager"])
     block_override_reason_guard(tokens["finance"])
     block_exw_review_transition(claims["product_manager"])
-    block_fx_same_day_correction(tokens["finance"], claims["finance"])
+    block_proposal_workflow_exchange_rates(tokens["finance"], claims["finance"])
+    block_proposal_workflow_overrides(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
 
     total = len(RESULTS)
     print(f"\n=== {total - FAILURES}/{total} passed ===")
