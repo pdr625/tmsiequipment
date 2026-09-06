@@ -86,9 +86,12 @@ fixture descartável, resíduo zero. Detalhe: `docs/STATE.md`.)
 
 ## 🟡 Médias — decisões tuas e melhorias com contexto
 
-**18. Alerta idade-FX** — **promovido 2026-09-06, o mais urgente dos pequenos** (era item
-⚪ 18, "Métrica idade-FX no vps-stats"). Continua pequeno em esforço, mas passa à frente dos
-restantes ⚪ por prioridade do Pedro — próxima sessão executável a seguir à E4.
+~~**18. Alerta idade-FX**~~ ✅ **fechada 2026-09-06** — métrica publicada em `status.json`
+(`tmsi_fx_ages_days` por moeda + `tmsi_fx_max_age_days` agregado), via novo endpoint interno
+`/api/fx-age` atrás de um bearer token próprio (nenhuma credencial de BD nova no
+`vps-stats`, hardening intocado). Limiar/alerta/tile ficam no homelab — pendência registada
+no canal D-PEND (`VPS.md`, «Pendência TMSI item 18»), com um limiar proposto (7/14 dias)
+para o Pedro validar lá. Detalhe completo: `docs/STATE.md`.
 ~~**9. L2 — quem aprova**~~ ✅ **decidida E implementada 2026-09-06** — Branch Manager da
 filial afectada ou um admin, um aprovador basta; «quem edita não aprova» **não se aplica**
 (admin pode aprovar as próprias modificações — decisão consciente da fase piloto, limitação

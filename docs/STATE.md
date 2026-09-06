@@ -3,11 +3,123 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E4 — workflow de aprovação (migração 0007) — ✅ FECHADA 2026-09-06.** Ver
-secção própria abaixo. Próximo, por `docs/BACKLOG.md` e prioridade do Pedro: item 18 (alerta
-idade-FX) · item 14 (medição a 50-70 artigos reais) · item 26 (white-label/branding, sessão(ões)
-própria(s)). Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3
-(i1–i10), E4, E5-VPS e as migrações 0003/0004/0005/0006/0007 estão fechadas.
+**Etapa actual: item 18 — alerta de idade dos câmbios — ✅ FECHADA 2026-09-06.** Ver secção
+própria abaixo. Próximo, por `docs/BACKLOG.md` e prioridade do Pedro: item 14 (medição a
+50-70 artigos reais) · item 26 (white-label/branding, sessão(ões) própria(s)). Ordem e
+critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E4, E5-VPS e
+as migrações 0003/0004/0005/0006/0007 estão fechadas.
+
+## Item 18 — Alerta de idade dos câmbios (métrica FX no vps-stats/T8) — ✅ FECHADA 2026-09-06
+
+**Contexto:** câmbios velhos produzem preços errados silenciosamente — o risco funcional
+mais próximo do negócio que restava. Entregável: idade do câmbio mais recente por moeda
+publicada em `status.json` (`~/atelier-vps/vps-stats.sh`, timer de 5 min), **sem** meter
+dependência Postgres no colector endurecido — o motivo pelo qual este item esteve adiado
+continua válido e foi respeitado.
+
+**F0 — três vias medidas, escolhida a (a), justificação citada no commit
+(`43468cf`):**
+1. **(a) escolhida — novo endpoint interno na app, `GET /api/fx-age`.** `tmsi-app` já corre
+   com `SERVICE_ROLE_KEY` em runtime; `service_role` tem `rolbypassrls=true` **e** GRANT já
+   concedido em `tmsi.exchange_rates` (confirmado via `pg_roles`/`information_schema`, não
+   assumido) — zero grant novo. A rota fica atrás de um bearer token próprio e estreito
+   (`STATS_INTERNAL_TOKEN`, nunca `SERVICE_ROLE_KEY` reutilizado, comparação
+   `timingSafeEqual`), lido pelo colector de um ficheiro `chmod 600` **separado** do `.env`
+   principal (`~/.config/tmsi/stats-internal-token`) — um colector comprometido só vaza este
+   token, nunca `POSTGRES_PASSWORD`/`JWT_SECRET`/`SERVICE_ROLE_KEY`. `172.20.40.1:3001` só é
+   alcançável a partir do próprio host (confirmado: o bind do Docker é a esse IP específico,
+   não `0.0.0.0` — não é rota pública), mas a fronteira real e suficiente por si só é o
+   token, não a topologia de rede: confirmado ao vivo que o mesmo caminho via
+   `tmsiequipment.duckdns.org/api/fx-age` (o `location /` do nginx proxya tudo, sem excepção
+   nova nenhuma) devolve **401** sem o token, exactamente como o pedido directo à bridge.
+   `middleware.ts` ganhou `/api/fx-age` em `PUBLIC_PATHS` — achado apanhado antes de
+   implementar (sem isto, o middleware de sessão redirigiria a `/login` antes do próprio
+   token chegar a ser verificado), mesmo raciocínio já aplicado a `/api/health`.
+2. **(b) rejeitada — PostgREST anónimo a uma vista de idades.** `anon` tem **zero** grants
+   em `tmsi.exchange_rates` hoje (confirmado por `information_schema.role_table_grants`) —
+   um endpoint assim exigiria um GRANT novo a `anon`, exactamente o tipo de alargamento que
+   as fronteiras 0003/0004 foram construídas para impedir, mesmo só expondo idades sem
+   valores.
+3. **(c) rejeitada — job separado fora do `vps-stats` a escrever um ficheiro.** Precisaria
+   da sua própria credencial de BD nalgum lado (ex. `docker exec psql`, como o
+   `tmsi-backup.service`) — só desloca o problema para um terceiro processo, sem reduzir
+   superfície nenhuma, e duplicaria a lógica de selecção do `fx_rate()` sem reutilizar
+   código/tipos já existentes na app.
+
+**Semântica da idade, contra o schema real (não assumida):** `tmsi.fx_rate()` lida por
+`psql`, confirmado `where currency = p_currency and effective_date <= p_date order by
+effective_date desc, created_at desc limit 1`. `/api/fx-age` mirra este WHERE/ORDER BY
+**verbatim** via parâmetros de query do PostgREST (`effective_date=lte.<hoje>&order=
+currency.asc,effective_date.desc,created_at.desc`) — nunca uma cópia da regra em JS; o
+código só lê o primeiro resultado por moeda de uma lista já correctamente ordenada pelo
+próprio Postgres. `hoje` é `new Date()` dentro do próprio container `tmsi-app` — seguro
+especificamente porque esse container partilha o relógio UTC do `supabase-db` (confirmado
+ao vivo, `date -u` idêntico nos dois) — **não** a mesma situação do bug do item 25
+(`scripts/smoke.py`, um script do HOST, fuso diferente do da BD); comentário no código a
+avisar explicitamente contra copiar este raciocínio para um script do host. Moedas vêm
+inteiramente dos dados (`distinct currency` em `exchange_rates`) — nunca uma lista
+hardcoded; EUR está correctamente ausente (moeda base, nunca guardada nesta tabela,
+`compute_price()` nunca chama `fx_rate()` para ela).
+
+**F1/F2:** `app/src/app/api/fx-age/route.ts` (novo); `STATS_INTERNAL_TOKEN` gerado
+(`openssl rand -hex 32`), em `deploy/supabase/.env` + `~/.config/tmsi/stats-internal-token`
+(hashes SHA-256 comparados para confirmar as duas cópias idênticas, nunca os valores
+impressos); `docker-compose.yml`/`.env.example`/`DEPLOY.md` actualizados.
+`~/atelier-vps/vps-stats.sh` ganhou o bloco de leitura (curl com o token, timeout 5s, `null`/
+`{}` em qualquer falha — nunca aborta o gerador, mesma filosofia do bloco de idade do
+backup já existente) e as duas chaves novas no `jq -n` final. Digest
+`sha256:fe4c4f3d61411e3feaf9a0ff3daa347b4aa8b75716910e82610b0cd96551f883`. Zero alteração ao
+endurecimento do `vps-stats.service` (`ProtectSystem=strict`/`ProtectHome=read-only`/
+`ReadWritePaths` intocados, confirmado por `systemctl show` antes/depois — `PrivateNetwork=
+no` já permitia o `curl` interno sem mudança nenhuma).
+
+**F3 — as 6 provas:**
+1. **Cruzamento SQL:** `status.json` real, servido pelo túnel, continha `{"CNY":0,"GBP":2,
+   "USD":2}`/`max=2` — cruzado contra uma consulta SQL manual (`current_date -
+   effective_date` da linha vencedora por moeda) com o resultado **byte-a-byte idêntico**.
+2. **Ramo de mudança, fluxo real (não escrita directa):** finance propôs uma correcção GBP
+   para hoje via `/price_proposals` (REST); aprovada por um `COMMIT` real (não `ROLLBACK` —
+   tinha de persistir para o timer seguinte ver) com as claims JWT do admin real (`false` no
+   3.º argumento de `set_config`, sessão inteira, não local a uma transacção — achado
+   apanhado ao vivo: a 1.ª tentativa usou `true`/local e falhou com `Forbidden` porque
+   `auth.uid()` já tinha voltado a `null` antes do `decide_price_proposal()` correr, cada
+   `psql` sem `begin;` explícito é a sua própria transacção implícita). GBP caiu de 2 para
+   0 de imediato em `/api/fx-age`, e **confirmado na execução seguinte real do timer**
+   (5 min depois, sem intervenção nenhuma) em `status.json`. Fixture revertido (`DELETE` da
+   proposta + da linha materializada) — `exchange_rates` de volta a 12 linhas, `0` propostas
+   residuais — e confirmado, na execução seguinte do timer outra vez, que GBP voltou a 2.
+3. `status.json` sem nenhum valor de câmbio — `grep` ao ficheiro real servido, zero
+   ocorrências.
+4. Binding/ACL do `:8080`/`status.json` inalterados — `nginx -T` mostra `allow
+   10.13.13.0/24; deny all;` intocado; `curl 127.0.0.1:8080/status.json` → `403` (prova o
+   `deny` do nginx; a nota já estabelecida do `~/CLAUDE.md` aplica-se — tráfego local sai por
+   `lo`, isto não prova a camada `ufw`, que também não foi tocada nesta sessão).
+5. `vps-stats.service` continua com o mesmo endurecimento — `systemctl show` idêntico
+   antes/depois desta sessão (`ProtectSystem=strict`, `ProtectHome=read-only`,
+   `PrivateNetwork=no`, `User=pedro`, sem alteração nenhuma ao ficheiro do unit).
+6. `scripts/smoke.py` **38/38**.
+
+**Achado real, não escondido:** o smoke acusou uma falha genuína a meio desta sessão —
+login de `branch_manager.test` a devolver `invalid_credentials`. `audit_log` mostrou duas
+`UPDATE`s reais em `tmsi.profiles` horas antes (actor = admin, depois actor = o próprio) —
+o padrão exacto de um reset de password pelo admin seguido da troca obrigatória, quase de
+certeza o Pedro a validar a E4 no browser (as provas de auto-aprovação/propor que tinham
+ficado por cobrir). Corrigido pela mesma via que a própria app usa
+(`PUT /admin/users/{id}` da Admin API do GoTrue, `admin/users/actions.ts`), gerando uma
+password nova com o mesmo charset de 4 classes que `generateStrongPassword()` já usa —
+a 1.ª tentativa com `openssl rand -base64` foi recusada pela política de password
+(só 3 classes, faltava carácter especial). Ficheiro de fixture
+(`~/tmp/tmsi-sudo/branch_manager-test-password.txt`) actualizado, nunca impresso; smoke
+confirmado 38/38 depois. Nenhuma alteração ao `must_change_password` desta conta (chamada
+directa à Admin API, não a Server Action da app).
+
+**F4 — pendência homelab (canal D-PEND, `VPS.md`):** chaves exactas publicadas
+(`tmsi_fx_ages_days`/`tmsi_fx_max_age_days`), limiar proposto (aviso 7 dias, alarme 14 —
+o Pedro valida no homelab, sem histórico real para os calibrar melhor aqui), pedido de
+13.ª métrica no digest T8 + tile no dashboard.
+
+**F5 (este fecho):** `docs/BACKLOG.md` (item 18 riscado); este ficheiro; dossier
+(`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`).
 
 ## E4 — Workflow de aprovação (migração 0007) — ✅ FECHADA 2026-09-06
 
