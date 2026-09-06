@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { buildXlsx } from '@/lib/xlsx-export';
+import { getBranding, getBrandingLogoBuffer, footerLines, slugify } from '@/lib/branding';
 
 type ProductRow = {
   id: string;
@@ -50,6 +51,8 @@ export async function GET() {
   const currencies = seesCosts
     ? [...new Set(products.map((p) => p.currency).filter((c): c is string => c !== null))].sort()
     : [];
+  const branding = await getBranding();
+  const logo = await getBrandingLogoBuffer(branding.logoId);
 
   const headers = ['Product', 'Type', 'Status', 'Branch', ...(seesCosts ? ['EXW price', 'Currency'] : [])];
   const widths = [28, 12, 12, 10, ...(seesCosts ? [12, 10] : [])];
@@ -64,7 +67,7 @@ export async function GET() {
 
   const buffer = await buildXlsx({
     sheetTitle: 'Products',
-    reportTitle: 'TMSI Equipment — Products',
+    reportTitle: `${branding.displayName} — Products`,
     scope: 'All products visible to your role',
     currency: currencies.join(', ') || '—',
     generatedBy: user.email ?? user.id,
@@ -72,9 +75,13 @@ export async function GET() {
     headers,
     widths,
     rows,
+    footerLines: footerLines(branding),
+    primaryColor: branding.primaryColor,
+    fontFamily: branding.fontFamily,
+    logo,
   });
 
-  const filename = `tmsi-products-${generatedAt.toISOString().slice(0, 10)}.xlsx`;
+  const filename = `${slugify(branding.displayName)}-products-${generatedAt.toISOString().slice(0, 10)}.xlsx`;
 
   // `as unknown as BodyInit`: a plain Uint8Array is a spec-valid Response body (and
   // works correctly at runtime, in every runtime this app targets) but

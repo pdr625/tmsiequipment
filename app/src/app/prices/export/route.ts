@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { buildXlsx } from '@/lib/xlsx-export';
+import { getBranding, getBrandingLogoBuffer, footerLines, slugify } from '@/lib/branding';
 
 type BranchPriceRow = {
   product_id: string;
@@ -74,7 +75,9 @@ export async function GET(request: NextRequest) {
 
   const { data: canReadCosts } = await supabase.schema('tmsi').rpc('can_read_costs');
   const generatedAt = new Date();
-  const filename = `tmsi-prices-${branch ?? 'all'}-${generatedAt.toISOString().slice(0, 10)}.xlsx`;
+  const branding = await getBranding();
+  const logo = await getBrandingLogoBuffer(branding.logoId);
+  const filename = `${slugify(branding.displayName)}-prices-${branch ?? 'all'}-${generatedAt.toISOString().slice(0, 10)}.xlsx`;
 
   if (canReadCosts) {
     let query = supabase
@@ -92,7 +95,7 @@ export async function GET(request: NextRequest) {
     const currencies = [...new Set(rows.map((r) => r.currency))].sort();
     const buffer = await buildXlsx({
       sheetTitle: 'Price list',
-      reportTitle: 'TMSI Equipment — Price list',
+      reportTitle: `${branding.displayName} — Price list`,
       scope: branch ?? 'All branches',
       currency: currencies.join(', ') || '—',
       generatedBy: user.email ?? user.id,
@@ -109,6 +112,10 @@ export async function GET(request: NextRequest) {
         r.ref_price,
         r.alert,
       ]),
+      footerLines: footerLines(branding),
+      primaryColor: branding.primaryColor,
+      fontFamily: branding.fontFamily,
+      logo,
     });
     return respond(buffer, filename);
   }
@@ -128,7 +135,7 @@ export async function GET(request: NextRequest) {
   const currencies = [...new Set(rows.map((r) => r.currency))].sort();
   const buffer = await buildXlsx({
     sheetTitle: 'Price list',
-    reportTitle: 'TMSI Equipment — Price list',
+    reportTitle: `${branding.displayName} — Price list`,
     scope: branch ?? 'All branches',
     currency: currencies.join(', ') || '—',
     generatedBy: user.email ?? user.id,
@@ -136,6 +143,10 @@ export async function GET(request: NextRequest) {
     headers: ['Product', 'Branch', 'Currency', 'Min price', 'Ref price', 'Lead time (days)'],
     widths: [28, 10, 10, 12, 12, 16],
     rows: rows.map((r) => [`${r.name} (${r.product_id})`, r.branch_id, r.currency, r.min_price, r.ref_price, r.lead_time_days]),
+    footerLines: footerLines(branding),
+    primaryColor: branding.primaryColor,
+    fontFamily: branding.fontFamily,
+    logo,
   });
   return respond(buffer, filename);
 }

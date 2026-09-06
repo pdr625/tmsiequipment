@@ -7,7 +7,7 @@
 
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { NOTICE_TEXT } from '@/lib/notice';
+import { getBranding, footerLines } from '@/lib/branding';
 import { PrintButton } from './print-button';
 
 type BranchPriceRow = {
@@ -72,11 +72,19 @@ export default async function PricesPage({
   // for scope, and no on-screen use for the rest).
   const generatedAt = new Date();
   const currencies = [...new Set((rows ?? []).map((r) => (r as { currency: string }).currency))].sort();
+  const branding = await getBranding();
+  const footer = footerLines(branding);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <div className="mb-4 hidden print:block">
-        <h1 className="text-lg font-bold">TMSI Equipment — Price list</h1>
+      <div className="mb-4 hidden print:block" style={{ fontFamily: branding.fontFamily }}>
+        {branding.logoId !== null && (
+          <img src="/api/branding/logo" alt="" className="mb-2 h-10 w-auto" />
+        )}
+        <h1 className="text-lg font-bold" style={{ color: branding.primaryColor }}>
+          {branding.displayName} — Price list
+        </h1>
+        {branding.tagline !== '' && <p className="text-sm text-gray-600">{branding.tagline}</p>}
         <p className="text-sm">Scope: {branch ?? 'All branches'}</p>
         <p className="text-sm">Currency: {currencies.join(', ') || '—'}</p>
         <p className="text-sm">
@@ -188,11 +196,13 @@ export default async function PricesPage({
         </table>
       )}
 
-      <div className="mt-6 hidden text-xs text-gray-500 print:block">
-        {NOTICE_TEXT.map((line) => (
-          <p key={line}>{line}</p>
-        ))}
-      </div>
+      {footer.length > 0 && (
+        <div className="mt-6 hidden text-xs text-gray-500 print:block" style={{ fontFamily: branding.fontFamily }}>
+          {footer.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

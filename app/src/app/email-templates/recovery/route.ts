@@ -5,6 +5,8 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
+import { getBrandingInternal } from '@/lib/branding';
+
 // Fetched directly by GoTrue (GOTRUE_MAILER_TEMPLATES_RECOVERY, internal
 // docker-network URL, not through nginx/the public internet) and parsed as
 // a Go template — the {{ .X }} placeholders below are GoTrue's, not ours;
@@ -18,12 +20,16 @@
 // different browser), which was breaking every real attempt. verifyOtp with
 // a token_hash needs no such local state, so it works regardless of where
 // the link is opened.
-const TEMPLATE = `<h2>Reset password</h2>
+//
+// item 26: display name is now the configured one (getBrandingInternal —
+// this route has no session/cookies at all, GoTrue calls it directly),
+// never a hardcoded client name.
+export async function GET() {
+  const branding = await getBrandingInternal();
+  const template = `<h2>Reset password</h2>
 
-<p>Follow this link to reset the password for your TMSI Equipment Price Listing account:</p>
+<p>Follow this link to reset the password for your ${branding.displayName} account:</p>
 <p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery">Reset password</a></p>
 `;
-
-export function GET() {
-  return new Response(TEMPLATE, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  return new Response(template, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }

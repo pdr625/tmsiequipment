@@ -5,74 +5,25 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
-'use client';
-
-import { useActionState } from 'react';
-import Link from 'next/link';
-import { signIn, type SignInState } from './actions';
+import { getBranding } from '@/lib/branding';
 import { PROPRIETARY_NOTICE } from '@/lib/notice';
+import { LoginForm } from './form';
 
-const initialState: SignInState = undefined;
-
-export default function LoginPage() {
-  const [state, formAction, pending] = useActionState(signIn, initialState);
+// item 26: split into a server shell (this file, fetches branding — no
+// session exists yet at /login, so tmsi.v_current_branding resolves as
+// `anon`, which 0008 deliberately allows read on) and a client form
+// (./form.tsx, unchanged interactive bits: useActionState needs
+// 'use client', which can't fetch branding itself since it has no
+// request/cookies context — same server/client split already used by
+// every other gated page in this app, e.g. config/page.tsx + forms.tsx).
+export default async function LoginPage() {
+  const branding = await getBranding();
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold">TMSI Equipment Price Listing</h1>
-
-        <form action={formAction} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              placeholder="you@company.com"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {state?.error && (
-            <p role="alert" className="text-sm text-red-600">
-              {state.error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={pending}
-            className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {pending ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-
-        <p className="mt-4 text-center text-sm">
-          <Link href="/forgot-password" className="text-gray-600 underline">
-            Forgot password?
-          </Link>
-        </p>
+        <h1 className="mb-6 text-center text-xl font-semibold">{branding.displayName}</h1>
+        <LoginForm />
       </div>
 
       <footer className="mt-8 max-w-sm text-center text-xs text-gray-500">

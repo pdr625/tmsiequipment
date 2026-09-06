@@ -25,7 +25,7 @@ export function CreateProductForm({
     <form action={formAction} className="space-y-4">
       <div>
         <label htmlFor="id" className="mb-1 block text-sm font-medium">
-          TMSI code
+          Product code
         </label>
         <input
           id="id"

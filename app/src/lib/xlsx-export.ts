@@ -6,7 +6,19 @@
  */
 
 import ExcelJS from 'exceljs';
-import { NOTICE_TEXT } from './notice';
+
+// item 26: the italic grey footer used to be lib/notice.ts's NOTICE_TEXT —
+// the software's OWN licence/copyright notice, hardcoded. Restriction (d)
+// of the prompt makes that a real bug, not a style choice: licence data
+// must never appear in an exported document. footerLines now comes from
+// the caller (branding config, tmsi.branding.footer_text/legal_text via
+// lib/branding.ts's own footerLines()) — this module has no idea what
+// licence text even is any more, on purpose.
+const DEFAULT_ARGB = 'FF1F2937'; // matches the branding table's own default #1f2937
+
+function hexToArgb(hex: string): string {
+  return `FF${hex.replace('#', '').toUpperCase()}`;
+}
 
 // i10: shared workbook shape for every export route (prices, products).
 // Columns/rows are the CALLER's responsibility to already have narrowed to
@@ -30,30 +42,50 @@ export async function buildXlsx(opts: {
   headers: string[];
   widths: number[];
   rows: (string | number | null)[][];
+  footerLines: string[];
+  primaryColor?: string;
+  fontFamily?: string;
+  logo?: { buffer: Buffer; extension: 'png' | 'jpeg' } | null;
 }): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = opts.generatedBy;
   workbook.created = opts.generatedAt;
+  const titleArgb = opts.primaryColor ? hexToArgb(opts.primaryColor) : DEFAULT_ARGB;
+  const fontName = opts.fontFamily || 'Calibri';
 
   // Sheet names are capped at 31 characters by the xlsx format itself.
   const sheet = workbook.addWorksheet(opts.sheetTitle.slice(0, 31));
 
-  sheet.addRow([opts.reportTitle]).font = { bold: true, size: 14 };
-  sheet.addRow([`Scope: ${opts.scope}`]);
-  sheet.addRow([`Currency: ${opts.currency}`]);
-  sheet.addRow([`Generated: ${opts.generatedAt.toISOString()} by ${opts.generatedBy}`]);
+  if (opts.logo) {
+    const imageId = workbook.addImage({ buffer: opts.logo.buffer, extension: opts.logo.extension });
+    // Fixed footprint (roughly a 120x40px logo area) — this module has no
+    // way to know the source image's own aspect ratio without a second
+    // decode step; a v1 choice, not a limitation of the format. Excel
+    // images float over cells rather than push rows down, so a blank
+    // spacer row of a similar height clears space for it before the
+    // title text starts underneath.
+    sheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 120, height: 40 } });
+    sheet.addRow([]).height = 30;
+  }
+
+  sheet.addRow([opts.reportTitle]).font = { bold: true, size: 14, name: fontName, color: { argb: titleArgb } };
+  sheet.addRow([`Scope: ${opts.scope}`]).font = { name: fontName };
+  sheet.addRow([`Currency: ${opts.currency}`]).font = { name: fontName };
+  sheet.addRow([`Generated: ${opts.generatedAt.toISOString()} by ${opts.generatedBy}`]).font = { name: fontName };
   sheet.addRow([]);
 
   const headerRow = sheet.addRow(opts.headers);
-  headerRow.font = { bold: true };
+  headerRow.font = { bold: true, name: fontName };
 
   for (const row of opts.rows) {
-    sheet.addRow(row.map((v) => v ?? '—'));
+    sheet.addRow(row.map((v) => v ?? '—')).font = { name: fontName };
   }
 
-  sheet.addRow([]);
-  for (const line of NOTICE_TEXT) {
-    sheet.addRow([line]).font = { italic: true, size: 9, color: { argb: 'FF666666' } };
+  if (opts.footerLines.length > 0) {
+    sheet.addRow([]);
+    for (const line of opts.footerLines) {
+      sheet.addRow([line]).font = { italic: true, size: 9, name: fontName, color: { argb: 'FF666666' } };
+    }
   }
 
   opts.widths.forEach((width, i) => {

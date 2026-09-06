@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { isAdmin, pricingConfigReadAccess, canReadAuditLog } from '@/lib/auth-guard';
+import { getBranding } from '@/lib/branding';
 
 // Minimal authenticated home — middleware already guarantees a session
 // exists here. Further screens (app/README.md) are their own routes.
@@ -21,11 +22,12 @@ export default async function HomePage() {
   const admin = await isAdmin();
   const { readCosts, readLogistics } = await pricingConfigReadAccess();
   const canReadAudit = await canReadAuditLog();
+  const branding = await getBranding();
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
-        <h1 className="mb-2 text-xl font-semibold">TMSI Equipment Price Listing</h1>
+        <h1 className="mb-2 text-xl font-semibold">{branding.displayName}</h1>
         <p className="mb-6 text-sm text-gray-600">Signed in as {user?.email}</p>
         <Link
           href="/prices"
@@ -81,6 +83,14 @@ export default async function HomePage() {
             className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
           >
             User administration
+          </Link>
+        )}
+        {admin && (
+          <Link
+            href="/config/branding"
+            className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+          >
+            Branding
           </Link>
         )}
         <Link

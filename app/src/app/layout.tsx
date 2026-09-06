@@ -7,11 +7,18 @@
 
 import type { Metadata } from 'next';
 import './globals.css';
+import { getBranding } from '@/lib/branding';
 
-export const metadata: Metadata = {
-  title: 'TMSI Equipment Price Listing',
-  robots: 'noindex, nofollow',
-};
+// item 26: dynamic instead of a literal string — every request re-reads
+// tmsi.v_current_branding (anon-readable, 0008), so a fresh session even
+// before login already shows the configured name in the browser tab.
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await getBranding();
+  return {
+    title: branding.displayName,
+    robots: 'noindex, nofollow',
+  };
+}
 
 export default function RootLayout({
   children,
