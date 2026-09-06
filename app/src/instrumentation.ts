@@ -33,6 +33,6 @@ export async function register() {
     console.error(
       `Missing required runtime environment variable(s): ${missing.join(', ')} — see deploy/DEPLOY.md §2.`,
     );
-    process.exit(1);
+    process.kill(process.pid, 'SIGKILL');
   }
 }
