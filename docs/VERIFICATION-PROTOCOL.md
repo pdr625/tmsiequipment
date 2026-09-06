@@ -58,8 +58,9 @@ partir do desenho original. 16 correcções feitas à proposta inicial; detalhe 
 | HS / peso / dimensões (operacional) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
 | Breakdown do motor de preços | ✅ | ✅ | ✅ | ◐ filial pedida | ❌ | ❌ | ❌ | ✅ |
 | Criar/editar produtos | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Configuração (câmbios, fees, transporte, direitos, margens) | ✅ | ❌ | ✅ | ❌ | ◐ transporte/direitos | ❌ | ❌ | ❌ |
-| Criar overrides | ✅ | ❌ | ✅ | ◐ transp./margem/coef, filial própria | ◐ só duty, qualquer filial | ❌ | ❌ | ❌ |
+| Propor configuração (câmbios, fees, transporte, direitos, margens) ⁶ | ✅ | ❌ | ✅ | ❌ | ◐ transporte/direitos | ❌ | ❌ | ❌ |
+| Propor overrides ⁶ | ✅ | ❌ | ✅ | ◐ transp./margem/coef, filial própria | ◐ só duty, qualquer filial | ❌ | ❌ | ❌ |
+| **Aprovar modificações propostas (workflow, 0007)** ⁶ | ✅ **(incl. as suas próprias — nota)** | ❌ | ❌ | ◐ só filial própria, só tipos com filial (transporte/margem/coef de overrides, `transport_tiers`, `margin_grids`) | ❌ | ❌ | ❌ | ❌ |
 | Ver valores de overrides de preço | ✅ | ✅ | ✅ | ◐ filial própria | ◐ só `kind=duty` ³ | ❌ | ❌ | ✅ |
 | Auditoria global | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
 | Dashboard (acesso à página) | ✅ | ✅ | ✅ | ✅ ² | ❌ | ❌ | ❌ | ✅ |
@@ -121,6 +122,23 @@ renderiza (`tmsi.compute_price()`/`v_branch_prices` devolvem colunas adicionais 
 `fx_used`/`duty`/`overrides[]` que a listagem nunca mostrou; o ficheiro também não as mostra).
 O ficheiro é a fronteira que se testa, não o ecrã — passo AA, secção 4.8.
 
+⁶ **Migração 0007 (E4, 2026-09-06) — estas duas linhas deixaram de ser escrita directa.**
+`tmsi.config_write` (5 tabelas) e `overrides_write` foram **removidas**; quem tinha
+capacidade de escrita directa antes de 0007 passa a poder apenas **propor** — a linha
+insere-se em `tmsi.price_proposals`, `pending`, invisível a `tmsi.compute_price()`/
+`tmsi.fx_rate()`/`tmsi.branch_margin()` até ser decidida. Só a nova linha "Aprovar
+modificações" faz a mudança tomar efeito, materializada como uma nova entrada append-only
+na tabela alvo (nunca uma edição de uma linha em vigor — o mesmo padrão que `exchange_rates`
+já tinha desde 0005, agora estendido a `interco_fees`/`transport_tiers`/`customs_rates`/
+`margin_grids`). **Decisão L2 do Pedro, 2026-09-06, registada e testada como comportamento
+esperado, não uma falha:** um admin pode aprovar a sua própria proposta — "quem edita não
+aprova" não se aplica nesta fase-piloto (poucos utilizadores reais); `audit_log` mostra
+sempre autor e aprovador, mesmo quando coincidem, por isso a decisão fica sempre rastreável
+mesmo quando é a mesma pessoa. `exchange_rates`/`interco_fees`/`customs_rates` são
+aprovação **admin-only** — não têm uma única filial associada (0007 §1: `exchange_rates` só
+tem `currency`, `customs_rates` só `zone`, `interco_fees` tem DUAS filiais sem que
+`branch_manager` alguma vez tivesse escrita nelas) — testado na secção 4.9, passo HH.
+
 ## 4. Protocolo de teste por papel
 Para cada papel testado: um utilizador dedicado a testes (em produção: conta de teste real
 com o papel, **nunca** a conta pessoal de um colega), duas vias por teste — **browser**
@@ -168,8 +186,10 @@ O. Activar artigo sem HS/peso/SAP → **bloqueado pela base** com erro explícit
 P. Alterar EXW de artigo activo → estado `review` + nova versão de preço, automáticos.
 Q. Override sem motivo → recusado. Autor de qualquer escrita = sessão autenticada (conferir
    na auditoria), nunca declarável manualmente.
-R. Correcção de câmbio no mesmo dia → aceite; entrada superada visível como "superseded";
-   consulta histórica devolve a taxa do dia respectivo.
+R. Correcção de câmbio no mesmo dia → **proposta** aceite (0007: já não é escrita directa,
+   ver nota ⁶, secção 3); uma vez **aprovada** (admin, único elegível para `exchange_rates`),
+   entrada superada visível como "superseded"; consulta histórica devolve a taxa do dia
+   respectivo. Workflow completo (proposta → aprovação → efeito) testado à parte, secção 4.9.
 
 ### 4.5 Fluxos de email (com destinatário real atrás de gateway corporativo)
 S. Convite: email chega; o link **sobrevive ao scanner** (só age com clique humano);
@@ -255,15 +275,46 @@ estática (`x-nextjs-cache: HIT`), a submissão não chegou à Server Action rea
 passos manuais do Pedro (secção 6 do prompt da i10), que já incluíam abrir os exports reais e
 testar a impressão.
 
-📌 **Cobertura automatizada (tarefa 3, BACKLOG.md, 2026-09-05):** os blocos G–J (secção 4.2,
-fronteiras do papel sem custos/de filial) e O–R (secção 4.4, integridade das regras de
-negócio) têm agora cobertura automatizada por `scripts/smoke.py`, corrível em segundos
-contra a app viva, sem browser — ver `scripts/README.md` para o que cobre exactamente e
-porquê (nenhuma asserção com valores/contagens hardcoded, ver o cabeçalho do próprio
-script). **Isto não substitui a execução formal deste protocolo** (secção 7) — os passos de
-browser, ficheiro real e email continuam a exigir os passos manuais que só um humano pode
-dar; o smoke é a rede rápida entre execuções formais, corrível após cada deploy, não um
-substituto da própria execução assinada.
+### 4.9 Workflow de aprovação (E4, migração 0007, adicionado nesta revisão)
+EE. **Motor insensível a pendente:** uma proposta `pending` (qualquer dos 6 tipos-alvo) não
+    é vista por `tmsi.compute_price()`/`tmsi.fx_rate()`/`tmsi.branch_margin()` — o valor em
+    vigor antes de propor continua exactamente o mesmo depois de propor, só muda depois de
+    **aprovada**.
+FF. **Fluxo completo, papel branch_manager:** proponente elegível cria a proposta → BM da
+    filial afectada aprova (com motivo) → motor recalcula de imediato para o novo valor
+    (prova "motor-vivo", mesmo padrão da i5) — nunca uma edição da linha em vigor, sempre uma
+    nova entrada append-only.
+GG. **Auto-aprovação de admin — comportamento esperado, decisão L2 (nota ⁶, secção 3), não
+    uma falha a corrigir:** admin propõe e aprova a sua própria proposta com sucesso;
+    `audit_log`/`price_proposals` mostram `proposed_by = decided_by`, rastreável mesmo
+    coincidindo.
+HH. **Três ramos negados:** (1) BM aprova uma proposta de **outra** filial → recusado; (2) um
+    papel sem elegibilidade de aprovação (ex. finance, numa proposta a `exchange_rates`,
+    admin-only) invoca `decide_price_proposal()` → recusado, mesmo sendo o próprio
+    proponente; (3) escrita directa às 6 tabelas-alvo, contornando a proposta → recusada pela
+    RLS (`config_write`/`overrides_write` já não existem, nota ⁶) — mesmo para um papel que
+    tinha essa escrita antes de 0007.
+II. **Rejeição:** sem motivo → recusada; com motivo → aceite, e o valor em vigor **não**
+    muda (a proposta rejeitada nunca chega a `compute_price()`); motivo fica registado em
+    `price_proposals.decision_reason`.
+JJ. **Sweep de regressão pós-deploy:** `scripts/smoke.py` completo sem falhas; ecrãs
+    `/config`, `/overrides` e o novo `/proposals` sem mudança de comportamento além do
+    pretendido (badges "pending approval", textos "Propose"/"Submitted — pending approval").
+
+📌 **Cobertura automatizada (tarefa 3, BACKLOG.md, 2026-09-05; estendida no E4/0007,
+2026-09-06):** os blocos G–J (secção 4.2, fronteiras do papel sem custos/de filial), O–R
+(secção 4.4, integridade das regras de negócio) e agora **EE–II** (secção 4.9, workflow de
+aprovação) têm cobertura automatizada por `scripts/smoke.py`, corrível em segundos contra a
+app viva, sem browser — ver `scripts/README.md` para o que cobre exactamente e porquê
+(nenhuma asserção com valores/contagens hardcoded, ver o cabeçalho do próprio script). **JJ é
+o próprio smoke** (não um passo à parte). **GG (auto-aprovação de admin) não tem cobertura em
+`scripts/smoke.py`** — a suite não tem conta de teste admin, por desenho (ver a nota acima de
+`TEST_USERS`, "a conta pessoal nunca entra no smoke"); confirmado em vez disso por
+`BEGIN`/`ROLLBACK` directo (claims JWT do admin real, nunca committed) — ver secção 7. **Isto
+não substitui a execução formal deste protocolo** (secção 7) — os passos de browser, ficheiro
+real e email continuam a exigir os passos manuais que só um humano pode dar; o smoke é a rede
+rápida entre execuções formais, corrível após cada deploy, não um substituto da própria
+execução assinada.
 
 ## 5. Regras de execução em produção
 - Executor: o administrador + uma segunda pessoa como testemunha para os testes do ramo
@@ -466,3 +517,55 @@ técnico; o convite/atribuição de papel/reset de password de cada colega é, p
 acção do Pedro no próprio `/admin/users` (ver nota de segurança já estabelecida: sessões
 autenticadas reais e passwords de pessoas reais não são fabricadas nem manuseadas pelo
 agente).
+
+**Adenda, 2026-09-06 (E4) — re-execução PARCIAL, só a linha "Aprovar modificações" da matriz
+(secção 3, nota ⁶) e os passos EE–JJ (secção 4.9), novos nesta migração (não uma nova
+execução completa dos 8 papéis — E4 não alterou visibilidade de linha nem de coluna nenhuma
+das já cobertas, só fechou a escrita directa a 6 tabelas atrás de um workflow de
+proposta/aprovação):** migração 0007 aplicada sobre 0001–0006; digest
+`sha256:e9ad8102b9c8f8c8b75c3365e2a10e132313f87a41d63aa0dca1c2e9c3480cd7`. Executor: agente
+(API/BD, contra a produção já com 0007 aplicada e o código do F2 em execução) — as provas de
+browser (EE–FF, II, com os utilizadores `.test`, e a metade de GG que usa a conta pessoal do
+Pedro como admin) ficam para o Pedro, secção 5 desta adenda.
+
+Confirmado ao vivo, via `scripts/smoke.py` (38/38, antes 27 — 24 pré-0007 mais os 3 novos
+blocos de workflow; ver `scripts/README.md`):
+- **EE:** `fx_rate()`/`compute_price()` devolvem o valor anterior, byte-idêntico, enquanto a
+  proposta correspondente está `pending` — confirmado para `exchange_rates` (finance propõe)
+  e `price_overrides` (finance propõe, branch_manager.test é o alvo elegível de aprovação).
+- **FF:** finance propõe um override de `margin` para a filial do `branch_manager.test` →
+  branch_manager.test aprova com motivo → `compute_price()` do mesmo produto/filial reflecte
+  de imediato o novo valor (`0.55`, baseline `0.50` — motor-vivo confirmado numericamente,
+  não só "mudou").
+- **HH (as três negações):** (1) branch_manager.test tenta aprovar uma proposta de uma
+  filial que não gere → recusado (`decide_price_proposal` levanta `Forbidden`); (2) finance
+  tenta decidir a sua própria proposta a `exchange_rates` (admin-only) → recusado, mesmo
+  sendo o proponente; (3) `POST` directo a `tmsi.exchange_rates` como finance (que tinha esta
+  escrita antes de 0007) → recusado pela RLS (`config_write` já não existe).
+- **II:** branch_manager.test rejeita uma proposta de override sem motivo → recusado; com
+  motivo → aceite, `price_proposals.decision_reason` gravado, e `compute_price()` continua a
+  mostrar o valor da aprovação FF (`0.55`), não o baseline nem o valor da proposta rejeitada
+  — a rejeição nunca chegou ao motor.
+- **Sem resíduo:** confirmado por query directa pós-suite — zero linhas em
+  `price_proposals`/`price_overrides`/`exchange_rates` com marcador de teste ("smoke:" na
+  razão, "smoke-test" na fonte).
+
+**GG (metade agente, sem browser nem conta pessoal):** confirmado por `BEGIN`/`ROLLBACK`
+directo contra a base já com 0007 aplicada — admin propõe e aprova a sua própria proposta a
+`exchange_rates` com sucesso (`self_approved = true` na leitura da linha), `rollback` no fim,
+zero resíduo. Não usa a conta pessoal do Pedro num sentido que produza efeito real (nunca
+`commit`), mas a autoria testada É o UUID real do admin (não um `.test`) — por ser
+precisamente essa a capacidade a provar (decisão L2: só o admin real self-aprova, não há
+`admin.test`).
+
+**Por cobrir nesta adenda (fica para o Pedro, browser, secção 6.2 do prompt E4):** EE
+(propor nos ecrãs `/config`/`/overrides`, ver o badge "N pending approval"), FF (aprovar como
+`branch_manager.test` em `/proposals`, ver o preço recalculado num ecrã real), a metade de
+GG que precisa mesmo do ecrã (`/proposals` como o próprio admin, ver "self-approved" na
+listagem de decididas), rejeição em II pelo ecrã (motivo obrigatório recusado pelo próprio
+formulário antes mesmo do RPC). JJ (sweep visual de `/config`, `/overrides`, `/proposals`
+pós-deploy) é o próprio passo manual do Pedro desta adenda.
+
+**Gate de produção satisfeito para o estado actual** (migrações 0001–0007 + digest acima),
+com a ressalva de sempre: os passos de browser ficam confirmados pelo Pedro à parte, não
+fabricados aqui.
