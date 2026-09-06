@@ -3,14 +3,15 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 14 — medição destacada e fecho — ✅ FECHADO 2026-09-06** (ver secção
-"Item 14 — Medição destacada sem sessão de agente pesada" abaixo). H1 (regressão da 0007)
-continua refutada, H2 (pressão de memória do host) confirmada — e desta vez resolvida ao
-nível da BD ao retirar a maior parte da pressão da própria sessão de agente que estava a
-medir. Achado novo e distinto (custo HTTP/PostgREST de `v_products` não acompanha a melhoria
-da BD) registado como item 28 do backlog, não coberto pelas propostas 1-5 do diagnóstico
-anterior. E0, E1, E2, E3 (i1–i10), E4, E5-VPS e as migrações 0003/0004/0005/0006/0007/0008
-estão fechadas.
+**Etapa actual: item 28 — custo HTTP/PostgREST de `v_products` — ✅ FECHADO 2026-09-06,
+artefacto de medição, não defeito da app** (ver secção "Item 28 — Custo HTTP/PostgREST de
+`v_products`" abaixo). O achado do item 14 media `v_products` pedido por inteiro
+(`select=*`, ~32 colunas) — uma forma que a app **nunca envia**: `/products` e o export só
+pedem 7 colunas. Medido com o `select` real da app, o tempo cai 8,6-9,5× e fica ao nível de
+`v_branch_prices` (o controlo saudável). Subir o `mem_limit` do `supabase-rest` (128m→512m,
+temporário, revertido e confirmado) não mudou nada — exclui H-B. Item 14 continua fechado
+(secção própria abaixo); E0, E1, E2, E3 (i1–i10), E4, E5-VPS e as migrações
+0003/0004/0005/0006/0007/0008 estão fechadas.
 
 **Regra de processo (item 14, 2026-09-06, escrita também em `~/atelier-vps/CLAUDE.md`):**
 medições de desempenho desta app nunca se fazem com uma sessão de agente aberta neste VPS —
@@ -248,6 +249,74 @@ parte do próprio protocolo de uma futura medição destacada, não é um estado
 larga); este ficheiro; dossier (`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`), incluindo a
 decisão sobre o linger. `scripts/smoke.py` não corrido nesta sessão (nenhuma alteração de
 código/schema).
+
+## Item 28 — Custo HTTP/PostgREST de `v_products` — ✅ FECHADO 2026-09-06 (artefacto de medição)
+
+**Contexto:** o item 14 encontrou `v_products` a não acompanhar, pela via HTTP/PostgREST, a
+melhoria já confirmada ao nível da BD (0,845s→2,945s→6,984s a 13/70/163, 27-44× o SQL puro),
+enquanto `v_branch_prices` pela mesma via acompanhava bem. Duas hipóteses a separar: **H-A**
+(largura/serialização — `v_products` devolve ~32 colunas) e **H-B** (`mem_limit: 128m` do
+contentor `supabase-rest`, mais apertado que a app). Medido sem sessão de agente pesada
+(mesmo protocolo do item 14 — `systemd-run --user --on-active`, `enable-linger` religado e
+depois revertido).
+
+**F0 — inventário, o contrato da correcção antes de medir:** `grep -rn "v_products"
+app/src` encontrou 4 consumidores. **`/products` (listagem) e o export
+(`products/export/route.ts`) já pedem só 7 colunas** — `id,name,item_type,status,
+primary_branch,currency,exw_price` — não `select('*')`. O `dashboard` pede só 3
+(`id,name,status`). Só `/products/[id]` (página de detalhe, **uma linha**, não uma
+listagem) usa `select('*')` — largura irrelevante a esta escala, o custo que aqui se mede é
+por-linha × número-de-linhas, e uma linha só não escala com o catálogo. **A medição do item
+14 usou `curl` sem `?select=`** — PostgREST responde `*` por omissão — testando uma forma
+que a app nunca envia para uma listagem.
+
+**F1 — separar H-A de H-B**, HTTP directa (bearer token, mediana de 5 execuções):
+
+| Volume | `v_products` completa (`*`) | `v_products` select real (7 col.) | `v_branch_prices` (controlo) |
+|---|---|---|---|
+| 70 | 3,234 s | **0,376 s** | 0,307 s |
+| 163 | 6,310 s | **0,667 s** | 0,721 s |
+| 163, `mem_limit` 512m | 6,290 s | 0,695 s | 0,587 s |
+
+**Veredicto — H-A confirmada, H-B excluída:** o `select` real da app é **8,6×** (a 70) e
+**9,5×** (a 163) mais rápido que `select=*`, e fica **ao nível do controlo** saudável
+(`v_branch_prices`) — a 163 até ligeiramente mais rápido. Subir o `mem_limit` do
+`supabase-rest` para 4× o valor original (128m→512m) **não mudou nada**: 6,290s com o
+limite maior vs. 6,310s com o original, a mesma vista, o mesmo volume — exclui H-B por
+inteiro. A causa é simplesmente volume de dados: mais colunas × mais linhas é mais bytes a
+serializar e a transferir — comportamento normal, não uma avaria nem um limite de
+contentor a morder.
+
+**Conclusão — item 28 fecha como artefacto de medição, não defeito da app.** Os
+consumidores reais de `v_products` (`/products`, export) já pedem exactamente as colunas
+que usam e já medem bem (0,376s/0,667s a 70/163, ao nível do controlo). **Nada a corrigir**
+— não há F2 (não há `.select()` a estreitar: já está estreito) nem F3 (não há deploy). O
+único consumidor com `select('*')` é a página de detalhe, uma linha, fora do âmbito de um
+problema que escala com o número de linhas.
+
+**Lição registada (aqui e em `~/atelier-vps/CLAUDE.md`):** três medições seguidas
+(item 26, item 14, e o início do item 28) mediram, sem se aperceberem, coisas diferentes do
+que a app realmente faz — a `curl` sem `?select=` testou uma forma de pedido que nenhuma
+página envia. Um número de desempenho só vale com a forma exacta do pedido (colunas
+pedidas, filtros, volume) e o contexto de carga (RAM/swap do host, se a própria sessão de
+agente ainda pesa) declarados ao lado — sem isso, "está lento" pode estar a medir outra
+coisa.
+
+**Confirmações de fecho:**
+- `mem_limit` do `supabase-rest`: confirmado de volta a **128m** (`134217728` bytes) por
+  `docker inspect` **e** pelo próprio `docker-compose.yml` (linha 135) — verificado nesta
+  sessão, não só no log do medidor. Ficheiro de backup do compose removido pelo próprio
+  script (reversão confirmada com sucesso).
+- `loginctl enable-linger pedro`: religado antes de agendar o medidor, **revertido nesta
+  sessão** (`disable-linger`, confirmado `Linger=no`).
+- Fixture: `delete ... where id like 'T-92%' or id like 'T-93%'` (as duas gamas explícitas,
+  não o padrão que falhou no item 14) → `DELETE 150`; confirmado nesta sessão por consulta
+  directa — `T-92%`=0, `T-93%`=0, `tmsi.products`=**13**, IDs exactos do catálogo real.
+
+**F5 (este fecho):** `docs/BACKLOG.md` (item 28 fechado); este ficheiro;
+`~/atelier-vps/CLAUDE.md` (lição sobre a forma exacta do pedido); dossier
+(`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`). `scripts/smoke.py` não corrido (nenhuma
+alteração de código/schema/config permanente).
 
 ## Item 26 — White-label + branding (opção B) — ✅ FECHADA 2026-09-06
 

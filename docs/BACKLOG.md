@@ -189,17 +189,16 @@ Nenhum segredo em output nesta sessão. Detalhe completo: `docs/STATE.md`.
 do que esta sessão VPS escreve directamente, nota já deixada em `VPS.md` §Pendências a
 migrar.
 
-**28. Custo HTTP/PostgREST de `v_products` a volume** — achado da medição destacada do item
-14 (2026-09-06), separado por ter um mecanismo diferente: com a BD já rápida e linear
-(99,5ms a 70 produtos), o mesmo pedido via PostgREST (`/rest/v1/v_products`, bearer token)
-continua a escalar mal — 0,845s→2,945s→6,984s (13→70→163), 27-44× acima do tempo de SQL
-puro no mesmo ponto. `v_branch_prices`, pela mesma via, acompanha bem (0,159s→0,305s→0,881s,
-8-3×). Única diferença estrutural: `v_products` devolve ~32 colunas, `v_branch_prices`
-~8-10; o contentor `supabase-rest` tem `mem_limit: 128m` (mais apertado que a app, 192MB) —
-hipótese não verificada: serialização JSON de um resultado largo dentro desse limite.
-**Nada medido ainda ao nível de causa** (falta `docker stats supabase-rest` durante a
-série, ou uma vista mais estreita para comparar). Detalhe completo: `docs/STATE.md`, secção
-"Item 14 — Medição destacada".
+~~**28. Custo HTTP/PostgREST de `v_products` a volume**~~ ✅ **fechado 2026-09-06 — artefacto
+de medição, não defeito da app.** O achado do item 14 media `v_products` sem `?select=`
+(PostgREST responde `*`, ~32 colunas) — forma que a app **nunca envia**: `/products` e o
+export já pedem só as 7 colunas que usam. Medido com essa forma real: 0,376s/0,667s a
+70/163 (vs. 3,234s/6,310s com `*`) — 8,6-9,5× mais rápido, ao nível do controlo saudável
+(`v_branch_prices`). Subir o `mem_limit` do `supabase-rest` 128m→512m (temporário, revertido
+e confirmado por `docker inspect`) não mudou nada — exclui a hipótese do limite do
+contentor. **Nada a corrigir** — o único consumidor com `select('*')` é a página de detalhe
+de um produto (uma linha, não escala com o catálogo). Detalhe completo: `docs/STATE.md`,
+secção "Item 28".
 
 ## ⚪ Baixas — registadas, sem urgência
 
