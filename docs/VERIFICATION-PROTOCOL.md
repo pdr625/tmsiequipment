@@ -621,21 +621,25 @@ Confirmado ao vivo (`scripts/smoke.py` 38/38, sem regressão nenhuma):
   branding real (`display_name="Acme Test Corp"`, cor `#c0392b`, rodapé e texto legal
   próprios) via `BEGIN`/COMMIT real (não `ROLLBACK` — tinha de persistir para um pedido HTTP
   **separado** o ver) → `GET /login` (sem sessão nenhuma, `anon`) devolveu de imediato
-  `&lt;title&gt;Acme Test Corp&lt;/title&gt;` e `&lt;h1&gt;Acme Test Corp&lt;/h1&gt;` — confirma
+  `<title>Acme Test Corp</title>` e `<h1>Acme Test Corp</h1>` — confirma
   `tmsi.v_current_branding` legível por `anon` (0008) e propagado correctamente ao
   `generateMetadata()`/à página de login, sem precisar de sessão nenhuma. Revertido depois
   (`DELETE` directo como `postgres`, `tmsi.branding` não tem política de `DELETE` para
-  `authenticated`, por desenho) → `&lt;title&gt;` voltou ao placeholder neutro do código
+  `authenticated`, por desenho) → título voltou ao placeholder neutro do código
   ("Equipment Price Listing"), confirmando também o caminho de omissão (sem linha nenhuma em
-  `tmsi.branding`, nunca "TMSI"). **Por cobrir (Pedro, browser):** o mesmo em `/prices`
-  (logo, tagline, cor) e nos dois ficheiros exportados.
+  `tmsi.branding`, nunca "TMSI"). **Metade do Pedro, browser, confirmada 2026-09-06:**
+  mudança de nome/cor/rodapé em `/config/branding` e o `.xlsx` exportado a reflecti-la —
+  confirmado directamente pelo Pedro. **Por confirmar ainda** (não mencionado): a vista de
+  impressão de `/prices` especificamente.
 - **LL (metade agente):** confirmado por leitura de código que `lib/xlsx-export.ts` e a
   vista de impressão de `/prices` já não importam `NOTICE_TEXT` nenhum (removido de
   `lib/notice.ts` — só `PROPRIETARY_NOTICE`, o rodapé do login, sobrevive) — o rodapé de
   ambos os documentos vem agora inteiramente de `footerLines()`
-  (`tmsi.branding.footer_text`/`legal_text`), nunca da licença. **Por cobrir (Pedro,
-  browser):** o `unzip`/grep ao `.xlsx` real e ao HTML de impressão real, confirmando zero
-  ocorrências, exactamente como AA já fez para custos na i10.
+  (`tmsi.branding.footer_text`/`legal_text`), nunca da licença. A confirmação do Pedro (KK)
+  cobriu o branding a aparecer correctamente no `.xlsx`, não especificamente a ausência da
+  licença — **por cobrir ainda:** o `unzip`/grep ao `.xlsx` real e ao HTML de impressão
+  real, confirmando zero ocorrências de "PROPRIETARY"/"Pedro Alexandre", exactamente como AA
+  já fez para custos na i10.
 - **Item 14, remedido no mesmo fixture (57 produtos sintéticos, `T-9200`..`T-9256`, `draft`,
   HS reais, ciclando as 4 filiais/moedas, cada um vendido em 2 filiais — 13+57=70,
   inserido/medido/apagado dentro de `BEGIN`/`ROLLBACK`, contagem de produtos confirmada de

@@ -25,7 +25,7 @@ desenhar a 0008 (não assumido de memória):**
   branding de cliente — mesma categoria de excepção que a opção B já concede ao nome do
   repo/imagem/domínio.
 - 11 ocorrências REAIS de "TMSI" fora desse bloco: `layout.tsx` (título da aba), `page.tsx`/
-  `login/page.tsx` (`&lt;h1&gt;`), `prices/page.tsx` (cabeçalho de impressão), os dois
+  `login/page.tsx` (`<h1>`), `prices/page.tsx` (cabeçalho de impressão), os dois
   `.../export/route.ts` (título do relatório, ×2 cada), o rótulo "TMSI code" no formulário
   de novo produto, os dois templates de email (convite/recuperação), e `lib/notice.ts`'s
   `NOTICE_TEXT` — uma cópia do `/NOTICE` do repositório embutida no rodapé de **ambos** os
@@ -33,7 +33,7 @@ desenhar a 0008 (não assumido de memória):**
   violação que a restrição (d) do prompt proíbe — dados de licença a aparecer num documento
   exportado. Zero "Condat" em `app/src` (a única ocorrência é um comentário de código sobre
   um incidente real com um endereço `condat.fr`, não uma referência de marca).
-- Sem `public/`, sem `&lt;img&gt;`/`next/image`, sem favicon, sem mecanismo de upload de
+- Sem `public/`, sem `<img>`/`next/image`, sem favicon, sem mecanismo de upload de
   ficheiros nenhum no código existente — tudo construído de raiz.
 - Convenções a seguir: `admin/users/page.tsx`/`actions.ts` (página admin-only + Server
   Action) e `config/actions.ts`'s `updateSetting` (escrita directa simples, sem workflow de
@@ -83,7 +83,7 @@ rodapé do login, sempre dentro da app).
    projecto acrescentou os membros de `ArrayBuffer` redimensionável
    (`resize`/`resizable`/`maxByteLength`/`detached`/...) — o `Buffer` real do `@types/node`
    já não satisfaz estruturalmente o shim do `exceljs`. Corrigido com
-   `as unknown as Parameters&lt;typeof workbook.addImage&gt;[0]` (evita nomear o `Image`
+   `as unknown as Parameters<typeof workbook.addImage>[0]` (evita nomear o `Image`
    interface não exportado do `exceljs`) — mesma classe de discrepância type-checker/lib já
    documentada neste ficheiro para `Buffer` vs `BodyInit`.
 
@@ -111,18 +111,21 @@ saudável; `scripts/smoke.py` 38/38, sem regressão.
    (`display_name="Acme Test Corp"`, cor `#c0392b`, rodapé e texto legal próprios) via
    `COMMIT` real (não `ROLLBACK` — tinha de persistir para um pedido HTTP **separado** o
    ver) → `GET /login` sem sessão nenhuma (`anon`) devolveu de imediato
-   `&lt;title&gt;Acme Test Corp&lt;/title&gt;`/`&lt;h1&gt;Acme Test Corp&lt;/h1&gt;`. Revertido
-   (`DELETE` directo como `postgres` — `tmsi.branding` não tem política de `DELETE` para
-   `authenticated`, por desenho) → título voltou ao placeholder neutro
-   ("Equipment Price Listing"). **Por cobrir (Pedro, browser):** o mesmo em `/prices` e nos
-   dois exports — `/prices/export`/`/products/export`/`/prices` exigem sessão real por
-   cookie, não um `Authorization: Bearer` (confirmado outra vez: um pedido com o token real
-   de `finance.test` devolveu a página HTML de `/login`, não o ficheiro — mesma limitação já
-   registada na adenda i10, não retentada de outra forma).
+   `<title>Acme Test Corp</title>`/`<h1>Acme Test Corp</h1>`. Revertido (`DELETE` directo
+   como `postgres` — `tmsi.branding` não tem política de `DELETE` para `authenticated`, por
+   desenho) → título voltou ao placeholder neutro ("Equipment Price Listing"). **Metade do
+   Pedro, browser, confirmada 2026-09-06:** mudança de nome/cor/rodapé em
+   `/config/branding` e o `.xlsx` exportado reflectindo-a — confirmado directamente pelo
+   Pedro (o ramo que `/prices/export`/`/products/export` exigirem sessão real por cookie,
+   não um `Authorization: Bearer`, impedia o agente de o provar sozinho — confirmado outra
+   vez nesta sessão: um pedido com o token real de `finance.test` devolveu a página HTML de
+   `/login`, não o ficheiro, mesma limitação já registada na adenda i10). Por confirmar
+   ainda (não mencionado pelo Pedro): a vista de impressão de `/prices` especificamente.
 3. **Licença ausente dos documentos:** confirmado por leitura de código
-   (`NOTICE_TEXT` removido dos dois); a confirmação por conteúdo do ficheiro real
-   (`unzip`/grep, como a própria AA da i10 já fez) fica para o Pedro, mesmo motivo do
-   ponto 2.
+   (`NOTICE_TEXT` removido dos dois). A confirmação por conteúdo do ficheiro real
+   (`unzip`/grep ao `.xlsx`, como a própria AA da i10 já fez) continua por cobrir — a
+   validação do Pedro confirmou o branding a aparecer correctamente, não especificamente a
+   ausência da licença dentro do ficheiro.
 4. **Papel `sales`/sem custos continua sem custos:** nenhuma linha da query
    `v_branch_prices`/`v_selling_prices`/`v_products` foi tocada por esta sessão, só
    metadados de branding à volta — risco de regressão avaliado como baixo por leitura de
