@@ -66,6 +66,7 @@ partir do desenho original. 16 correcções feitas à proposta inicial; detalhe 
 | Dashboard (acesso à página) | ✅ | ✅ | ✅ | ✅ ² | ❌ | ❌ | ❌ | ✅ |
 | Administração de utilizadores | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Reset de password (a outro utilizador) — i9, 0006 ⁴ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Editar branding (item 26, 0008) ⁷ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Artigos não-activos (draft/review/…) | ✅ | ✅ | ✅ | ◐ | ✅ | ❌ | ❌ | ✅ |
 
 ¹ **Duas fontes distintas, com regras diferentes.** O EXW e os códigos SAP/fornecedor vêm de
@@ -138,6 +139,18 @@ mesmo quando é a mesma pessoa. `exchange_rates`/`interco_fees`/`customs_rates` 
 aprovação **admin-only** — não têm uma única filial associada (0007 §1: `exchange_rates` só
 tem `currency`, `customs_rates` só `zone`, `interco_fees` tem DUAS filiais sem que
 `branch_manager` alguma vez tivesse escrita nelas) — testado na secção 4.9, passo HH.
+
+⁷ **Migração 0008 (item 26, 2026-09-06) — branding é apresentação, não preço, e por isso
+fica FORA do workflow de aprovação da 0007** (decisão registada no cabeçalho da própria
+migração e em `docs/STATE.md`): editar `tmsi.branding` é uma escrita directa, admin-only,
+imediata — nunca uma proposta `pending`. `tmsi.branding` é o único caso deste projecto em
+que `anon` (não só `authenticated`) tem leitura — os templates de email do GoTrue (convite,
+recuperação) correm sem sessão nenhuma e precisam do nome configurado; a tabela não tem
+nenhum dado sensível a custo, ao contrário de tudo o resto que este protocolo protege.
+Append-only como o resto da configuração deste projecto (0005/0007): editar nunca apaga a
+versão anterior, insere uma nova — sem política de `UPDATE`/`DELETE` para `authenticated`
+em nenhuma das duas tabelas (`tmsi.branding`/`tmsi.branding_logos`). Testado na secção 4.8,
+passos KK–LL.
 
 ## 4. Protocolo de teste por papel
 Para cada papel testado: um utilizador dedicado a testes (em produção: conta de teste real
@@ -262,6 +275,20 @@ CC. Vista de impressão (`/prices` apenas, `@media print`): cabeçalho (lista, �
     vista sem as colunas de custo.
 DD. Memória: `docker stats` do `tmsi-app` durante uma geração real (o maior dataset
     disponível) — dentro do `mem_limit` (192 MB), sem `OOMKilled` nos logs do container.
+KK. **Branding aplicado (item 26, migração 0008):** mudar nome, cor primária e rodapé em
+    `/config/branding` → o `.xlsx` (título, cor, rodapé) e a vista de impressão (cabeçalho,
+    tagline, rodapé) reflectem de imediato a mudança, sem precisar de novo deploy; o próprio
+    ecrã (`<title>`, `<h1>` da home/login) também muda. Sem branding nenhum configurado
+    ainda (tabela vazia), o nome mostrado é o placeholder neutro do código
+    ("Equipment Price Listing"), nunca "TMSI"/"Condat".
+LL. **Ausência da licença nos documentos (restrição (d) do prompt do item 26, absoluta):**
+    o texto de propriedade do software (`PROPRIETARY_NOTICE`, "Pedro Alexandre") continua
+    visível só no rodapé do ecrã de login (nunca removido dali) e **nunca** aparece no
+    `.xlsx` nem na vista de impressão — prova por conteúdo, como AA: `unzip`/grep ao
+    `sharedStrings.xml` do ficheiro real e ao HTML servido da pré-visualização de
+    impressão, zero ocorrências de "PROPRIETARY"/"Pedro Alexandre"/"Copyright". O que
+    aparece nos documentos a partir de agora vem sempre do rodapé/texto legal configurados
+    em `/config/branding`, nunca da licença.
 
 **Nota de execução, i10:** AA/BB (dados) e a metade de RLS de AA foram confirmados
 directamente contra a base de dados (`BEGIN`/leitura directa, claims JWT reais) — provam que
@@ -569,3 +596,63 @@ pós-deploy) é o próprio passo manual do Pedro desta adenda.
 **Gate de produção satisfeito para o estado actual** (migrações 0001–0007 + digest acima),
 com a ressalva de sempre: os passos de browser ficam confirmados pelo Pedro à parte, não
 fabricados aqui.
+
+**Adenda, 2026-09-06 (item 26) — re-execução PARCIAL, só a linha nova da matriz (secção 3,
+nota ⁷) e os passos KK–LL (secção 4.8), novos nesta migração (não uma nova execução
+completa dos 8 papéis — item 26 não alterou visibilidade de linha/coluna nenhuma das já
+cobertas, só branding de apresentação e a remoção de um vazamento real de licença nos
+documentos):** migração 0008 aplicada sobre 0001–0007; digest
+`sha256:ad90a1c0fe34b4216edd05f4c340d18a1e77caa6d333a638c2669ba9666117f7`. Executor: agente
+(API/BD, contra a produção já com 0008 aplicada) — as provas de ficheiro real (o `.xlsx`
+gerado, a pré-visualização de impressão) ficam para o Pedro, pelo mesmo motivo já registado
+na adenda i10 acima: `/prices/export`/`/products/export`/`/prices` exigem uma sessão real
+por cookie (`@supabase/ssr`), não um `Authorization: Bearer` directo — tentativa feita com
+um token real de `finance.test` devolveu a página HTML de `/login`, não o ficheiro, mesma
+classe de limitação já documentada e não retentada desde então.
+
+Confirmado ao vivo (`scripts/smoke.py` 38/38, sem regressão nenhuma):
+- **Varrimento da restrição 1 (zero literais de marca):** `grep` a `app/src` confirma zero
+  ocorrências de "TMSI"/"Condat" fora do bloco de copyright (mantido deliberadamente — é a
+  titularidade do código, mesma categoria de excepção que o nome do repo/imagem/domínio) e
+  fora de identificadores de infra (nome do serviço docker `tmsi-app`). Grep testado contra
+  o seu próprio falso positivo (uma string "TMSI" sintética, confirmada apanhada) antes de
+  confiar no resultado limpo.
+- **KK (metade agente — mudança reflectida num ecrã real, não só na BD):** admin propõe
+  branding real (`display_name="Acme Test Corp"`, cor `#c0392b`, rodapé e texto legal
+  próprios) via `BEGIN`/COMMIT real (não `ROLLBACK` — tinha de persistir para um pedido HTTP
+  **separado** o ver) → `GET /login` (sem sessão nenhuma, `anon`) devolveu de imediato
+  `&lt;title&gt;Acme Test Corp&lt;/title&gt;` e `&lt;h1&gt;Acme Test Corp&lt;/h1&gt;` — confirma
+  `tmsi.v_current_branding` legível por `anon` (0008) e propagado correctamente ao
+  `generateMetadata()`/à página de login, sem precisar de sessão nenhuma. Revertido depois
+  (`DELETE` directo como `postgres`, `tmsi.branding` não tem política de `DELETE` para
+  `authenticated`, por desenho) → `&lt;title&gt;` voltou ao placeholder neutro do código
+  ("Equipment Price Listing"), confirmando também o caminho de omissão (sem linha nenhuma em
+  `tmsi.branding`, nunca "TMSI"). **Por cobrir (Pedro, browser):** o mesmo em `/prices`
+  (logo, tagline, cor) e nos dois ficheiros exportados.
+- **LL (metade agente):** confirmado por leitura de código que `lib/xlsx-export.ts` e a
+  vista de impressão de `/prices` já não importam `NOTICE_TEXT` nenhum (removido de
+  `lib/notice.ts` — só `PROPRIETARY_NOTICE`, o rodapé do login, sobrevive) — o rodapé de
+  ambos os documentos vem agora inteiramente de `footerLines()`
+  (`tmsi.branding.footer_text`/`legal_text`), nunca da licença. **Por cobrir (Pedro,
+  browser):** o `unzip`/grep ao `.xlsx` real e ao HTML de impressão real, confirmando zero
+  ocorrências, exactamente como AA já fez para custos na i10.
+- **Item 14, remedido no mesmo fixture (57 produtos sintéticos, `T-9200`..`T-9256`, `draft`,
+  HS reais, ciclando as 4 filiais/moedas, cada um vendido em 2 filiais — 13+57=70,
+  inserido/medido/apagado dentro de `BEGIN`/`ROLLBACK`, contagem de produtos confirmada de
+  volta a 13 depois): `EXPLAIN ANALYZE` como sessão `authenticated` (claims reais de
+  `finance`), três execuções independentes — `v_products` (`/products`): **3,50 s / 3,90 s
+  / 7,25 s** (70 linhas); `v_branch_prices` (`/prices`): **506 ms / 559 ms** (147 linhas,
+  duas execuções medidas). **Não fecha o item 14** — reaberto com o número real, per a
+  condição de paragem do próprio prompt ("tempos que tornem a app inutilizável → reportar e
+  reabrir, não redesenhar aqui"): muito mais lento do que a extrapolação de 05/09 sugeria
+  (~300–400 ms esperados a este volume), e com uma variância grande entre execuções — este
+  VPS parte 1 vCPU entre várias apps (`load average` observado ~1,0–1,6 durante as medições,
+  `swap` usado ~1,3 GB de 4 GB), o que explica tanto a severidade como a variação, mas não
+  torna o número menos real: mesmo na execução mais rápida (3,50 s), `/products` a 70
+  artigos já está bem dentro de "ordem de segundos". Detalhe completo, com a nota sobre o
+  diagnóstico remoto que também correu (por engano) num worktree local em vez de
+  verdadeiramente remoto: `docs/STATE.md`.
+
+**Gate de produção satisfeito para o estado actual** (migrações 0001–0008 + digest acima)
+para as capacidades já cobertas pela execução n.º 1 + as adendas anteriores — item 14
+continua **por fechar**, não é coberto por este gate.
