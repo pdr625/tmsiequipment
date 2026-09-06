@@ -65,12 +65,17 @@ function fromRow(row: BrandingRow): Branding {
 // and still gets a row back, never a 401.
 export async function getBranding(): Promise<Branding> {
   const supabase = await createSupabaseServerClient();
+  // .maybeSingle() BEFORE .overrideTypes() — the established lesson from
+  // audit/page.tsx (docs/STATE.md, E3-i6 F1): overrideTypes() is a
+  // "transform" stage postgrest-js narrows to a type with no further
+  // query-shaping methods, so .maybeSingle()/.eq() have to come first,
+  // never chained (or reassigned) after it.
   const { data } = await supabase
     .schema('tmsi')
     .from('v_current_branding')
     .select('display_name, tagline, footer_text, legal_text, primary_color, font_family, logo_id, logo_mime_type')
-    .overrideTypes<BrandingRow[], { merge: false }>()
-    .maybeSingle();
+    .maybeSingle()
+    .overrideTypes<BrandingRow, { merge: false }>();
   return data ? fromRow(data) : DEFAULT_BRANDING;
 }
 
@@ -120,8 +125,8 @@ export async function getBrandingLogoBuffer(
     .from('branding_logos')
     .select('data, mime_type')
     .eq('id', logoId)
-    .overrideTypes<LogoRow[], { merge: false }>()
-    .maybeSingle();
+    .maybeSingle()
+    .overrideTypes<LogoRow, { merge: false }>();
   if (error || !data) return null;
   const hex = data.data.startsWith('\\x') ? data.data.slice(2) : data.data;
   return {
