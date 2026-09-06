@@ -104,21 +104,25 @@ Detalhe completo: `docs/STATE.md`.
 **12. Questões do handover §7**: moeda escalões TBM (T2) · taxas SAP (C2, manual no piloto).
 **13. Terceira perna do backup** — **SUSPENSO, decisão do Pedro 2026-09-06** (hoje 2
 cópias/2 máquinas; liga a D-C/D-D do parque — sem prazo, sem próxima acção definida).
-**14. Paginação/pesquisa nas listagens** — **MEDIDO a ~70 artigos reais 2026-09-06 (item
-26), NÃO FECHADO — números reais bem piores do que a extrapolação de 05/09 sugeria.**
-Fixture de 57 produtos sintéticos (13 reais + 57 = 70, o topo do catálogo real) medido em
-`EXPLAIN ANALYZE` como sessão `authenticated` real: `v_products` (`/products`) **3,50 s /
-3,90 s / 7,25 s** em três execuções — não os ~300–400 ms que a extrapolação linear de
-148ms→717ms (13→163) previa. `v_branch_prices` (`/prices`) ficou muito melhor comportado,
-506–559 ms. Nota honesta: este VPS reparte 1 vCPU entre várias apps (`load average`
-~1,0–1,6, swap ~1,3/4 GB durante as medições) — explica a variância grande entre execuções,
-mas não torna o pior número menos real: mesmo a execução mais rápida (3,50 s) já é "ordem de
-segundos" a um volume que **é** o catálogo real, não um cenário hipotético. **Próxima acção:
-decisão do Pedro sobre prioridade/timing do redesenho** (mover `products_visible()` para uma
-condição `WHERE` indexável em vez de uma função por linha — âmbito maior que uma sessão de
-medição) — esta entrada já não é "aceitável tal como está". A paginação dos exports
-Excel/PDF já segue a charte Condat, uma vez carregada (item 26, ✅ fechado). Detalhe
-completo das duas medições (05/09 e 06/09): `docs/STATE.md`.
+**14. Paginação/pesquisa nas listagens** — **DIAGNOSTICADO 2026-09-06 — a medição de 06/09
+do item 26 estava INVÁLIDA** (não é a extrapolação: menos linhas a custar 5–10× mais é
+impossível se a variável fosse o volume). Sessão de diagnóstico dedicada, sem correcção
+nenhuma (medir, não consertar): **H2 confirmada, H1 refutada** — o custo é pressão de
+memória/swap deste VPS (961 MB/1 vCPU, partilhado por 4 apps + a própria sessão de agente,
+que sozinha já usa ~48% da RAM), provado directamente por `vmstat` a mostrar swap real
+durante as consultas lentas enquanto o Postgres mostrava 100% de acerto em cache (zero
+leitura real de disco) — **não** uma regressão de código da migração 0007 (`v_products` nem
+sequer chama `compute_price()`, o caminho que a 0007 tocou). Remedição limpa (5 execuções
+por ponto, carga registada): 13→309ms, 70→3.382ms, 163→10.555ms (`v_products`) — a 13
+linhas os números são normais (mesma ordem que os 148ms de 05/09), a escala deixa de ser
+linear a partir de 70. **Continua por fechar** — o catálogo real (50-70 artigos) vai
+encontrar este problema em produção. Propostas ordenadas por custo/risco (nenhuma
+executada): (1) mais RAM no VPS — sem tocar em código; (2) disciplina de sessões de agente
+longas neste host; (3) afinar `shared_buffers`/`work_mem` do Postgres; (4) redesenhar
+`products_visible()`/`v_products` para uma condição indexável (o redesenho maior, exige
+reprovar a matriz completa do protocolo); (5) paginação real, só útil combinada com (4).
+**Próxima acção: decisão do Pedro sobre qual seguir** (ou nenhuma, se aceitar o risco por
+agora). Detalhe completo das três medições (05/09, 06/09 inválida, diagnóstico): `docs/STATE.md`.
 ~~**26. White-label + branding dos documentos**~~ ✅ **fechada 2026-09-06 (opção B).**
 Migração 0008 (`tmsi.branding`/`tmsi.branding_logos`, append-only, admin-only, fora do
 workflow de aprovação da 0007 — é apresentação, não preço); nova página `/config/branding`

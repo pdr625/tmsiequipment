@@ -3,12 +3,144 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 26 — white-label/branding (opção B) — ✅ FECHADA 2026-09-06.** Ver
-secção própria abaixo — inclui a remedição do item 14, que **não fechou** (números reais
-piores do que a extrapolação de 05/09, reaberto). Próximo, por `docs/BACKLOG.md` e decisão
-do Pedro: prioridade/timing do redesenho do item 14 · CPI/EOP · renome de infra na E6.
-Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E4,
-E5-VPS e as migrações 0003/0004/0005/0006/0007/0008 estão fechadas.
+**Etapa actual: item 14 — diagnóstico do desempenho — ✅ DIAGNOSTICADO 2026-09-06 (a
+medição de 06/09 do item 26 é INVÁLIDA, não apagada — ver secção própria abaixo).**
+Veredicto: **H2 confirmada, H1 refutada** — pressão de memória/swap deste host, não uma
+regressão de código da 0007. Nenhuma correcção executada nesta sessão, por desenho. Próximo,
+por `docs/BACKLOG.md` e decisão do Pedro: qual das propostas seguir (ou nenhuma) · CPI/EOP ·
+renome de infra na E6. Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1,
+E2, E3 (i1–i10), E4, E5-VPS e as migrações 0003/0004/0005/0006/0007/0008 estão fechadas.
+
+## Item 14 — Diagnóstico do desempenho (medição inválida de 06/09) — ✅ DIAGNOSTICADO 2026-09-06
+
+**Contexto:** a medição do item 26 (70 artigos = 3,50/3,90/7,25 s) era logicamente
+impossível como medição de *volume* — menos linhas (70) do que a de 05/09 (163) a custar
+5–10× mais é o sinal de que outra coisa mandava, não o número de produtos. Esta sessão
+**não corrigiu nada** (restrição 1 do prompt) — só diagnosticou.
+
+**F0 — reconstituição, contra o git e o `docs/STATE.md`, não de memória:** a medição de
+05/09 (`47ff96a`, 2026-09-05T22:46) é **anterior** à migração 0007 (`783c5bb`,
+2026-09-06T12:56) — corre contra migrações 0001-0006. A medição de 06/09 (dentro da sessão
+do item 26) corre contra 0001-0008 — 0007 já tinha versionado `interco_fees`/
+`transport_tiers`/`customs_rates`/`margin_grids` e mudado as procuras internas do
+`compute_price()`; a 0008 acrescentou `tmsi.branding`/`tmsi.branding_logos`, sem relação
+nenhuma com as vistas medidas. **Os dois conjuntos não são directamente comparáveis** —
+schema diferente — mas isso por si só não explica uma escala 5–10× pior para *menos*
+linhas. As fixtures também diferiam em desenho (150 produtos T-9200..T-9349 em 05/09 vs.
+57 T-9200..T-9256 em 06/09), mas ambas seguem o mesmo padrão (draft, HS reais, 4
+filiais/moedas, 2 filiais por produto) — não é a causa provável.
+
+**F1 — remedição limpa, 5 execuções por ponto (descartando a 1.ª, fria), carga registada
+antes/depois de cada série, dentro de `BEGIN`/`ROLLBACK`, sessão `authenticated` real
+(claims de `finance`), schema de hoje (0001-0008):**
+
+| Volume | `v_products` mediana (intervalo) | `v_branch_prices` mediana (intervalo) | `load average` antes→depois |
+|---|---|---|---|
+| 13 (real) | **309 ms** (212–432 ms) | **50 ms** (47–92 ms) | 1,47 → 1,43 |
+| 70 (+57 fixture) | **3.382 ms** (2.559–4.453 ms) | **309 ms** (262–400 ms) | 1,10 → 2,35 |
+| 163 (+150 fixture) | **10.555 ms** (8.501–13.084 ms) | **1.412 ms** (921–1.982 ms) | 1,42 → 3,80 |
+
+Comparação com 05/09 (pré-0007, sem carga registada nessa sessão): 13→148 ms, 163→717 ms
+(`v_products`); 33→159 ms, 333→909 ms (`v_branch_prices`, contagem de pares produto×filial,
+não de produtos). **A 13 linhas os números de hoje são normais** (309 ms, mesma ordem de
+grandeza que 148 ms) — a app não está geralmente mais lenta. **A escala deixa de ser linear
+a partir de 70**, e piora ainda mais a 163 — um padrão super-linear, não o crescimento
+sub-linear amortizado que 05/09 tinha mostrado.
+
+**F2 — a prova directa, não uma inferência:** `EXPLAIN (ANALYZE, BUFFERS)` a `v_products`
+com 70 linhas mostrou `Buffers: shared hit=6724` — **zero leituras reais de disco**, os
+dados já estavam em cache do Postgres. Ao mesmo tempo, `vmstat 1` corrido **durante** essa
+mesma consulta mostrou actividade de swap real e substancial: `si` (swap-in) até
+**9.608 KB/s**, `so` (swap-out) até **12.892 KB/s**, `bi`/`bo` (I/O de blocos) na ordem dos
+12.000–24.000 KB/s — o sistema operativo estava activamente a paginar memória para dentro e
+fora do swap **durante** a consulta, não o Postgres a ler do disco. Isto é o mecanismo:
+pressão de memória do host, não um custo por linha da própria função. **`tmsi.v_products`
+nem sequer chama `compute_price()`** — usa só `tmsi.products_visible()`
+(`primary_branch`/`sold_in`/`status`, `has_role()` × 3 chamadas por linha via curto-
+circuito do `OR`) — uma função que a 0007 **nunca tocou**. Isto por si só já refuta H1 para
+metade do problema (a mais grave das duas): não há caminho nenhum entre a 0007 e este
+custo. `tmsi.user_roles` tem 7 linhas e um índice próprio (`user_roles_uniq`) — não é uma
+tabela a crescer nem sem índice.
+
+Para `v_branch_prices` (que chama `compute_price()`, tocada pela 0007): a escala observada
+(50→309→1.412 ms, para uma contagem de pares produto×filial a crescer de 33→147→~333) é
+grosso modo proporcional ao volume, não desproporcional como em `v_products` — consistente
+com a MESMA pressão ambiente a amplificar um custo que continua linear, não com uma
+regressão nova introduzida pelas procuras versionadas da 0007 (que usam os índices de
+procura próprios criados nessa migração — `transport_tiers_lookup_idx` e equivalentes,
+nunca um varrimento de histórico completo). Uma chamada isolada a
+`compute_price('T-0002','SA')` mostrou `Buffers: shared hit=2462`, também sem leitura real
+de disco. **Não foi feita a comparação completa contra um ambiente efémero pré-0007**
+(restrição 6 do prompt) — considerada desnecessária face à evidência directa já obtida
+(`v_products`, que nem usa `compute_price()`, já mostra o mesmo padrão e é o caso mais
+grave); fica disponível se o Pedro quiser uma certeza absoluta sobre a metade do
+`compute_price()`.
+
+**Achado estrutural, não pontual, registado com honestidade:** a própria sessão de
+diagnóstico (e a do item 26 antes dela) consome, sozinha, uma fracção substancial da RAM
+deste VPS — `top` confirmou o processo `claude` desta sessão a usar **477 MB (48% dos 961
+MB totais)** durante as medições, para além dos containers da app e de mais três outras
+aplicações (Oikos, Itinera, Vaultwarden) a partilhar o mesmo host de 1 vCPU. Um host
+"em repouso" no sentido literal da restrição 2 do prompt (nenhum build/backup/timer a
+correr) foi confirmado antes de cada série — mas a PRÓPRIA sessão que mede nunca deixa de
+contribuir para a pressão de memória, por ser ela própria um processo pesado neste mesmo
+host. A carga subiu progressivamente ao longo das três séries (1,43→2,35→3,80) — consistente
+com pressão cumulativa (mais swap gera mais swap), não com um pico isolado e independente.
+**Isto explica também porque a medição de 05/09 (uma sessão mais curta, sem uma migração de
+branding com upload de logo, sem o histórico desta conversa) partiu de uma base mais
+folgada** — não porque o código fosse mais rápido então, mas porque havia mais memória
+disponível nesse momento específico.
+
+**F3 — impacto ponta-a-ponta:** `/prices` e uma página de produto exigem sessão real por
+cookie (`@supabase/ssr`) — a mesma limitação já registada nas adendas i9/i10/item 26,
+confirmada mais uma vez como não contornável por `curl`. Medido em alternativa:
+`/api/health` (rota pública, sem consulta à BD) manteve-se rápido (74–386 ms) mesmo com
+`load average` ainda elevado (2,09) — confirma que o **contentor da app não está,
+por si, a sofrer** (limite de 192 MB, muito abaixo da pressão que a BD sofre); o gargalo
+é inteiramente do lado do Postgres/host. Um pedido real a `/prices`/produto nestas condições
+experimentaria, no mínimo, o tempo de BD medido acima mais uma sobrecarga modesta de
+Next.js/rede (a mesma ordem de grandeza do `/api/health`, dezenas a poucas centenas de ms)
+— seria dominado pelo tempo de BD, não pelo resto. **Por confirmar com precisão (Pedro,
+browser):** o tempo real completo de `/prices`/produto nestas condições.
+
+**Veredicto — H2 confirmada, H1 refutada:**
+1. **H1 (regressão da 0007) — refutada para `v_products`** (não usa `compute_price()`,
+   caminho de código intocado pela 0007) e **não suportada para `v_branch_prices`**
+   (escala aproximadamente proporcional ao volume, índices de procura da 0007 confirmados
+   em uso, sem varrimento de histórico).
+2. **H2 (contenção do host) — confirmada por prova directa**: `vmstat` mostrou swap real
+   e substancial durante as consultas lentas, com `Buffers` do Postgres a mostrar hit-rate
+   de 100% (sem leitura real de disco) — o custo está no sistema operativo a paginar
+   memória, não na base de dados a ler do disco nem numa função mais cara.
+3. **Não fecha a 305–432 ms como "aceitável"**: mesmo a 13 linhas, hoje já é o dobro do
+   valor de 05/09 — o headroom deste host encolheu, não é o mesmo de há dois dias. O
+   catálogo real (50-70 artigos) **vai** encontrar este problema em produção, com carga
+   normal de utilização a somar-se à do host — não é um cenário hipotético.
+
+**Propostas, por ordem de custo/risco crescente — nenhuma executada (decisão do Pedro):**
+1. **Mais RAM no VPS** (upgrade de plano) — sem alteração de código nenhuma; remove a causa
+   raiz directamente. Re-verificação: nenhuma nova prova de app, só confirmar que os tempos
+   voltam à escala sub-linear de 05/09 depois.
+2. **Disciplina de sessões de trabalho** — evitar sessões de agente muito longas/pesadas em
+   paralelo com medições de desempenho; considerar reiniciar sessões periodicamente neste
+   VPS. Baixo risco, não resolve a raiz (outras apps continuam a partilhar o host).
+3. **Afinar `shared_buffers`/`work_mem` do Postgres** dentro do limite do container (320 MB)
+   — configuração, sem tocar em código; pode reduzir picos de swap. Re-verificação: memória
+   do container dentro do limite, sem `OOMKilled`.
+4. **Redesenhar `products_visible()`/a vista `v_products`** para uma condição `WHERE`
+   indexável em vez de uma função `SECURITY DEFINER` por linha — reduziria o número de
+   chamadas de função (e por isso a superfície de pressão de memória), mas é o redesenho
+   maior, com o risco maior: teria de reprovar a matriz completa do `VERIFICATION-
+   PROTOCOL.md` (papéis/filiais) e as fronteiras 0003/0004.
+5. **Paginação real (`LIMIT`/`OFFSET`)** — só ajuda combinada com a proposta 4; sozinha,
+   `products_visible()` continua a avaliar todas as linhas antes de aplicar o limite (achado
+   já registado em 05/09, confirmado ainda válido).
+
+**F5 (este fecho):** `docs/BACKLOG.md` (item 14 com a causa e as propostas, a medição de
+06/09 marcada inválida); este ficheiro; dossier (`VPS.md`/`CHANGELOG.md` via
+`dossier-push.sh`). Fixture zero resíduo confirmado por contagem (`tmsi.products` de volta
+a 13 depois de cada série). `scripts/smoke.py` não foi corrido nesta sessão — nenhuma
+alteração de código/schema foi feita, nada a re-verificar (restrição 1).
 
 ## Item 26 — White-label + branding (opção B) — ✅ FECHADA 2026-09-06
 
