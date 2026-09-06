@@ -77,8 +77,11 @@ dois runs distintos — daí só haver um run no histórico. `STATE.md` tem o di
 **Duas melhorias identificadas nesta etapa:**
 1. ✅ **Implementada na E2, removida no item 22 (2026-09-06):** o guard de CI existiu
    enquanto `NEXT_PUBLIC_SUPABASE_ANON_KEY` era um build-arg — deixou de fazer sentido
-   quando esse valor passou a env de runtime (`SUPABASE_ANON_KEY`, validado por
-   `app/src/instrumentation.ts` no arranque do container, não no build).
+   quando esse valor passou a env de runtime (`SUPABASE_ANON_KEY`). A validação de arranque
+   vive agora num guard `sh -c` no próprio `CMD` do `app/Dockerfile`, não num
+   `instrumentation.ts` do Next.js — tentado primeiro, descartado ao provar ao vivo que
+   `register()` corre nalgum contexto interno do Next.js/Turbopack onde nem
+   `process.kill(process.pid, 'SIGKILL')` chamado de dentro da app derruba o processo real.
 2. ✅ **Fechada no item 22 (2026-09-06), não só documentada.** A premissa desta linha
    (rodar `JWT_SECRET` exige rebuild da imagem) deixou de ser verdade: `SUPABASE_URL`/
    `SUPABASE_ANON_KEY` já não estão embutidos na imagem, são env de runtime lidos de

@@ -11,9 +11,17 @@
 # grep, this app only talks to Supabase server-side), so build-time
 # inlining bought nothing except pinning the image to one hostname/key set.
 # They're runtime env now, read by app/src/lib/supabase-server.ts and
-# supabase-middleware.ts directly, validated at server startup by
-# app/src/instrumentation.ts (fails the container at boot if either is
-# missing, rather than shipping a build with an empty value baked in).
+# supabase-middleware.ts directly.
+#
+# Fail-fast lives in this file's own CMD (below), not in
+# app/src/instrumentation.ts — tried that first and verified live it
+# doesn't actually work for hard process termination here: register()
+# executes in some Next.js/Turbopack-internal context where process.exit()
+# and even process.kill(process.pid, 'SIGKILL') from *inside* the app have
+# no effect on the real container process (confirmed: console.error prints,
+# then the server just sits there, connection refused forever, never
+# exiting — only an external `docker kill` actually stops it). A plain
+# shell guard before `exec`ing into node has none of that ambiguity.
 
 FROM node:24.20.0-alpine AS builder
 WORKDIR /app
@@ -43,4 +51,7 @@ COPY --from=builder /app/.next/static ./.next/static
 
 USER node
 EXPOSE 3000
-CMD ["node", "server.js"]
+# `exec` replaces this shell with node once the check passes, so node ends
+# up as PID 1 for correct signal handling (docker stop/compose down), same
+# as the bare `CMD ["node", "server.js"]` this replaces.
+CMD ["sh", "-c", "if [ -z \"$SUPABASE_URL\" ] || [ -z \"$SUPABASE_ANON_KEY\" ]; then echo 'Missing required runtime environment variable(s): SUPABASE_URL, SUPABASE_ANON_KEY — see deploy/DEPLOY.md §2.' >&2; exit 1; fi; exec node server.js"]

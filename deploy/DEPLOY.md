@@ -85,10 +85,17 @@ because the disaster drill also confirmed the **value was never in the client-si
 `SUPABASE_ANON_KEY`, read directly by `app/src/lib/supabase-server.ts` and
 `supabase-middleware.ts`. `docker-compose.yml` wires them to `tmsi-app` from the **same**
 `SITE_URL`/`ANON_KEY` values GoTrue and PostgREST already use — no new `.env` keys, one
-value each, not two kept in sync by hand. `app/src/instrumentation.ts` validates both are
-set once at server startup (Next.js's `register()` hook, called before any request is
-served) — missing either one fails the container at boot with a clear log line, not a
-silently-broken app answering requests.
+value each, not two kept in sync by hand.
+
+The fail-fast check lives in `app/Dockerfile`'s own `CMD` (a plain `sh -c` guard before
+`exec node server.js`), not in a Next.js `instrumentation.ts`. That was tried first and
+verified live not to work here: `register()` runs in some Next.js/Turbopack-internal context
+where even `process.kill(process.pid, 'SIGKILL')` called from inside the app has no effect on
+the real container process — the error logs correctly, then the server just sits there,
+connection refused forever, never actually exiting (only an external `docker kill` stops it).
+A shell check before the process even starts has none of that ambiguity: missing either
+variable prints a clear line to stderr and the container exits non-zero immediately,
+verified live.
 
 **Consequence, now that this is fixed:** restoring this app on a different hostname, or
 after rotating `JWT_SECRET`/regenerating `ANON_KEY` (a real disaster, item 24's planned
