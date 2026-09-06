@@ -57,7 +57,22 @@ export async function buildXlsx(opts: {
   const sheet = workbook.addWorksheet(opts.sheetTitle.slice(0, 31));
 
   if (opts.logo) {
-    const imageId = workbook.addImage({ buffer: opts.logo.buffer, extension: opts.logo.extension });
+    // `as unknown as Parameters<...>[0]`: exceljs's own .d.ts declares a
+    // MODULE-LOCAL `interface Buffer extends ArrayBuffer` for this one
+    // field — under this project's `esnext` lib (which adds the
+    // resizable-ArrayBuffer members: resize/resizable/maxByteLength/
+    // detached/transfer/transferToFixedLength), @types/node's real
+    // Buffer no longer structurally satisfies exceljs's stale shim.
+    // Confirmed real (a fresh `npx tsc --noEmit` on a clean clone, not a
+    // CI fluke) and confirmed harmless at runtime — same class of
+    // type-checker/lib mismatch already documented elsewhere in this
+    // file and in the two export routes for Buffer vs BodyInit.
+    // Parameters<>[0] avoids having to name exceljs's own (unexported)
+    // Image interface.
+    const imageId = workbook.addImage({
+      buffer: opts.logo.buffer,
+      extension: opts.logo.extension,
+    } as unknown as Parameters<typeof workbook.addImage>[0]);
     // Fixed footprint (roughly a 120x40px logo area) — this module has no
     // way to know the source image's own aspect ratio without a second
     // decode step; a v1 choice, not a limitation of the format. Excel
