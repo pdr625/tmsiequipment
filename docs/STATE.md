@@ -3,13 +3,23 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 14 — diagnóstico do desempenho — ✅ DIAGNOSTICADO 2026-09-06 (a
-medição de 06/09 do item 26 é INVÁLIDA, não apagada — ver secção própria abaixo).**
-Veredicto: **H2 confirmada, H1 refutada** — pressão de memória/swap deste host, não uma
-regressão de código da 0007. Nenhuma correcção executada nesta sessão, por desenho. Próximo,
-por `docs/BACKLOG.md` e decisão do Pedro: qual das propostas seguir (ou nenhuma) · CPI/EOP ·
-renome de infra na E6. Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1,
+**Etapa actual: item 14 — medição destacada de sessão de agente — EM CURSO 2026-09-06
+(agendada, sem sessão de agente ligada; ver secção "Item 14 — medição destacada" abaixo
+para a hora exacta e o caminho do resultado).** O diagnóstico anterior (H2 confirmada, H1
+refutada — pressão de memória/swap, não a 0007) sofria do mesmo defeito que apontava: a
+própria sessão de agente que mediu já ocupava ~48% da RAM do host. Esta sessão escreveu e
+agendou um medidor que corre sem nenhuma sessão de agente activa (`systemd-run --user
+--on-active`, sem sudo, com `loginctl enable-linger` activado) — o resultado fica por ler
+numa sessão futura. Nenhuma correcção executada (restrição 1, medir não consertar). E0, E1,
 E2, E3 (i1–i10), E4, E5-VPS e as migrações 0003/0004/0005/0006/0007/0008 estão fechadas.
+
+**Regra de processo (item 14, 2026-09-06, escrita também em `~/atelier-vps/CLAUDE.md`):**
+medições de desempenho desta app nunca se fazem com uma sessão de agente aberta neste VPS —
+a sessão do Claude Code chegou a usar ~48% da RAM total do host (961 MB), o que por si só
+já explica a maior parte da pressão de memória medida no diagnóstico anterior. Uma medição
+limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
+resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
+pena medir.
 
 ## Item 14 — Diagnóstico do desempenho (medição inválida de 06/09) — ✅ DIAGNOSTICADO 2026-09-06
 
