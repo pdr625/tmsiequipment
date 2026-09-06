@@ -13,6 +13,57 @@ disponíveis para uma sessão futura de correcção, se/quando decidires prioriz
 critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
 
+## Item 21 — Kit de desastre + GHCR privado + escrow de segredos — ✅ FECHADA 2026-09-06
+
+**Contexto:** fecha as lacunas 5–8 do ensaio de restauro (`docs/DISASTER-DRILL.md`, item 15)
+mais os itens 23 (GHCR privado) e o desenho do escrow (ponto 5 do 21). Seis frentes, uma
+sessão. Detalhe completo de cada frente já registado nas secções próprias abaixo (F1–F6,
+ordem cronológica inversa neste ficheiro); esta secção é o fecho/mapa geral pedido pelo
+prompt.
+
+**F0 (medição):** `~/.docker/config.json` já tinha uma entrada `ghcr.io`, datada de 19 de
+Julho — anterior a este projecto, origem esclarecida pelo Pedro como provável PAT de pull do
+Itinera (nunca decifrada nem investigada). 25 variáveis reais inventariadas no `.env` de
+produção (só nomes).
+
+**Mapa achado→prova:**
+| Achado | Frente | Prova |
+|---|---|---|
+| GHCR público (achado 4 / item 23) | F1 | Ordem rígida: login autenticado com o pacote ainda público (TMSI **e** Itinera, coerência provada) → Pedro torna privado → re-prova → ramo de falha (`unauthorized` sem credencial) → restaurado, re-provado |
+| `DEPLOY.md` obsoleto (achado 5) | F2 | Reescrito contra a produção real, incl. o procedimento de restauro provado no ensaio e o workaround de rebuild do achado 3 |
+| `.env.example` incompleto (achado 6) | F3 | `deploy/supabase/.env.example` com as 25 variáveis reais, verificadas por `cut -d= -f1`; raiz corrigida para apontar lá |
+| Vhost não versionado (achado 7) | F4 | `deploy/nginx/tmsiequipment.conf`, diff zero contra o real, verificado sem segredos |
+| `smoke.py` não portável (achado 8) | F6 | `TMSI_BASE_URL`/`TMSI_CREDENTIALS_DIR`, 27/27 nos dois modos (sem vars e com vars explícitas) |
+| Escrow de segredos (ponto 5) | F5 | `.env` + PAT GHCR cifrados (`gpg -c`, `age` não instalado), decifração provada pelo Pedro |
+
+**Dois incidentes reais desta sessão, ambos registados honestamente, nenhum escondido:**
+1. **4 segredos de produção ecoados** (`POSTGRES_PASSWORD`/`JWT_SECRET`/`ANON_KEY`/
+   `SERVICE_ROLE_KEY`) — ver secção própria abaixo. **Decisão do Pedro: aceitar o risco por
+   agora, rodar mais tarde** (BACKLOG item 24, ainda aberto).
+2. **A passphrase do escrow teve de tocar disco** (ficheiro 600, `read -rs` não funciona
+   nesta sessão), contra a intenção original da restrição 6 — `shred -u -z` imediatamente a
+   seguir ao uso, desvio registado em `deploy/DEPLOY.md` §6.
+
+**Achado lateral, não corrigido, registado (BACKLOG item 25):** `smoke.py` bloco R é sensível
+à fronteira UTC/hora local (`date.today()` Python vs `current_date` Postgres) — apanhado ao
+vivo a provar a F6 (26/27 antes da meia-noite UTC, 27/27 depois, sem tocar em código).
+
+**Item 22 (imagem presa ao hostname) fica FORA desta sessão, por desenho** — o workaround de
+rebuild está documentado em `deploy/DEPLOY.md` §3 enquanto a correcção não existir.
+
+**O que sobrevive a um desastre agora, coluna por coluna do inventário F0 do ensaio:**
+dump ✅ (já sobrevivia) · migrações/seed/compose ✅ (já sobreviviam) · imagens ✅ (já
+sobreviviam) · imagem da app ✅ mas **privada agora**, credencial de pull sobrevive **só**
+através do escrow (F5) · **segredos (`.env`) ✅ agora, via escrow** · **vhost ✅ agora,
+versionado** · **passwords `.test` continuam ❌** (fora do âmbito desta sessão — o caminho
+que funciona, provado no ensaio, é o reset administrativo via `SERVICE_ROLE_KEY`, que já
+sobrevive pelo escrow) · **procedimento de restauro ✅ agora, escrito e provado**. A única
+coisa que não sobrevive por desenho, não por lacuna, é a **passphrase do escrow** — humana,
+guardada pelo Pedro em dois sítios fora desta VPS (Vaultwarden + foto), nunca no próprio
+ficheiro cifrado.
+
+---
+
 ## Item 21 F5 — Escrow cifrado de segredos — ✅ FECHADO 2026-09-06
 
 **O quê:** `deploy/supabase/.env` + o PAT GHCR de pull (extraído de

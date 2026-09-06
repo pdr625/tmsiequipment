@@ -114,3 +114,12 @@ host diferente e com segredos novos. **O que falta é o kit à volta deles** —
 escrito, os nomes das variáveis, o vhost, e um caminho para os segredos. Enquanto o `.env` do VPS
 só existir no VPS, um desastre real obriga a reconstruir segredos à mão antes de qualquer
 restauro começar.
+
+**Actualização, 2026-09-06 (item 21 do BACKLOG) — lacunas 5–8 e o escrow fechados.** Achado 5
+(`DEPLOY.md` obsoleto), 6 (`.env.example` incompleto), 7 (vhost não versionado) e 8
+(`smoke.py` não portável) corrigidos; o escrow de segredos (proposto aqui, não desenhado)
+existe e foi provado por decifração. Achado 4 (pacote GHCR público) também fechado, com
+autenticação do VPS provada nos dois sentidos (pacote ainda público → privado → ramo de
+falha). **Só o achado 3 (imagem presa ao hostname) continua aberto** — sessão própria, por
+desenho (BACKLOG item 22). Detalhe completo, procedimentos e provas: `deploy/DEPLOY.md` e
+`docs/STATE.md`.

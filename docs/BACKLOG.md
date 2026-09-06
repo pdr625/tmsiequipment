@@ -106,25 +106,25 @@ intactas. O que **não** sobreviveu foi o procedimento: o restauro documentado p
 meio-restaurada em silêncio, e a imagem não se consegue reapontar. Relatório completo, com o
 procedimento correcto provado: `docs/DISASTER-DRILL.md`. Sequelas → itens 21, 22 e 23.
 
-**21. Kit de desastre** — as lacunas de *documentação e portabilidade* achadas no ensaio
-(`docs/DISASTER-DRILL.md`, achados 5–8), agrupadas por serem todas a mesma coisa: os dados
-sobrevivem, o kit à volta deles não. Âmbito:
-1. **Reescrever o `DEPLOY.md` contra a produção real** — nginx no host (sem Kong, sem NPM),
-   deploy em `~/atelier-vps/tmsiequipment`, imagens por digest do GHCR — incluindo o
-   **procedimento de restauro correcto provado no ensaio** (`pg_restore -U supabase_admin`,
-   **sem** `--no-owner`) e o **passo de rebuild** do achado 3, enquanto a correcção do item 22
-   não existir.
-2. **Completar o `.env.example`** com TODOS os nomes de variáveis que a produção usa — só nomes
-   e comentários, **nunca valores**.
-3. **Versionar o vhost nginx** em `deploy/nginx/`, com nota de que a cópia operante é a do VPS.
-4. **Tornar o `smoke.py` portável:** `BASE` e a localização do ficheiro de credenciais por
-   variáveis de ambiente, com os valores actuais como default — continua igual em produção e
-   passa a poder correr num drill.
-5. **Escrow de segredos** — hoje o `.env` do VPS não existe em mais lado nenhum, e sem ele um
-   desastre real obriga a reconstruir segredos à mão antes de o restauro sequer começar.
-   Proposta **a desenhar neste item, não a executar**: cópia cifrada (`age` ou gpg simétrico,
-   passphrase só do Pedro, **nunca em ficheiro**) incluída no fluxo do backup off-site para o
-   homelab. **Decisão pendente do Pedro.**
+~~**21. Kit de desastre**~~ ✅ **fechada 2026-09-06** — as 6 frentes (`docs/DISASTER-DRILL.md`
+achados 5–8 + GHCR + escrow), todas provadas: `DEPLOY.md` reescrito contra a produção real,
+incl. o procedimento de restauro provado no ensaio e o passo de rebuild do achado 3;
+`deploy/supabase/.env.example` completo (25 nomes reais, raiz `.env.example` corrigido para
+apontar lá); `deploy/nginx/tmsiequipment.conf` versionado, diff zero contra o real; GHCR
+autenticado com ordem rígida provada (→ item 23, já fechado); `smoke.py` portável
+(`TMSI_BASE_URL`/`TMSI_CREDENTIALS_DIR`), 27/27 provado nos dois modos; escrow cifrado
+(`gpg -c`, `age` não instalado) com prova de decifração do Pedro. Detalhe completo, todos os
+desvios/incidentes registados honestamente: `docs/STATE.md`.
+
+**25. `smoke.py`'s bloco R é sensível à fronteira UTC/hora local** *(achado lateral,
+2026-09-06, ao provar o item 21 F6 — não corrigido, fora do âmbito dessa sessão)* — o bloco
+usa `date.today()` (hora local do host, WEST/UTC+1) para `effective_date` ao inserir, mas
+`fx_rate()`/a própria query usam `current_date` do Postgres (UTC). Entre as 00:00 e a 00:59
+hora local todos os dias, as duas datas discordam — uma corrida do smoke nessa janela falha
+o bloco R (`26/27`) por motivo nenhum relacionado com uma regressão real (confirmado ao vivo:
+falhou antes de qualquer alteração de código, voltou a passar depois da meia-noite UTC, sem
+tocar em nada). Fix simples quando alguém pegar nisto: ler a data via `select current_date`
+do próprio Postgres em vez de `date.today()` do Python.
 
 **22. Desprender a imagem do hostname** (achado 3 do ensaio). O URL do Supabase e a anon key
 estão compilados no build via `NEXT_PUBLIC_*`, sem override em runtime — restaurar noutro
