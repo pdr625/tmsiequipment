@@ -13,6 +13,91 @@ disponíveis para uma sessão futura de correcção, se/quando decidires prioriz
 critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
 
+## Item 22 — Desprender a imagem do hostname (env de runtime) — ✅ FECHADA 2026-09-06
+
+**Contexto:** achado 3 do ensaio de desastre (item 15) — `NEXT_PUBLIC_SUPABASE_URL`/
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` compilados no bundle do servidor em build-time, sem override
+de runtime; restaurar noutro hostname ou rodar segredos (item 24) exigia refazer a imagem.
+
+**F0 (medição):** os quatro únicos consumidores de `process.env.NEXT_PUBLIC_SUPABASE_*` em
+todo o `app/src` são `lib/supabase-server.ts`, `lib/supabase-middleware.ts`,
+`forgot-password/actions.ts` e `logout/route.ts` — todos server-only (confirmado: nenhum
+`'use client'` os importa; `supabase-server.ts` usa `next/headers`, que o próprio Next.js
+recusaria num componente cliente). Build-args em `.github/workflows/ci.yml` linhas 74-75.
+
+**F1 (código):** os 4 ficheiros passam a ler `process.env.SUPABASE_URL`/`SUPABASE_ANON_KEY`;
+Dockerfile perde os `ARG`/`ENV` de build; `ci.yml` perde o build-arg e o guard "Verify
+NEXT_PUBLIC_SUPABASE_ANON_KEY is set" (deixou de fazer sentido). `docker-compose.yml` passa
+as duas vars ao `tmsi-app` reaproveitando `SITE_URL`/`ANON_KEY` já existentes no `.env` — zero
+chave nova, uma só fonte de verdade por valor.
+
+**F3 — a saga do fail-fast, três tentativas falhadas antes da que funcionou, todas provadas
+ao vivo, nenhuma assumida:**
+1. `app/src/instrumentation.ts` com `throw` — Next.js apanha internamente, regista "Failed to
+   prepare server" + `unhandledRejection` no log, mas o **processo continua vivo**, porta
+   nunca abre, nunca sai.
+2. Substituído por `console.error(...); process.exit(1);` — o `console.error` imprime
+   correctamente (confirmado no log), mas `process.exit(1)` **não tem efeito nenhum** —
+   `docker run` com `timeout 8` confirmou exit `124` (foi o `timeout` a matar, não a app).
+3. Substituído por `process.kill(process.pid, 'SIGKILL')` — sinal do kernel, não
+   interceptável por JS em teoria — **também sem efeito**: container ficou "Up 2 minutes",
+   só um `docker kill` externo o parou. Diagnóstico: `docker top` mostrou um único processo
+   `node server.js` (PID 1 real do host), mas `register()` corre nalgum contexto interno do
+   Next.js/Turbopack onde nem sinais de kernel enviados de "dentro" afectam o processo real
+   — causa exacta não identificada com certeza, não investigada mais fundo (retorno
+   decrescente face ao custo de mais ciclos de CI).
+4. **Fix real:** abandonado `instrumentation.ts` por inteiro (removido). Guard `sh -c` no
+   próprio `CMD` do `app/Dockerfile`, antes de `exec node server.js` — validado localmente
+   (simulação de shell + parse do JSON do `CMD`) antes de gastar mais um ciclo de CI.
+   **Funcionou à primeira:** `docker run --rm` sem as vars → mensagem clara em stderr, **exit
+   1 imediato**, sem timeout nenhum necessário.
+
+**Provas finais (contra o digest realmente deployado,
+`sha256:3e83bdcad2d94a22312e3e86c2da82885b2ed2f8d76ca5b0593f4594a4f7c2f7`):**
+1. Literal ausente: `grep -rl tmsiequipment.duckdns.org /app/.next/` → exit 1 (zero). Também
+   verificado zero ocorrências de qualquer JWT (prefixo genérico `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9`,
+   comum a qualquer JWT HS256, não um valor específico desta instância).
+2. Fail-fast: `docker run --rm` sem `SUPABASE_URL`/`SUPABASE_ANON_KEY` → mensagem exacta +
+   `exit code: 1`, confirmado directamente, sem timeout.
+3. Com as vars: `docker run` com valores de controlo não mostra a mensagem de erro (roda
+   normalmente até ser parado); em produção real, `docker compose up -d --no-deps tmsi-app`
+   com `SUPABASE_URL=${SITE_URL}`/`SUPABASE_ANON_KEY=${ANON_KEY}` → saudável,
+   `scripts/smoke.py` 27/27.
+4. **Honestidade de âmbito, como pedido:** esta sessão prova a ausência do literal + o
+   mecanismo de injecção/fail-fast a funcionar contra o digest real de produção — não prova
+   "a mesma imagem serve outro hostname de facto", que só um próximo ensaio de desastre dá.
+
+**Deploy:** digest `sha256:9122dfa58c40...` → `sha256:3e83bdcad2d94a22312e3e86c2da82885b2ed2f8d76ca5b0593f4594a4f7c2f7`.
+
+**Fecho da classe:** rodar `JWT_SECRET`/`ANON_KEY` (item 24) deixa de exigir rebuild — passa a
+ser um redeploy do container com o `.env` actualizado. `DEPLOY.md` §3/§9 reescritos para
+reflectir isto; `ROADMAP.md` corrigido (uma entrada antiga dizia "rodar `JWT_SECRET` exige
+rebuild" — deixou de ser verdade).
+
+---
+
+## Item 25 — `smoke.py` deixa de depender do fuso do host — ✅ FECHADA 2026-09-06
+
+**Contexto:** achado lateral, apanhado ao vivo durante o item 21 (F6, prova da portabilidade
+do `smoke.py`) — `26/27` numa corrida sem relação nenhuma com o código a testar.
+
+**Diagnóstico:** o relógio deste VPS é WEST (UTC+1); `date.today()` (Python, hora local do
+host) e `current_date` do Postgres (UTC) discordam durante a janela diária entre a meia-noite
+local e a meia-noite UTC (~1h/dia). O bloco R inseria uma linha de correcção com
+`effective_date` = "amanhã" segundo o Postgres; `fx_rate()` (filtro `effective_date <=
+current_date`) ignorava-a, caía para uma linha antiga — daí `fx_rate=785.0 expected=787.0`.
+
+**Fix:** `db_today()` novo, pergunta directamente ao Postgres (`select current_date;`) — as
+duas comparações reais do ficheiro (bloco I, linha ~198; bloco R, linha ~403) passam a usar
+esta única autoridade. O timestamp cosmético do cabeçalho impresso mantém `date.today()`
+(não é uma comparação, só informativo).
+
+**Provas:** mecanismo confirmado ao vivo (`TZ=UTC` vs `TZ=Etc/GMT+12` dão datas diferentes
+agora mesmo, prova ao vivo, não histórica); `smoke.py` corrigido dá **27/27** sob os dois
+extremos de fuso — a dependência do relógio do host desapareceu.
+
+---
+
 ## Item 21 — Kit de desastre + GHCR privado + escrow de segredos — ✅ FECHADA 2026-09-06
 
 **Contexto:** fecha as lacunas 5–8 do ensaio de restauro (`docs/DISASTER-DRILL.md`, item 15)

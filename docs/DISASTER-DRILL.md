@@ -82,6 +82,17 @@ qualquer variável de runtime que os sobreponha. Restaurar noutro hostname, ou c
 Supabase **só do lado do servidor**, portanto basta lê-lo de env de runtime em vez de
 `NEXT_PUBLIC_*`. → BACKLOG 22.
 
+**✅ Fechado 2026-09-06 (BACKLOG item 22).** `SUPABASE_URL`/`SUPABASE_ANON_KEY` são agora env
+de runtime, reaproveitando `SITE_URL`/`ANON_KEY` já existentes no `.env` — nenhuma chave nova.
+Confirmado por grep contra a imagem nova: zero ocorrências do hostname e de qualquer JWT nos
+chunks. O fail-fast desenhado inicialmente com `instrumentation.ts`/`register()` do Next.js
+não funcionou — provado ao vivo três vezes (`throw`, `process.exit()`,
+`process.kill(process.pid, 'SIGKILL')`) que o processo real não morre, fica um zombie a
+recusar ligações para sempre; substituído por um guard `sh -c` no `CMD` do `app/Dockerfile`,
+que funciona correctamente (exit 1 imediato, confirmado ao vivo). Rodar `JWT_SECRET`/
+`ANON_KEY` (item 24) deixa de exigir rebuild — passa a ser um redeploy do container.
+Detalhe completo: `docs/STATE.md`.
+
 ### 🟠 4 — O pacote GHCR é público
 Provado sem qualquer credencial (`~/.docker/config.json` inexistente): token anónimo → manifest
 por digest **200**, `tags/list` **200**, `docker pull` bem-sucedido. O repo é privado e a licença

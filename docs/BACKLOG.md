@@ -116,21 +116,23 @@ autenticado com ordem rígida provada (→ item 23, já fechado); `smoke.py` por
 (`gpg -c`, `age` não instalado) com prova de decifração do Pedro. Detalhe completo, todos os
 desvios/incidentes registados honestamente: `docs/STATE.md`.
 
-**25. `smoke.py`'s bloco R é sensível à fronteira UTC/hora local** *(achado lateral,
-2026-09-06, ao provar o item 21 F6 — não corrigido, fora do âmbito dessa sessão)* — o bloco
-usa `date.today()` (hora local do host, WEST/UTC+1) para `effective_date` ao inserir, mas
-`fx_rate()`/a própria query usam `current_date` do Postgres (UTC). Entre as 00:00 e a 00:59
-hora local todos os dias, as duas datas discordam — uma corrida do smoke nessa janela falha
-o bloco R (`26/27`) por motivo nenhum relacionado com uma regressão real (confirmado ao vivo:
-falhou antes de qualquer alteração de código, voltou a passar depois da meia-noite UTC, sem
-tocar em nada). Fix simples quando alguém pegar nisto: ler a data via `select current_date`
-do próprio Postgres em vez de `date.today()` do Python.
+~~**25. `smoke.py`'s bloco R é sensível à fronteira UTC/hora local**~~ ✅ **fechada
+2026-09-06** — `db_today()` novo pergunta ao próprio Postgres (`select current_date`) em vez
+de usar `date.today()` do Python; as duas comparações reais (blocos I e R) passam a usar essa
+autoridade única. Provado: mecanismo de dependência do fuso confirmado ao vivo (`TZ=UTC` vs
+`TZ=Etc/GMT+12` dão datas diferentes agora), `smoke.py` corrigido dá 27/27 sob os dois
+extremos. Detalhe: `docs/STATE.md`.
 
-**22. Desprender a imagem do hostname** (achado 3 do ensaio). O URL do Supabase e a anon key
-estão compilados no build via `NEXT_PUBLIC_*`, sem override em runtime — restaurar noutro
-hostname exige refazer a imagem por CI. Barato de corrigir: a app usa o URL **só do lado do
-servidor** (confirmado — não está no bundle do cliente), portanto basta lê-lo de env de runtime.
-Fecha a classe toda: a mesma imagem passa a servir qualquer hostname.
+~~**22. Desprender a imagem do hostname**~~ ✅ **fechada 2026-09-06** (achado 3 do ensaio).
+`SUPABASE_URL`/`SUPABASE_ANON_KEY` passam a env de runtime, reaproveitando `SITE_URL`/
+`ANON_KEY` já existentes — zero chave nova no `.env`. Confirmado por grep contra a imagem
+nova: zero ocorrências do hostname e de qualquer JWT nos chunks. **Achado lateral real
+durante a prova:** o fail-fast desenhado com `instrumentation.ts`/`register()` do Next.js não
+funcionava — provado ao vivo três vezes que nem `process.kill(process.pid, 'SIGKILL')`
+chamado de dentro da app derruba o processo real (fica um zombie a recusar ligações para
+sempre); substituído por um guard `sh -c` no `CMD` do `Dockerfile`, que funciona (exit 1
+imediato, confirmado ao vivo). Fecha a classe toda: a mesma imagem serve qualquer hostname, e
+rodar `JWT_SECRET`/`ANON_KEY` (item 24) deixa de exigir rebuild. Detalhe: `docs/STATE.md`.
 
 ~~**23. Tornar o pacote GHCR privado**~~ ✅ **fechada 2026-09-06** (achado 4; item 21 F1).
 Ordem rígida provada: login autenticado com o pacote ainda público (`tmsi-app` **e**
@@ -146,9 +148,13 @@ só por ficheiro 600 descartado logo a seguir ao login — avança a rotação p
 inventariar o `.env` para o item 21 (F3). Não usados nem reimpressos depois de detectado.
 Rodar os quatro juntos quando o Pedro decidir (`JWT_SECRET` invalida todas as sessões vivas;
 `ANON_KEY`/`SERVICE_ROLE_KEY` derivam dele; `POSTGRES_PASSWORD` exige reiniciar a stack).
-Detalhe: `docs/STATE.md`. `CREDENTIALS-INVENTORY.md` do dossier precisa da entrada
-correspondente — fora do que esta sessão VPS escreve directamente, texto preparado para o
-Pedro colar.
+**Agora barato (item 22, 2026-09-06): rodar já não exige rebuild da imagem** —
+`SUPABASE_URL`/`SUPABASE_ANON_KEY` são env de runtime, um `docker compose up -d --no-deps
+tmsi-app` depois de actualizar o `.env` chega. **Obrigatório no fecho deste item: re-cifrar o
+escrow de segredos** (`~/backups/tmsi/tmsi-secrets-*.gpg`, item 21 F5) com os valores novos —
+um escrow desactualizado depois de uma rotação é pior do que nenhum. Detalhe: `docs/STATE.md`.
+`CREDENTIALS-INVENTORY.md` do dossier precisa da entrada correspondente — fora do que esta
+sessão VPS escreve directamente, texto preparado para o Pedro colar.
 
 ## ⚪ Baixas — registadas, sem urgência
 
