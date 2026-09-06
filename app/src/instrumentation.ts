@@ -19,11 +19,20 @@
 // process and process.env, not a separate Vercel Edge worker) — checked
 // unconditionally, not gated to one runtime, since both contexts need both
 // variables.
+//
+// process.exit(1), not throw: verified live (docker run, no vars set) that
+// Next.js's own server startup catches a thrown/rejected register() and
+// logs "Failed to prepare server" + an unhandledRejection, but the process
+// itself keeps running — no port ever opens, but the container never
+// exits either, so it sits as a permanent unhealthy zombie instead of
+// "container down". An explicit exit is the only way to get a real,
+// immediate non-zero exit for docker/compose to act on.
 export async function register() {
   const missing = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'].filter((name) => !process.env[name]);
   if (missing.length > 0) {
-    throw new Error(
+    console.error(
       `Missing required runtime environment variable(s): ${missing.join(', ')} — see deploy/DEPLOY.md §2.`,
     );
+    process.exit(1);
   }
 }
