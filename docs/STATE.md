@@ -3,15 +3,196 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: tarefa 5 — code review read-only — ✅ FECHADA 2026-09-05.** 9 achados
-triados (`app/src`, 48 ficheiros, ~5.557 linhas), sem reescrita nenhuma — ver secção
-própria abaixo. Segredos em logs voltou **limpo** (zero `console.*` em `app/src`,
-`SERVICE_ROLE_KEY`/passwords geradas nunca logadas — confirmado por `grep`, não assumido).
-Próximo, por `docs/BACKLOG.md`: por procura — restam a decisão da i9/EOP (7, sem pressa) e
-o piloto (8, agora sem bloqueio das tarefas 1–4); os achados desta revisão ficam
-disponíveis para uma sessão futura de correcção, se/quando decidires priorizá-los. Ordem e
-critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
-e as migrações 0003/0004/0005/0006 estão fechadas.
+**Etapa actual: E4 — workflow de aprovação (migração 0007) — ✅ FECHADA 2026-09-06.** Ver
+secção própria abaixo. Próximo, por `docs/BACKLOG.md` e prioridade do Pedro: item 18 (alerta
+idade-FX) · item 14 (medição a 50-70 artigos reais) · item 26 (white-label/branding, sessão(ões)
+própria(s)). Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3
+(i1–i10), E4, E5-VPS e as migrações 0003/0004/0005/0006/0007 estão fechadas.
+
+## E4 — Workflow de aprovação (migração 0007) — ✅ FECHADA 2026-09-06
+
+**Contexto:** decisão L2 do Pedro, fechando o que a i5 só registava como inclinação
+(`docs/ROADMAP.md`): modificações a preços publicados exigem aprovação do Branch Manager da
+filial afectada OU de um admin — um aprovador basta; «quem edita não aprova» **não se
+aplica** (admin pode aprovar as próprias modificações — decisão consciente de fase-piloto,
+limitação conhecida a revisitar com mais utilizadores reais; `audit_log` mostra sempre autor
+e aprovador, mesmo coincidindo).
+
+**Âmbito proposto pelo prompt, validado contra o schema real em F0 (restrição 7: divergência
+→ parar e perguntar, nunca assumir):** sujeitas ao workflow, mutações a preços publicados —
+câmbios, configuração de preço (fees, transporte, direitos aduaneiros, margens) e overrides.
+Ciclo de vida do produto fica **fora** do workflow (o estado `draft` + a validação de
+activação da 0001 já o gate-keeperam).
+
+**F0 — dois desvios reais entre o desenho e o schema real, ambos resolvidos com o Pedro por
+`AskUserQuestion` antes de escrever DDL nenhuma (nunca assumidos):**
+1. **«BM da filial afectada» só tem significado limpo em 3 das 6 tabelas.**
+   `transport_tiers`/`margin_grids`/`price_overrides` têm uma única coluna `branch_id` cada
+   — candidato natural. `exchange_rates` só tem `currency`, `customs_rates` só `zone`, e
+   `interco_fees` tem **duas** filiais (`supplier_branch`/`seller_branch`) sem que
+   `branch_manager` alguma vez tivesse escrita nela. **Decisão do Pedro (a opção
+   recomendada):** aprovação **admin-only** para estas três, rejeitando derivar "a filial" a
+   partir da moeda/zona — todas as moedas/zonas mapeiam para uma única filial nos dados de
+   hoje, mas isso é dado, não garantia de schema; uma segunda filial futura na mesma
+   moeda/zona mudaria silenciosamente quem aprova, sem nada no código a assinalar o dia em
+   que isso acontecesse.
+2. **Só `exchange_rates`/`price_overrides` tinham mecanismo histórico** (padrão 0005:
+   `effective_date`/`created_at`, nunca editar em vigor). `interco_fees`/`transport_tiers`/
+   `customs_rates`/`margin_grids` tinham a PK na própria identidade da configuração (ex.
+   `(branch_id, tier)` em `margin_grids`) — inserir "uma nova versão" de uma chave existente
+   violaria essa PK directamente. **Decisão do Pedro, a opção maior (não a mais pequena que
+   eu recomendei — um simples UPSERT-in-place):** redesenhar as quatro tabelas com o mesmo
+   versionamento `effective_date`/`created_at` que `exchange_rates` já tinha, com
+   `compute_price()`/`branch_margin()` a escolherem sempre "a mais recente aplicável" de cada
+   uma, tal como `fx_rate()` já fazia. Isto só muda as procuras **internas** de
+   `compute_price()` — a sua assinatura `(p_product, p_branch, p_date)` e colunas de saída
+   ficam intocadas (condição de paragem do prompt, não violada).
+
+Ciclo de vida do produto ficou explicitamente fora — o estado `draft` e a validação de
+activação da 0001 já impõem essa fronteira; sobrepor este workflow duplicaria controlo sem
+uma decisão a pedi-lo.
+
+**F1 — migração 0007, validada em `BEGIN`/`ROLLBACK` antes de aplicar (restrição do prompt:
+falha na validação → parar e propor):**
+- `interco_fees`/`transport_tiers`/`customs_rates`/`margin_grids`: PK antiga substituída por
+  `id bigint generated always as identity`, mais `effective_date date default current_date`,
+  `created_at timestamptz default clock_timestamp()` (não `now()` — a mesma lição da 0005:
+  `now()` fica congelado durante toda a transacção, `clock_timestamp()` reflecte o momento
+  real) e `created_by uuid`; índice de procura `(identidade, effective_date desc, created_at
+  desc)` em cada uma, espelhando exactamente o padrão 0005.
+- `tmsi.branch_margin()`: dropada e recriada com um novo parâmetro `p_date default
+  current_date`; `DISTINCT ON` para escolher a linha mais recente **por tier** antes de
+  aplicar a selecção "menor tier cujo `max_cost_eur` ainda cobre o custo" — necessário
+  porque são duas selecções em camadas diferentes (mais-recente-por-identidade e
+  menor-tier-aplicável); escolher só uma linha mais recente entre todos os tiers escolheria
+  silenciosamente o tier errado sempre que tiers fossem editados em dias diferentes.
+- `tmsi.compute_price()`: `CREATE OR REPLACE`, mesma assinatura/colunas de saída, só as três
+  procuras internas (interco/transporte/direitos) ganham a mesma disciplina de
+  `effective_date`, e a chamada a `branch_margin()` passa `p_date` adiante.
+  **Bug real apanhado pela própria validação obrigatória** (exactamente o processo a
+  funcionar como desenhado): "column reference 'branch_id' is ambiguous" na sub-consulta de
+  `transport_tiers` — a cláusula `returns table(..., branch_id text, ...)` da própria função
+  cria implicitamente uma variável PL/pgSQL `branch_id`, colidindo com uma referência não
+  qualificada a `tmsi.transport_tiers.branch_id`. Corrigido com um alias `tt` e todas as
+  colunas qualificadas; o mesmo padrão aplicado por consistência (não por bug real, função
+  `language sql` sem variável de saída colidente) à sub-consulta análoga de
+  `branch_margin()`.
+- Nova tabela `tmsi.price_proposals` (genérica, um único desenho para os 6 tipos-alvo — a
+  lógica do workflow é a mesma forma para todos, seis cópias multiplicaria a superfície de
+  RLS/auditoria sem diferença de comportamento nenhuma): `payload jsonb` carrega exactamente
+  as colunas que o `INSERT` da tabela-alvo precisa; `branch_id` desnormalizado do payload
+  para permitir RLS/elegibilidade indexável, `NULL` para os três tipos admin-only. RLS desde
+  o primeiro momento: `proposals_read` (âmbito espelha `overrides_read` — papéis
+  amplamente visíveis, `branch_manager` só a sua filial, e qualquer proponente vê sempre as
+  suas próprias propostas mesmo sem outro acesso de leitura) e `proposals_insert`
+  (elegibilidade de proposta = exactamente a elegibilidade de escrita que cada tabela já
+  tinha antes de 0007 — este é agora o único lugar onde essa fronteira vive). **Sem nenhuma
+  política de `UPDATE`/`DELETE` para `authenticated`** — uma proposta só muda de estado por
+  dentro de `decide_price_proposal()` (SECURITY DEFINER), nunca por escrita directa; não é
+  uma lacuna, é a própria imposição.
+- `tmsi.decide_price_proposal(p_proposal_id, p_decision, p_reason)`: SECURITY DEFINER,
+  `search_path = pg_temp` (o padrão mais estrito, o mesmo de `admin_revoke_sessions` da
+  0006), reconfirma `has_role('admin') or (branch_id is not null and has_role('branch_manager')
+  and branch_id = any(my_branches()))` **por dentro**, nunca confiando no chamador; exige
+  motivo para rejeitar; materializa a aprovação com `INSERT`s explícitos por
+  `target_table` (nunca SQL dinâmico a partir de identificadores do payload, mesmo
+  `target_table` já estando limitado por `CHECK` a um dos 6 valores literais).
+- Removidas as 6 políticas de escrita directa: `config_write` em `exchange_rates`/
+  `interco_fees`/`transport_tiers`/`customs_rates`/`margin_grids`, e `overrides_write` em
+  `price_overrides` — `overrides_write` também concedia a única leitura de `logistics` às
+  linhas `kind=duty` (achado já registado no `VERIFICATION-PROTOCOL.md`, nota ³); essa
+  visibilidade foi dobrada explicitamente para dentro de `overrides_read` antes de remover a
+  política antiga, para não a levar consigo por engano. `tmsi.settings` fica intocado, fora
+  de âmbito (ajusta limiares de alerta, não um valor que `compute_price()` devolve).
+- **Validação:** 14 verificações num único `BEGIN`/`ROLLBACK`, com um snapshot de baseline
+  pré-migração de `compute_price('T-0002', <4 filiais>)` capturado primeiro para comparação
+  byte-a-byte. Todas as 14 com o resultado esperado na segunda corrida (a primeira apanhou o
+  bug acima): baseline idêntico; bypass de escrita directa negado; proposta por role
+  inelegível negada; proposta elegível aceite; motor insensível a pendente; aprovação de
+  filial errada negada; aprovação correcta pelo BM + materialização confirmada; motor
+  reflecte o novo valor de imediato; consulta histórica insensível à correcção de hoje;
+  re-decidir uma proposta já decidida negado; rejeição sem motivo negada; rejeição com
+  motivo aceite sem alterar o valor em vigor; auto-aprovação de admin aceite (decisão L2);
+  `audit_log` completo. `rollback` final sem resíduo.
+- Ficheiro commitado (`783c5bb`) e pushed **antes** de aplicar (restrição do prompt);
+  backup fresco (`~/backups/tmsi/tmsi-pre-0007-20260906-125655.dump`, 300 KB, verificado
+  restaurável por `pg_restore --list`, 645 entradas) tirado imediatamente antes do `DDL`.
+  Aplicada em produção sem erros (`COMMIT`); `compute_price()` confirmado byte-idêntico ao
+  baseline pré-migração nas 4 filiais logo a seguir.
+
+**F2 — código da app (commit `e6b53e7`):** `app/src/lib/propose-change.ts` (helper único,
+partilhado por `config/actions.ts`/`overrides/actions.ts`, nunca confia num `proposed_by`
+vindo do cliente); as 5 acções de config e a de criar override deixam de escrever
+directamente e passam a propor; cada linha editável de config ganha um campo Reason
+obrigatório; `tmsi.settings`/`SettingRow` fica com escrita directa (fora de âmbito,
+intocado). `config/page.tsx`: as 4 tabelas agora históricas passam a seleccionar
+`id`/`effective_date`/`created_at` e a escolher, em JS, a linha "activa" por identidade
+(mesma regra do motor: mais recente com `effective_date <= hoje`) — sem isto a página
+mostraria linhas duplicadas crescentes a cada aprovação, um bug real que a mudança de schema
+introduziria silenciosamente sem este ajuste. Novo ecrã `/proposals`: fila de pendentes
+(Approve/Reject + motivo, botões só visíveis a quem `decide_price_proposal()` aceitaria —
+admin ou o BM da filial certa) e histórico de decisões, com aviso "self-approved" quando
+`decided_by = proposed_by` (decisão L2, documentado como esperado, não como falha). Badges
+"N pending approval" em `/config`/`/overrides`, ligados a `/proposals`. Novo link
+"Proposals" na home; `price_proposals` acrescentada à lista de tabelas do `/audit`.
+
+**F3 — deploy (commit `d0b1534`):** CI verde (run `34032683416`), imagem pulled por digest
+(`sha256:e9ad8102b9c8f8c8b75c3365e2a10e132313f87a41d63aa0dca1c2e9c3480cd7`), `tmsi-app`
+saudável. `scripts/smoke.py`: o bloco R (correcção de câmbio no mesmo dia, 0005) partia de
+um `INSERT` directo em `exchange_rates` — 0007 removeu esse caminho, pelo que o smoke acusou
+2 falhas reais logo após o deploy. **Não era regressão:** era o comportamento novo e
+pretendido, que o smoke tinha de passar a validar. Bloco R reescrito (prova que o `INSERT`
+directo é recusado mesmo para `finance`, que uma proposta pendente é invisível a
+`fx_rate()`, e que um decisor inelegível — `finance`, na sua própria proposta a
+`exchange_rates`, tipo admin-only — é recusado, tudo sem tocar em conta admin nenhuma, a
+regra "a conta pessoal nunca entra no smoke" mantida). Novo bloco S (`price_overrides`,
+branch-scoped, com `branch_manager.test` a aprovar): fluxo completo propose→approve→efeito;
+aprovação de filial errada recusada; rejeição sem motivo recusada, com motivo aceite sem
+alterar o valor em vigor; limpeza final confirma zero resíduo. Overrides em vez de
+`margin_grids` deliberadamente — uma override é uma linha nova, independentemente apagável,
+nunca uma edição em vigor de uma filial real. **38/38** a passar (24 antes deste commit);
+zero resíduo confirmado por query directa (`price_proposals`/`price_overrides`/
+`exchange_rates` sem nenhuma linha "smoke").
+
+**F4 — as 6 provas comportamentais pedidas, lado do agente (API/BD):**
+1. **Motor insensível a pendente** — confirmado ao vivo (smoke, blocos R e S).
+2. **Aprovação por BM + recálculo motor-vivo** — confirmado ao vivo (smoke, bloco S:
+   `expected=0.55 got=0.55`).
+3. **Auto-aprovação de admin** — confirmado duas vezes: na validação `BEGIN`/`ROLLBACK` de
+   F1 (CHECK 13) e de novo, já com 0007 em produção, por um `BEGIN`/`ROLLBACK` dedicado
+   (claims JWT do admin real, nunca `commit`) — `self_approved = t`, sem resíduo. Sem conta
+   de teste admin (não existe, por desenho) — este é precisamente o tipo de prova que a
+   regra "a conta pessoal nunca entra no **smoke**" não proíbe (é sobre o `scripts/smoke.py`
+   correr repetidamente contra produção, não sobre uma verificação pontual em transacção
+   nunca submetida).
+4. **Três ramos negados** — filial errada (BM), decisor inelegível (`finance` a decidir a
+   sua própria proposta a `exchange_rates`), bypass por escrita directa (`finance` a tentar
+   `INSERT` directo em `exchange_rates`) — os três confirmados ao vivo (smoke).
+5. **Rejeição com motivo não altera o motor** — confirmado ao vivo (smoke, bloco S).
+6. **Sweep de regressão** — `scripts/smoke.py` 38/38 (agente); sweep visual de `/config`,
+   `/overrides`, `/proposals` fica para o Pedro (ver "por cobrir" abaixo).
+
+**F5 — `docs/VERIFICATION-PROTOCOL.md` (commit `56f1122`):** matriz (secção 3) ganha nota ⁶
+e a linha "Aprovar modificações propostas" por papel; nova secção 4.9 (passos EE–JJ,
+espelhando as 6 provas acima); nota de "cobertura automatizada" actualizada (EE–II cobertos
+por `scripts/smoke.py`, GG sem cobertura no smoke por desenho, coberto por
+`BEGIN`/`ROLLBACK` directo); adenda datada em secção 7 com o resultado exacto de cada prova
+e a lista explícita do que fica para o Pedro no browser.
+
+**Por cobrir (fica para o Pedro, browser, `docs/VERIFICATION-PROTOCOL.md` secção 7,
+adenda E4):** propor nos ecrãs `/config`/`/overrides` e ver o badge "N pending approval";
+aprovar como `branch_manager.test` em `/proposals` e ver o preço recalculado; a metade de
+auto-aprovação de admin que precisa mesmo do ecrã (a conta pessoal do Pedro, ver
+"self-approved" na listagem de decididas); rejeitar pelo ecrã (motivo obrigatório recusado
+pelo próprio formulário); e o sweep visual de regressão pós-deploy. Confirmar CI verde
+(feito também pelo agente desta vez, via API pública do GitHub, mas continua listado como
+passo do Pedro por ser a norma estabelecida).
+
+**F6 (este fecho):** `docs/ROADMAP.md` (E4 ✅, tabela de estado + secção própria + questão
+aberta L2 resolvida); `docs/BACKLOG.md` (item 9 marcado implementado, novo item 27 —
+"regra de validade de 90 dias + notificações" — separado por nunca ter feito parte do
+âmbito real desta sessão, apesar de constar do texto original da E4 no ROADMAP); este
+ficheiro; dossier (`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`).
 
 ## Item 24 — Rotação dos 4 segredos expostos + re-escrow — ✅ FECHADA 2026-09-06
 

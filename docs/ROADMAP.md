@@ -49,7 +49,7 @@ segredos em logs voltou limpo. Prepara a entrega E6. Detalhe: `docs/STATE.md`.
 | — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
 | — | Migração 0005 — correcção de câmbio no mesmo dia | ✅ 04/09/2026 |
 | — | Migração 0006 — gestão de passwords sem email (i9) | ✅ 05/09/2026 (mecanismo; provas de ecrã real pendentes do Pedro) |
-| E4 | Migração 0007 (workflow de aprovação, regra 90 dias, notificações) — número avançado por 0006/i9 | por iniciar |
+| E4 | Migração 0007 — workflow de aprovação (regra 90 dias + notificações separadas, `docs/BACKLOG.md` item 27, fora deste âmbito) | ✅ 06/09/2026 |
 | E5 | Operações e endurecimento — VPS ✅, homelab por iniciar | em curso |
 | E6 | Validação do piloto + preparação da migração para a empresa (gate: `VERIFICATION-PROTOCOL.md`) | por iniciar |
 
@@ -301,21 +301,45 @@ marcar entradas do mesmo dia superadas como tal, em vez de as mostrar como dupli
 inexplicadas. Cenário exacto do Pedro reproduzido e o ramo temporal (consulta histórica
 insensível a correcções de hoje) confirmados antes de fechar. Detalhe completo: `STATE.md`.
 
-## E4 — Migração 0007 — por iniciar
-A numeração avança quatro vezes: `0002` foi consumida pelo defeito real de RLS da i4,
-`0003`/`0004` pela protecção de custos ao nível da BD, `0005` pela correcção de câmbio no
-mesmo dia, `0006` pela gestão de passwords sem email (i9, `must_change_password` +
-`tmsi.mark_password_changed()`/`tmsi.admin_revoke_sessions()` — ver `STATE.md`) — nenhuma é
-a migração funcional da E4. Políticas de escrita por estado (quem aprova — questão L2 do
-handover, decisão do Pedro pendente), regra dos 90 dias, notificações. Nunca editar a
-0001/0002/0003/0004/0005/0006 aplicadas. Backup + restauro provado antes de aplicar.
+## E4 — Migração 0007 — workflow de aprovação — ✅ FECHADA 06/09/2026
+Decisão L2 do Pedro (06/09), fechando o que a i5 só registava como inclinação: modificações
+a preços publicados passam a exigir aprovação do Branch Manager da filial afectada OU de um
+admin — um aprovador basta; «quem edita não aprova» **não** se aplica (admin pode aprovar a
+sua própria proposta — decisão consciente de fase-piloto, a revisitar com mais utilizadores
+reais; `audit_log` mostra sempre autor e aprovador, mesmo coincidindo).
 
-**Inclinação registada (i5, 2026-09-04), não uma decisão:** Branch Manager como aprovador
-provável — já tem RLS de leitura de custos con âmbito de filial (0001, `can_read_costs()`
-inclui `branch_manager`), o candidato mais natural para aprovar mudanças de preço na sua
-própria filial. Variante a considerar: «quem edita não aprova» (separação de funções — o
-`finance`/`admin` que propõe uma mudança de câmbio/margem não seria quem a aprova). Continua
-em aberto, decisão do Pedro antes de desenhar a 0005.
+**F0 — dois desvios reais entre o desenho e o schema, resolvidos com o Pedro antes de
+escrever DDL nenhuma (nunca assumidos):**
+1. «BM da filial afectada» só tem significado limpo para `transport_tiers`/`margin_grids`/
+   `price_overrides` (uma única coluna `branch_id` cada). `exchange_rates` (só `currency`),
+   `customs_rates` (só `zone`) e `interco_fees` (DUAS filiais, sem que `branch_manager`
+   alguma vez tivesse escrita nelas) não têm identidade de filial nenhuma para pendurar essa
+   elegibilidade — decisão do Pedro: aprovação **admin-only** para estas três, rejeitando
+   derivar "a filial" a partir da moeda/zona (dados de hoje, não uma garantia do schema).
+2. Só `exchange_rates`/`price_overrides` tinham histórico (padrão 0005) — `interco_fees`/
+   `transport_tiers`/`customs_rates`/`margin_grids` tinham a PK na própria identidade da
+   configuração, sem onde materializar uma "nova versão". Decisão do Pedro, a opção maior:
+   redesenhar as quatro com o mesmo versionamento `effective_date`/`created_at` que
+   `exchange_rates` já tinha, `compute_price()`/`branch_margin()` a escolherem sempre "o mais
+   recente aplicável" — sem tocar a assinatura/colunas de saída de `compute_price()`.
+
+**Migração 0007:** as quatro tabelas ganham `id`/`effective_date`/`created_at`/`created_by`
+(padrão 0005); `branch_margin()` recriada com `p_date` e selecção "mais recente por tier";
+`compute_price()` com as mesmas três procuras (interco/transporte/direitos) a respeitar
+`effective_date`; nova tabela `tmsi.price_proposals` (genérica, 6 tipos-alvo) com RLS
+(`proposals_read`/`proposals_insert`, sem `UPDATE`/`DELETE` nenhum para `authenticated`);
+nova função `tmsi.decide_price_proposal()` (SECURITY DEFINER, `search_path=pg_temp`,
+reconfirma elegibilidade sempre por dentro, nunca confia no chamador); as 6 políticas de
+escrita directa (`config_write` × 5, `overrides_write`) removidas — `tmsi.settings` fica
+intocado, fora de âmbito. Validada em 14 verificações `BEGIN`/`ROLLBACK` (baseline idêntico,
+bypass negado, propostas inelegíveis negadas, fluxo completo, motor insensível a pendente,
+filial errada negada, motor-vivo, insensibilidade histórica, re-decisão negada, rejeição
+sem/com motivo, auto-aprovação de admin, `audit_log` completo) antes de aplicar — commitada e
+pushed antes de tocar a produção, backup fresco imediatamente antes do DDL.
+
+Código da app (`/config`, `/overrides` a propor em vez de escrever directamente; novo
+`/proposals`, a fila de aprovação) + `scripts/smoke.py` com 11 verificações novas do
+workflow (38/38 total). Detalhe completo, achado a achado: `STATE.md`.
 
 ## E5 — Operações e endurecimento — EM CURSO (E5-VPS ✅ fechada 05/09/2026)
 
@@ -360,7 +384,8 @@ Detalhe: `docs/STATE.md`.
 
 ## Questões abertas do Pedro (do handover §7 — não bloqueiam E1–E2)
 Moeda dos escalões de transporte TBM (T2) · periodicidade/mecanismo das taxas SAP (C2 —
-manual no piloto) · quem aprova (L2 — bloqueia E4) · titularidade CPI (bloqueia E6).
+manual no piloto) · ~~quem aprova (L2 — bloqueia E4)~~ ✅ **decidida e implementada
+06/09/2026** (`docs/BACKLOG.md` item 9, E4/migração 0007) · titularidade CPI (bloqueia E6).
 
 **Duas questões novas da i6 (mesma família que L2 — desenho do motor, não de infra), sem
 bloquear nada hoje porque `product_hs_overrides` de canal/agente ainda não é oferecido pela UI:**

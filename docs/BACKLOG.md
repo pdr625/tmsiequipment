@@ -89,10 +89,13 @@ fixture descartável, resíduo zero. Detalhe: `docs/STATE.md`.)
 **18. Alerta idade-FX** — **promovido 2026-09-06, o mais urgente dos pequenos** (era item
 ⚪ 18, "Métrica idade-FX no vps-stats"). Continua pequeno em esforço, mas passa à frente dos
 restantes ⚪ por prioridade do Pedro — próxima sessão executável a seguir à E4.
-~~**9. L2 — quem aprova**~~ ✅ **decidida 2026-09-06** — Branch Manager da filial afectada ou
-um admin, um aprovador basta; «quem edita não aprova» **não se aplica** (admin pode aprovar
-as próprias modificações — decisão consciente da fase piloto, limitação conhecida a
-revisitar com mais utilizadores reais). Implementação: **E4** (migração 0007), esta sessão.
+~~**9. L2 — quem aprova**~~ ✅ **decidida E implementada 2026-09-06** — Branch Manager da
+filial afectada ou um admin, um aprovador basta; «quem edita não aprova» **não se aplica**
+(admin pode aprovar as próprias modificações — decisão consciente da fase piloto, limitação
+conhecida a revisitar com mais utilizadores reais). Implementação: **E4** (migração 0007),
+fechada nesta sessão — `tmsi.price_proposals`/`tmsi.decide_price_proposal()`, ecrã
+`/proposals`, `docs/ROADMAP.md`/`docs/VERIFICATION-PROTOCOL.md` (passos EE-JJ) actualizados.
+Detalhe completo: `docs/STATE.md`.
 **10. Âmbitos de override canal/agente** — 2 perguntas de desenho registadas.
 **11. CPI L113-9 por escrito** — pré-condição E6; condiciona a via TI (7).
 **12. Questões do handover §7**: moeda escalões TBM (T2) · taxas SAP (C2, manual no piloto).
@@ -181,6 +184,13 @@ migrar.
 **19.** Varredura ~/.ssh dos dois hosts (item 13 do dossier — parque, não só TMSI).
 **20.** Swap do VPS — vigilância contínua (T8/tiles já o fazem; só agir se a tendência
 mudar de regime).
+**27. Regra de validade de 90 dias + notificações** — parte do texto original da E4 no
+`docs/ROADMAP.md` ("workflow de aprovação, regra 90 dias, notificações"), nunca parte do
+âmbito real desta sessão (o prompt do Pedro para a E4 pediu só o workflow de aprovação,
+migração 0007 — fechado). Registada aqui para não se perder, sem desenho nenhum feito ainda:
+o que expira aos 90 dias (uma proposta pendente? um override sem `valid_to`? uma taxa de
+câmbio antiga?) e o mecanismo de notificação (email? um ecrã de alertas?) são ambos decisões
+do Pedro, por tomar numa sessão própria.
 
 ---
 
