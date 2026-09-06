@@ -5,11 +5,12 @@
 #
 # Builds app/ and pushes the image to GHCR. Never runs on the VPS.
 #
-# NEXT_PUBLIC_SUPABASE_ANON_KEY must exist as a repository secret before this
-# workflow produces a working image (it still builds fine without it — the
-# client bundle would just have an empty value baked in). See app/Dockerfile
-# for why it has to be a build arg. NEXT_PUBLIC_SUPABASE_URL is not sensitive
-# (it's the public domain) and is passed as a literal below.
+# item 22 (docs/DISASTER-DRILL.md achado 3): SUPABASE_URL/SUPABASE_ANON_KEY
+# used to be NEXT_PUBLIC_* build-args here (see git history if hunting for
+# the old "Verify NEXT_PUBLIC_SUPABASE_ANON_KEY is set" step) — now runtime
+# env on the deployed container instead (deploy/supabase/docker-compose.yml),
+# validated at server startup by app/src/instrumentation.ts. This workflow
+# no longer needs either value at all.
 
 name: CI
 
@@ -30,18 +31,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
-
-      # Registered as an E1 pendency (STATE.md) after attempt #1 built green
-      # with an empty key silently baked into the client bundle. Fail loud
-      # instead of shipping a broken image with a passing CI status.
-      - name: Verify NEXT_PUBLIC_SUPABASE_ANON_KEY is set
-        env:
-          ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-        run: |
-          if [ -z "$ANON_KEY" ]; then
-            echo "::error::NEXT_PUBLIC_SUPABASE_ANON_KEY repository secret is empty or unset — the built image would ship a broken client bundle."
-            exit 1
-          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.3.0
@@ -70,6 +59,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            NEXT_PUBLIC_SUPABASE_URL=https://tmsiequipment.duckdns.org
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}

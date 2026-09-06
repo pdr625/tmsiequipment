@@ -5,15 +5,15 @@
 #
 # Multi-stage build. Runs only in CI (GitHub Actions) — never on the VPS.
 #
-# NEXT_PUBLIC_* handling: Next.js inlines NEXT_PUBLIC_* variables into the
-# client-side JS bundle at *build* time — `output: 'standalone'` does not
-# make them read at container start. So these have to be build ARGs here,
-# not runtime env on the deployed container, or the shipped bundle would
-# have empty values baked in. NEXT_PUBLIC_SUPABASE_URL is not sensitive
-# (it's the public domain, https://tmsiequipment.duckdns.org) and is passed
-# as a literal in the workflow; NEXT_PUBLIC_SUPABASE_ANON_KEY comes from a
-# GitHub Actions repository secret referenced by the workflow — the value
-# itself never appears in this file or in ci.yml.
+# item 22 (docs/DISASTER-DRILL.md achado 3): SUPABASE_URL/SUPABASE_ANON_KEY
+# used to be NEXT_PUBLIC_* build ARGs here, baked into the client bundle at
+# build time — but nothing client-side ever consumed them (confirmed by
+# grep, this app only talks to Supabase server-side), so build-time
+# inlining bought nothing except pinning the image to one hostname/key set.
+# They're runtime env now, read by app/src/lib/supabase-server.ts and
+# supabase-middleware.ts directly, validated at server startup by
+# app/src/instrumentation.ts (fails the container at boot if either is
+# missing, rather than shipping a build with an empty value baked in).
 
 FROM node:24.20.0-alpine AS builder
 WORKDIR /app
@@ -26,11 +26,6 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-
-ARG NEXT_PUBLIC_SUPABASE_URL
-ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
-ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 RUN npm run build
 

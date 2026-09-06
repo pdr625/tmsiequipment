@@ -27,7 +27,7 @@ export async function requestPasswordReset(
 ): Promise<RequestResetState> {
   const email = String(formData.get('email') ?? '');
 
-  const origin = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const origin = process.env.SUPABASE_URL!;
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {

@@ -75,11 +75,15 @@ dois runs distintos — daí só haver um run no histórico. `STATE.md` tem o di
 (`Created`) usados para confirmar que o attempt #2 (o re-run bom) é o que ficou nas tags.
 
 **Duas melhorias identificadas nesta etapa:**
-1. ✅ **Implementada na E2:** guard no início do job do CI que falha alto se
-   `NEXT_PUBLIC_SUPABASE_ANON_KEY` vier vazio.
-2. **Por fazer (E5):** registar explicitamente no procedimento de rotação de segredos que rodar
-   o `JWT_SECRET` invalida o `ANON_KEY` já embutido na imagem — exige **rebuild**, não só
-   redeploy do container.
+1. ✅ **Implementada na E2, removida no item 22 (2026-09-06):** o guard de CI existiu
+   enquanto `NEXT_PUBLIC_SUPABASE_ANON_KEY` era um build-arg — deixou de fazer sentido
+   quando esse valor passou a env de runtime (`SUPABASE_ANON_KEY`, validado por
+   `app/src/instrumentation.ts` no arranque do container, não no build).
+2. ✅ **Fechada no item 22 (2026-09-06), não só documentada.** A premissa desta linha
+   (rodar `JWT_SECRET` exige rebuild da imagem) deixou de ser verdade: `SUPABASE_URL`/
+   `SUPABASE_ANON_KEY` já não estão embutidos na imagem, são env de runtime lidos de
+   `deploy/supabase/.env` — rodar qualquer um dos dois passa a ser um redeploy do container,
+   nunca um rebuild. Detalhe: `docs/DISASTER-DRILL.md` achado 3, `docs/STATE.md`.
 
 ## E2 — Deploy do frontend + vhost — ✅ FECHADA 04/09/2026
 Entregue: container `tmsi-app` (imagem pinada por digest, `172.20.40.1:3001`, `mem_limit

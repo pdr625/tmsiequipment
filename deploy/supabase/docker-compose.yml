@@ -175,6 +175,16 @@ services:
       # surface, documented: whoever compromises this container gets full
       # GoTrue admin + PostgREST access.
       SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      # item 22 (docs/DISASTER-DRILL.md achado 3): used to be NEXT_PUBLIC_*
+      # build-args baked into the image — no client component ever consumed
+      # them, so build-time inlining only bought pinning the image to one
+      # hostname/key set. Reusing SITE_URL/ANON_KEY's own values here
+      # (rather than adding two new .env keys) so rotating either one is a
+      # single-line change, not two kept in sync by hand. Validated at
+      # server startup by app/src/instrumentation.ts — missing either one
+      # fails the container at boot, not silently per-request.
+      SUPABASE_URL: ${SITE_URL}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
     ports:
       - "172.20.40.1:3001:3000"
     networks:

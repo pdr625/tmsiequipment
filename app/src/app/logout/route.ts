@@ -24,12 +24,13 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 // attacker-controlled with no allowlist, an open redirect — and
 // NextResponse.redirect() rejects a bare relative path outright
 // (validateURL does `new URL(url)` with no base, which throws for
-// anything not already absolute). NEXT_PUBLIC_SUPABASE_URL is already
-// this app's own public origin in production (supabase-server.ts) and
-// is a build-time value, not anything read off the request, so it's the
-// safe base to resolve `/login` against.
+// anything not already absolute). SUPABASE_URL is already this app's own
+// public origin in production (supabase-server.ts), read server-side at
+// runtime (item 22 — no longer NEXT_PUBLIC_*, never build-time-inlined)
+// and never anything read off the request, so it's the safe base to
+// resolve `/login` against.
 export async function POST() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
-  return NextResponse.redirect(new URL('/login', process.env.NEXT_PUBLIC_SUPABASE_URL!));
+  return NextResponse.redirect(new URL('/login', process.env.SUPABASE_URL!));
 }

@@ -72,36 +72,36 @@ Runtime env actually reaching each container:
   needs no other secret at runtime today — see §3 for why that's a real limitation, not a
   simplification.
 
-## 3. Known limitation: the image is pinned to this hostname (item 22, open)
+## 3. Hostname/key rotation: a restart, not a rebuild (item 22, fixed 2026-09-06)
 
-`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are `NEXT_PUBLIC_*` — Next.js
-inlines them into the compiled bundle **at CI build time**, as literal strings. Confirmed
-live in the disaster drill: the server chunk contains the literal
-`https://tmsiequipment.duckdns.org` and the anon JWT, baked in — no runtime environment
-variable overrides them. (The value is **not** in the client-side bundle: the app only talks
-to Supabase server-side, which is exactly why item 22's fix — reading it from a runtime env
-var instead — is cheap once done. Not done in this pass; this section is the workaround
-until it is.)
+Until 2026-09-06, `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` were
+`NEXT_PUBLIC_*` build ARGs, inlined into the compiled bundle at CI build time as literal
+strings — confirmed live in the disaster drill (the server chunk contained the literal
+domain and anon JWT, baked in, no runtime override possible). The fix was cheap precisely
+because the disaster drill also confirmed the **value was never in the client-side bundle**
+— this app only talks to Supabase server-side.
 
-**Consequence:** restoring this app on a different hostname, or with newly-generated
-secrets (a real disaster, or the eventual move to the company's own server, E6), requires a
-**new image build**, not just a new `.env` + restore. Procedure:
+**Fixed:** both are now plain runtime environment variables, `SUPABASE_URL`/
+`SUPABASE_ANON_KEY`, read directly by `app/src/lib/supabase-server.ts` and
+`supabase-middleware.ts`. `docker-compose.yml` wires them to `tmsi-app` from the **same**
+`SITE_URL`/`ANON_KEY` values GoTrue and PostgREST already use — no new `.env` keys, one
+value each, not two kept in sync by hand. `app/src/instrumentation.ts` validates both are
+set once at server startup (Next.js's `register()` hook, called before any request is
+served) — missing either one fails the container at boot with a clear log line, not a
+silently-broken app answering requests.
 
-1. Edit `.github/workflows/ci.yml`'s hardcoded build-arg:
-   ```yaml
-   NEXT_PUBLIC_SUPABASE_URL=https://<new-domain>
-   ```
-   (it is a literal in the file, not a workflow input — must be edited and committed, or at
-   minimum changed on the branch CI builds from).
-2. Update the `NEXT_PUBLIC_SUPABASE_ANON_KEY` **repository secret** on GitHub to the anon
-   JWT for whatever `JWT_SECRET` the new environment uses (generate it the normal Supabase
-   way from the new secret — see §5 for where that secret lives after a restore).
-3. Push (or `workflow_dispatch` the workflow) to force a rebuild with the corrected values.
-4. Deploy that new image by digest as in §1.
+**Consequence, now that this is fixed:** restoring this app on a different hostname, or
+after rotating `JWT_SECRET`/regenerating `ANON_KEY` (a real disaster, item 24's planned
+rotation, or the eventual move to the company's own server, E6) is **just a new `.env` +
+`docker compose up -d --no-deps tmsi-app`** — the same image serves any hostname or key set.
+No CI rebuild, no repository secret to update, no `.github/workflows/ci.yml` edit. This is
+exactly what the disaster drill's Achado 3 caught as missing, and what made item 24's
+rotation cheap enough to schedule freely instead of needing its own rebuild step.
 
-Skipping this step is exactly what the disaster drill's Achado 3 caught: the restored data
-was correct, but the app kept trying to reach the *old* production Supabase URL until a
-fresh image was built.
+Proof this class is actually closed, not just moved: `deploy/DEPLOY.md`'s own commit history
+and `docs/STATE.md`'s item 22 section carry the grep-for-the-literal-in-the-new-image proof
+and the fail-fast proof (a throwaway container from the same image, started with the
+variables unset, confirmed to exit rather than come up half-broken).
 
 ## 4. Backups
 
@@ -245,10 +245,10 @@ Same procedure as §5's restore, on new hardware, plus:
 
 1. `git clone` this repository on the target (private repo — needs a deploy key or PAT with
    read access; the licence requires written authorisation from the owner before this step).
-2. New `.env` (§2), new domain in `SITE_URL`/`GOTRUE_URI_ALLOW_LIST`/etc.
-3. Rebuild the image for the new hostname (§3) — this step is **not** optional here, unlike
-   a same-hostname restore.
-4. Point DNS, issue a new certificate, decommission the VPS instance.
+2. New `.env` (§2), new domain in `SITE_URL`/`GOTRUE_URI_ALLOW_LIST`/etc. — the same GHCR
+   image serves the new hostname with no rebuild (§3, fixed 2026-09-06); pull it
+   authenticated (§8) and deploy by digest as in §1.
+3. Point DNS, issue a new certificate, decommission the VPS instance.
 
 Also required before this step, per `docs/ROADMAP.md`'s E6 gate: a first *formal* execution
 of `docs/VERIFICATION-PROTOCOL.md` with a signed record, and the CPI (art. L113-9) written

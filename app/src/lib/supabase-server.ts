@@ -14,8 +14,12 @@ import { cookies } from 'next/headers';
 // module graph, so this stays separate from supabase-middleware.ts's
 // NextRequest/NextResponse cookie adapter.
 //
-// NEXT_PUBLIC_SUPABASE_URL is https://tmsiequipment.duckdns.org in
-// production, served directly by nginx without Kong.
+// SUPABASE_URL is https://tmsiequipment.duckdns.org in production, served
+// directly by nginx without Kong. Runtime env, not NEXT_PUBLIC_* (item 22,
+// docs/DISASTER-DRILL.md achado 3) — this module is server-only anyway
+// (see above), so there was never a reason for the build-time-inlining
+// NEXT_PUBLIC_* gives; instrumentation.ts fails the container at boot if
+// either var is missing, rather than this throwing per-request via `!`.
 //
 // No middleware.ts yet (out of scope for the E1 scaffold), so a token
 // refresh triggered from a plain Server Component cannot write cookies back
@@ -25,8 +29,8 @@ export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
