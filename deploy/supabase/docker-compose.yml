@@ -185,6 +185,16 @@ services:
       # fails the container at boot, not silently per-request.
       SUPABASE_URL: ${SITE_URL}
       SUPABASE_ANON_KEY: ${ANON_KEY}
+      # item 18: a narrow, purpose-scoped secret — never SERVICE_ROLE_KEY
+      # itself — so the host-side vps-stats.sh collector (hardened,
+      # credential-free by design, restriction 1) can authenticate to
+      # /api/fx-age without ever touching Postgres or this stack's other
+      # secrets. Same value also lives in a standalone chmod 600 file the
+      # collector reads (~/.config/tmsi/stats-internal-token) — kept
+      # separate from this .env on purpose, so a compromised collector
+      # can leak at most this one token, not POSTGRES_PASSWORD/JWT_SECRET/
+      # SERVICE_ROLE_KEY alongside it.
+      STATS_INTERNAL_TOKEN: ${STATS_INTERNAL_TOKEN}
     ports:
       - "172.20.40.1:3001:3000"
     networks:

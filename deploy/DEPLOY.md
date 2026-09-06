@@ -68,9 +68,12 @@ described a Kong-based `/supabase`-prefixed URL scheme that was never actually d
 Runtime env actually reaching each container:
 - `db`/`auth`/`rest`: most of the 25 variables in `deploy/supabase/.env.example`, via `docker-compose.yml`'s
   `${VAR}` interpolation.
-- `tmsi-app`: **only `SERVICE_ROLE_KEY`** at runtime (plus `HOSTNAME`/`PORT` literals). It
-  needs no other secret at runtime today — see §3 for why that's a real limitation, not a
-  simplification.
+- `tmsi-app`: `SERVICE_ROLE_KEY` and, since item 18, `STATS_INTERNAL_TOKEN` (a narrow bearer
+  token gating `GET /api/fx-age`, the only other secret it needs — see `docs/BACKLOG.md` item
+  18 and `app/src/app/api/fx-age/route.ts`'s own comment for why it's a separate value, never
+  `SERVICE_ROLE_KEY` reused) at runtime, plus `HOSTNAME`/`PORT` literals and the non-sensitive
+  `SUPABASE_URL`/`SUPABASE_ANON_KEY` (item 22, §3 below) — see §3 for why the app needing so
+  little at runtime is a real design property, not a simplification.
 
 ## 3. Hostname/key rotation: a restart, not a rebuild (item 22, fixed 2026-09-06)
 

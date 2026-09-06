@@ -17,7 +17,13 @@ import { updateSession } from '@/lib/supabase-middleware';
 // `/`) precisely so it can be named here — a Server Action's POST would
 // otherwise be indistinguishable, at the middleware level, from any other
 // POST to the flagged user's current page.
-const PUBLIC_PATHS = ['/login', '/forgot-password', '/auth', '/api/health', '/email-templates', '/logout'];
+// /api/fx-age (item 18) is machine-to-machine (vps-stats.sh, no user
+// session ever) — its own bearer-token check in route.ts is the real
+// boundary, same reasoning as /api/health being public, not a weaker one:
+// this middleware's job is redirecting a human without a session to
+// /login, which makes no sense for a caller that was never going to have
+// one. A wrong/missing token still gets refused, just by the route itself.
+const PUBLIC_PATHS = ['/login', '/forgot-password', '/auth', '/api/health', '/api/fx-age', '/email-templates', '/logout'];
 
 // i9: routes that stay reachable even while must_change_password is set,
 // besides the always-public ones above. /reset-password is the older
