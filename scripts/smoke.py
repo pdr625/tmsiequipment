@@ -25,13 +25,20 @@
 # Real personal accounts (the admin) never appear here — see NOTE below.
 
 import json
+import os
 import subprocess
 import sys
 import urllib.error
 import urllib.request
 from datetime import date
 
-BASE = "https://tmsiequipment.duckdns.org"
+# item 21 F6 (docs/DISASTER-DRILL.md achado 8): portable via env vars, with
+# today's production values as defaults — unset, this behaves byte-for-byte
+# as it always has. Only override to point this at a drill/second
+# environment (a different BASE, and/or a credentials dir laid out the same
+# way: one "<role>-test-password.txt" file per TEST_USERS entry below).
+BASE = os.environ.get("TMSI_BASE_URL", "https://tmsiequipment.duckdns.org")
+CREDENTIALS_DIR = os.environ.get("TMSI_CREDENTIALS_DIR", "/home/pedro/tmp/tmsi-sudo")
 GOTRUE = f"{BASE}/auth/v1"
 REST = f"{BASE}/rest/v1"
 
@@ -43,10 +50,10 @@ REST = f"{BASE}/rest/v1"
 # and isn't distinguishable from finance/product_manager at the RLS layer
 # this suite exercises.
 TEST_USERS = {
-    "finance": ("finance.test@example.test", "/home/pedro/tmp/tmsi-sudo/finance-test-password.txt"),
-    "product_manager": ("pm.test@example.test", "/home/pedro/tmp/tmsi-sudo/pm-test-password.txt"),
-    "logistics": ("logistics.test@example.test", "/home/pedro/tmp/tmsi-sudo/logistics-test-password.txt"),
-    "branch_manager": ("branch_manager.test@example.test", "/home/pedro/tmp/tmsi-sudo/branch_manager-test-password.txt"),
+    "finance": ("finance.test@example.test", f"{CREDENTIALS_DIR}/finance-test-password.txt"),
+    "product_manager": ("pm.test@example.test", f"{CREDENTIALS_DIR}/pm-test-password.txt"),
+    "logistics": ("logistics.test@example.test", f"{CREDENTIALS_DIR}/logistics-test-password.txt"),
+    "branch_manager": ("branch_manager.test@example.test", f"{CREDENTIALS_DIR}/branch_manager-test-password.txt"),
 }
 
 RESULTS = []
