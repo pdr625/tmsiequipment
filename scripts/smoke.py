@@ -131,6 +131,16 @@ def psql_rows(sql, claims_uuid=None):
     return [line.split("|") for line in out.splitlines() if line != ""]
 
 
+def db_today():
+    """Postgres's own current_date — the one authority any date comparison
+    in this suite uses (item 25: this VPS's host clock is WEST/UTC+1, the
+    db container is UTC; date.today() genuinely disagrees with Postgres's
+    current_date for the ~1h/day window after local midnight but before UTC
+    midnight — caught live when this exact mismatch failed block R). Never
+    date.today() for anything compared against a row's effective_date."""
+    return date.fromisoformat(psql_rows("select current_date;")[0][0])
+
+
 # ---------------------------------------------------------------------------
 # 0. health
 # ---------------------------------------------------------------------------
@@ -185,7 +195,7 @@ def block_no_cost_role(token):
     # confirm the row genuinely wasn't written, not just unreported.
     status, body = http(
         "PATCH",
-        f"{REST}/exchange_rates?currency=eq.EUR&effective_date=eq.{date.today().isoformat()}",
+        f"{REST}/exchange_rates?currency=eq.EUR&effective_date=eq.{db_today().isoformat()}",
         token=token,
         body={"source": "smoke"},
         prefer="return=representation",
@@ -382,6 +392,7 @@ def block_fx_same_day_correction(token, claims_uuid):
         check("R: same-day FX correction", True, "SKIP — no historical exchange rate to compare against")
         return
     currency, hist_date, hist_rate = candidates[0]
+    today = db_today()
 
     inserted_ids = []
 
@@ -390,7 +401,7 @@ def block_fx_same_day_correction(token, claims_uuid):
             "POST",
             f"{REST}/exchange_rates",
             token=token,
-            body={"currency": currency, "rate_per_eur": rate, "effective_date": str(date.today()), "source": "smoke-test"},
+            body={"currency": currency, "rate_per_eur": rate, "effective_date": str(today), "source": "smoke-test"},
             prefer="return=representation",
         )
         if status == 201 and isinstance(created, list) and len(created) == 1:
