@@ -13,6 +13,87 @@ disponíveis para uma sessão futura de correcção, se/quando decidires prioriz
 critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E5-VPS
 e as migrações 0003/0004/0005/0006 estão fechadas.
 
+## Item 24 — Rotação dos 4 segredos expostos + re-escrow — ✅ FECHADA 2026-09-06
+
+**Contexto:** fecho do incidente de 2026-09-06 (item 21) — `POSTGRES_PASSWORD`, `JWT_SECRET`,
+`ANON_KEY`, `SERVICE_ROLE_KEY` tinham ficado visíveis num comando mal escrito. Graças ao
+item 22 (fechado horas antes, no mesmo dia), o custo passou a ser um restart, não um rebuild.
+
+**F0 (medições, sem valores):**
+- `POSTGRES_PASSWORD` **não é um único role** — usado por `db` (init), pela connection
+  string do GoTrue (`postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db/...`) e pela do
+  PostgREST (`postgres://authenticator:${POSTGRES_PASSWORD}@db/...`). Confirmado via
+  `pg_authid`: 5 roles com password definida (`authenticator`, `pgbouncer`, `postgres`,
+  `supabase_admin`, `supabase_auth_admin`) — `pgbouncer` não corresponde a nenhum serviço
+  desta stack (não existe `pgbouncer` no `docker-compose.yml`, achado lateral, não tocado);
+  `supabase_admin` não é referenciado por nenhuma connection string do compose (só usado
+  localmente via `docker exec`, `pg_hba.conf` confirma `local`/`127.0.0.1`/`::1` → `trust`,
+  sem password) — não rodado, fora do âmbito real da exposição. Rodados: `postgres`,
+  `supabase_auth_admin`, `authenticator` — os três que a variável `POSTGRES_PASSWORD`
+  efectivamente alimenta nesta stack.
+- Claims do `ANON_KEY`/`SERVICE_ROLE_KEY` actuais, só o payload (nunca a assinatura, nunca o
+  token completo): `{"role":"anon"|"service_role","iss":"tmsiequipment-atelier24","iat":
+  1788470056,"exp":2103830056}` — os novos replicam exactamente `iss`/`iat`/`exp`, mudando
+  só `role` (já diferia) e a assinatura (novo `JWT_SECRET`).
+- Rollback preparado e verificado antes de tocar em nada: cópia do `.env` (600, timestamped,
+  fora do git) + `pg_dump` fresco (637 entradas no TOC, `pg_restore -l` confirmou legível).
+
+**F1:** 4 valores novos gerados (`openssl rand -hex 32` para `POSTGRES_PASSWORD`/
+`JWT_SECRET`; `ANON_KEY`/`SERVICE_ROLE_KEY` assinados HS256 à mão, stdlib `hmac`/`hashlib`,
+claims idênticos aos medidos na F0) — todos em ficheiros 600, nunca ecoados; payloads dos
+novos JWTs verificados por decode (não a assinatura).
+
+**F2 — ordem aplicada exactamente como a restrição 4 pedia:**
+1. `ALTER ROLE ... PASSWORD` como `supabase_admin` (não `postgres` — a mesma lição do
+   restauro do item 21: `postgres` não é superuser nesta imagem, «permission denied to alter
+   role» confirmou isso ao vivo antes de corrigir) — as três roles, mesma sessão.
+2. `.env` actualizado nas 4 linhas, verificado (tamanho do ficheiro, `grep -c` de não-vazio,
+   nunca o conteúdo).
+3. Restart `auth` → `rest` → `tmsi-app`, `-t 60`, `supabase-db` nunca reiniciado. Saudável
+   por função em cada passo: GoTrue log limpo, PostgREST log "Successfully connected to
+   PostgreSQL", `/login` a servir 200, `/auth/v1/health` 200, raiz do PostgREST a responder.
+
+**F3 — as duas famílias de prova:**
+1. **Antigos mortos** (ramo que interessa, restrição 5): `ANON_KEY` antigo contra a raiz do
+   PostgREST → `401`; `SERVICE_ROLE_KEY` antigo contra `/products` → `401`; o mesmo contra o
+   admin do GoTrue → `403`. Um JWT **genérico, moldado como sessão** (`sub`/`role:
+   authenticated`/`exp` futuro), assinado à mão com o `JWT_SECRET` **antigo** (lido só do
+   ficheiro de rollback, nunca ecoado) → `401`, `PGRST301 "No suitable key or wrong..."` —
+   prova a classe toda (qualquer JWT assinado com o segredo antigo, não só as duas chaves
+   específicas), já que não havia um token de sessão real anterior à rotação capturado para
+   testar directamente.
+2. **Novos vivos:** `scripts/smoke.py` **27/27** — logins reais dos 4 papéis `.test` com as
+   passwords de sempre (prova que sobreviveram, hashes bcrypt independentes do `JWT_SECRET`,
+   como o ensaio de desastre já tinha estabelecido). Login fresco de `finance.test` +
+   `v_products`/`v_branch_prices` com dados reais (3 linhas cada) — fontes de dados do
+   dashboard confirmadas vivas com o novo `ANON_KEY`. Export não re-testado de forma
+   independente (é o mesmo caminho de dados já confirmado pelo `smoke.py`, sem lógica própria
+   ligada a estes 4 segredos além da leitura inicial).
+3. **Ligações internas:** logs de `auth`/`rest` sem nenhum erro de autenticação desde o
+   restart. Duas entradas presentes no log do GoTrue explicadas, não escondidas: a `403
+   "token signature is invalid"` é a própria prova F3.1 (achado esperado); um `400 "Invalid
+   login credentials"` real, do próprio `tmsi-app` (IP `172.20.40.5`, confirmado via
+   `docker inspect`), **confirmado pelo Pedro como teste dele próprio** (password errada,
+   sem relação com a rotação — a verificação de password é ortogonal a `JWT_SECRET`/chaves).
+
+**F4 — re-escrow:** novo `~/backups/tmsi/tmsi-secrets-2026-09-06-rotated.gpg` (mesma
+mecânica do item 21, `gpg -c`, passphrase reutilizada pelo Pedro — nunca exposta, podia ser
+reutilizada por desenho). **Achado de processo, corrigido no acto:** o ficheiro da
+passphrase e o `.gpg` gerado saíram com permissões `664` por omissão (o `umask 077` de uma
+chamada anterior não persiste entre chamadas de shell separadas) — corrigido para `600`
+manualmente antes de continuar, ambas as vezes. Decifração provada pelo Pedro (2 nomes de
+variáveis, nunca valores). **Destruídos com `shred -u -z`, por esta ordem, só depois de todas
+as provas passarem:** escrow antigo (valores queimados), os 4 ficheiros de geração dos
+segredos novos (redundantes com o `.env` + o escrow novo), o ficheiro da passphrase, a cópia
+de rollback do `.env`. **Mantido, não é um segredo queimado:** o dump de rollback
+(`~/tmp/tmsi-sudo/tmsi-rotation-rollback-20260906-111135.dump`) — não contém os 4 valores
+como dado, fica como backup extra.
+
+**Nenhum segredo em output nesta sessão** — todos os valores (antigos e novos) só tocaram
+ficheiros 600 ou variáveis de ambiente dentro de comandos, nunca `echo`/`print`/argv.
+
+---
+
 ## Item 22 — Desprender a imagem do hostname (env de runtime) — ✅ FECHADA 2026-09-06
 
 **Contexto:** achado 3 do ensaio de desastre (item 15) — `NEXT_PUBLIC_SUPABASE_URL`/

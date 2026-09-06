@@ -142,19 +142,20 @@ restaurada, re-provado. Novo PAT `read:packages` (classic), criado pelo Pedro, i
 só por ficheiro 600 descartado logo a seguir ao login — avança a rotação pendente do
 `CREDENTIALS-INVENTORY.md` (KI #9) do lado do pull. Detalhe: `docs/STATE.md`.
 
-**24. 4 segredos de produção ecoados no output do agente — rotação pendente** *(incidente
-2026-09-06, decisão do Pedro: aceitar o risco por agora)* — `POSTGRES_PASSWORD`,
-`JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` ficaram visíveis num comando mal escrito ao
-inventariar o `.env` para o item 21 (F3). Não usados nem reimpressos depois de detectado.
-Rodar os quatro juntos quando o Pedro decidir (`JWT_SECRET` invalida todas as sessões vivas;
-`ANON_KEY`/`SERVICE_ROLE_KEY` derivam dele; `POSTGRES_PASSWORD` exige reiniciar a stack).
-**Agora barato (item 22, 2026-09-06): rodar já não exige rebuild da imagem** —
-`SUPABASE_URL`/`SUPABASE_ANON_KEY` são env de runtime, um `docker compose up -d --no-deps
-tmsi-app` depois de actualizar o `.env` chega. **Obrigatório no fecho deste item: re-cifrar o
-escrow de segredos** (`~/backups/tmsi/tmsi-secrets-*.gpg`, item 21 F5) com os valores novos —
-um escrow desactualizado depois de uma rotação é pior do que nenhum. Detalhe: `docs/STATE.md`.
-`CREDENTIALS-INVENTORY.md` do dossier precisa da entrada correspondente — fora do que esta
-sessão VPS escreve directamente, texto preparado para o Pedro colar.
+~~**24. 4 segredos de produção ecoados no output do agente — rotação**~~ ✅ **fechada
+2026-09-06** (incidente de 2026-09-06, item 21). `POSTGRES_PASSWORD`, `JWT_SECRET`,
+`ANON_KEY`, `SERVICE_ROLE_KEY` rodados, todos os quatro. Ordem provada: `ALTER ROLE` (3
+roles: `postgres`, `supabase_auth_admin`, `authenticator`) → `.env` → restart
+`auth`→`rest`→`tmsi-app` (`supabase-db` nunca reiniciou). **Prova pelo ramo que interessa:**
+os quatro valores antigos confirmados mortos (`ANON_KEY`/`SERVICE_ROLE_KEY` → 401/403; um JWT
+de sessão genérico assinado com o `JWT_SECRET` antigo → `PGRST301`); `smoke.py` 27/27 com os
+valores novos, confirmando que as passwords `.test` sobreviveram (hashes bcrypt
+independentes do `JWT_SECRET`, como o ensaio de desastre já tinha provado). Escrow re-cifrado
+com os valores novos, decifração provada pelo Pedro, escrow antigo destruído (`shred`).
+Nenhum segredo em output nesta sessão. Detalhe completo: `docs/STATE.md`.
+`CREDENTIALS-INVENTORY.md` 5.8 do dossier precisa de passar de ⚠️ EXPOSTOS a ✅ rodado — fora
+do que esta sessão VPS escreve directamente, nota já deixada em `VPS.md` §Pendências a
+migrar.
 
 ## ⚪ Baixas — registadas, sem urgência
 

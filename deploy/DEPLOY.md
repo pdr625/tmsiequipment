@@ -30,7 +30,7 @@ Everything below is checked against the real running production, not assumed.
   `docker-compose.yml`'s `image:` line — never `:latest` in that file. This VPS has no
   Node/npm toolchain by design (961 MB RAM, 1 vCPU) — building here risks OOM.
 - **The GHCR package is private** (since 2026-09-06, item 21/23). The VPS authenticates via
-  `docker login ghcr.io` with a classic PAT, `read:packages` scope only — see §8. Without
+  `docker login ghcr.io` with a classic PAT, `read:packages` scope only — see §9. Without
   this login, `docker compose pull` for `tmsi-app` fails.
 
 ## 1. Release cycle (day-to-day deploys)
@@ -98,12 +98,12 @@ variable prints a clear line to stderr and the container exits non-zero immediat
 verified live.
 
 **Consequence, now that this is fixed:** restoring this app on a different hostname, or
-after rotating `JWT_SECRET`/regenerating `ANON_KEY` (a real disaster, item 24's planned
-rotation, or the eventual move to the company's own server, E6) is **just a new `.env` +
-`docker compose up -d --no-deps tmsi-app`** — the same image serves any hostname or key set.
-No CI rebuild, no repository secret to update, no `.github/workflows/ci.yml` edit. This is
-exactly what the disaster drill's Achado 3 caught as missing, and what made item 24's
-rotation cheap enough to schedule freely instead of needing its own rebuild step.
+rotating `JWT_SECRET`/regenerating `ANON_KEY` (a real disaster, or the eventual move to the
+company's own server, E6) is **just a new `.env` + `docker compose up -d --no-deps
+tmsi-app`** — the same image serves any hostname or key set. No CI rebuild, no repository
+secret to update, no `.github/workflows/ci.yml` edit. This is exactly what the disaster
+drill's Achado 3 caught as missing, and what made item 24's rotation (2026-09-06, the very
+same day — see §7) cheap enough to do immediately instead of needing its own rebuild step.
 
 Proof this class is actually closed, not just moved: `deploy/DEPLOY.md`'s own commit history
 and `docs/STATE.md`'s item 22 section carry the grep-for-the-literal-in-the-new-image proof
@@ -166,19 +166,19 @@ hashes don't depend on the JWT secret. GoTrue re-issues tokens against the resto
 with whatever new secret it's given.
 
 What does **not** survive on its own: the app pointing at the right hostname (§3) and the
-GHCR pull credential existing anywhere but this one VPS (§8, and the escrow in §6) — without
+GHCR pull credential existing anywhere but this one VPS (§9, and the escrow in §6) — without
 those two, data survival alone doesn't get the service back up.
 
 ## 6. Secrets escrow
 
-Today, `deploy/supabase/.env` and the GHCR pull PAT (§8) exist **only on this VPS**. A real
+Today, `deploy/supabase/.env` and the GHCR pull PAT (§9) exist **only on this VPS**. A real
 disaster loses them along with everything else, forcing secrets to be reconstructed by hand
 before a restore can even begin.
 
 **Rule, going forward: re-encrypt the escrow every time `.env` changes.** A stale escrow is
 worse than none — it produces a confident, wrong reconstruction.
 
-**What it is:** `deploy/supabase/.env` plus the GHCR pull PAT (§8, extracted from
+**What it is:** `deploy/supabase/.env` plus the GHCR pull PAT (§9, extracted from
 `~/.docker/config.json`'s `ghcr.io` entry), concatenated into one plaintext file, symmetric-
 encrypted, then the plaintext shredded. `age -p` was the first choice (restriction-driven)
 but isn't installed on this VPS — fell back to `gpg -c` (AES256), so the file is `.gpg`, not
@@ -199,7 +199,7 @@ off-site pull (§4) picks it up with no changes needed on either side.
 at all (this section's original design intent); in practice, with no live interactive
 terminal available to this session, it had to pass through a `chmod 600` file for `gpg
 --passphrase-file` to read — same constraint that already applies to every other real secret
-this kind of session handles (see the GHCR PAT in §8). The file was `shred -u -z`'d
+this kind of session handles (see the GHCR PAT in §9). The file was `shred -u -z`'d
 immediately after use. `shred`'s guarantees are themselves imperfect on some filesystems/SSDs
 — disclosed, not treated as equivalent to "never touched disk."
 
@@ -211,7 +211,71 @@ gpg --output /tmp/tmsi-secrets-check.txt --decrypt ~/backups/tmsi/tmsi-secrets-<
 shred -u -z /tmp/tmsi-secrets-check.txt
 ```
 
-## 7. `smoke.py` against a drill or a second environment
+## 7. Rotating secrets (`POSTGRES_PASSWORD`, `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY`)
+
+Proven end to end 2026-09-06 (item 24, closing a real exposure incident). Cheap since item 22
+(§3) — a restart, not a rebuild.
+
+**Before touching anything:** timestamped `.env` copy (600, outside git) + a fresh `pg_dump`,
+verified readable (`pg_restore -l`). Keep both until every proof below passes; only then
+`shred -u -z` the `.env` copy (the dump isn't itself a secret — it holds application data,
+not these four values — safe to keep as an extra backup).
+
+**`POSTGRES_PASSWORD` is not one role.** This stack's `docker-compose.yml` wires it into
+three places: the `db` service's own init, GoTrue's connection string
+(`postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db/...`), and PostgREST's
+(`postgres://authenticator:${POSTGRES_PASSWORD}@db/...`). Rotating it means updating **all
+three roles** — `postgres`, `supabase_auth_admin`, `authenticator` — not just one. (`SELECT
+rolname FROM pg_authid WHERE rolpassword IS NOT NULL` also lists `pgbouncer` and
+`supabase_admin` — neither is referenced by this compose file's connection strings;
+`pgbouncer` isn't even a service here, and `supabase_admin` is only reached locally via
+`docker exec`, which is `trust`-authenticated per `pg_hba.conf`. Leave both alone unless you
+have a specific reason tied to them, not this rotation.)
+
+**`ANON_KEY`/`SERVICE_ROLE_KEY` regeneration:** these are HS256 JWTs signed with
+`JWT_SECRET`. Decode the *payload* of the current ones first (never the signature, never
+print the full token) to see the exact `iss`/`iat`/`exp` claims in use, then construct new
+tokens with the **same claims**, signed with the new secret — only the signature changes,
+plus `role` (already `anon`/`service_role`, unchanged). Plain Python stdlib
+(`hmac`/`hashlib`/`base64`) is enough; no dependency needed.
+
+**Order that actually works** — verified live, including the mistake to avoid:
+1. `ALTER ROLE ... PASSWORD '...'` for all three roles above, connected as `supabase_admin`
+   — **not** `postgres`. Same lesson as the restore procedure (§5): `postgres` isn't a
+   superuser in this image and cannot alter privileged roles (`permission denied to alter
+   role`, confirmed live). Existing connections survive this; only new connections use the
+   new password, so nothing drops yet.
+2. Update all four values in `deploy/supabase/.env`.
+3. Restart in this order, `-t 60`, **not** `db`: `docker compose up -d --no-deps -t 60 auth`,
+   then `rest`, then `tmsi-app`. Confirm each is healthy *by function* before moving to the
+   next (GoTrue's own `/health`, PostgREST answering its root, `/login` serving 200) — a
+   green container status alone doesn't confirm the new password actually works.
+
+**Prove the branch that matters: the old values are dead, not just that the new ones work.**
+The old `ANON_KEY`/`SERVICE_ROLE_KEY` against PostgREST/GoTrue should now get `401`/`403`. If
+no real pre-rotation session token was captured to test directly, sign a throwaway
+session-shaped JWT (`sub`/`role: authenticated`/a future `exp`) with the **old** `JWT_SECRET`
+(read only from the rollback `.env` copy, inline, never echoed) and confirm PostgREST rejects
+it (`PGRST301`, "No suitable key or wrong...") — this proves the whole class of tokens signed
+with the retired secret is dead, not just the two specific keys.
+
+**Then prove the new values are alive:** `scripts/smoke.py` full pass count — this doubles as
+proof that user passwords survived (they're bcrypt hashes, independent of `JWT_SECRET`; a
+disaster-drill restore with brand-new secrets already established this, and a rotation on the
+live system is the same fact from the other direction).
+
+**Re-encrypt the escrow (§6) with the new values before closing** — this was already the
+rule there; a rotation is exactly the moment it matters. Delete the old escrow file with
+`shred -u -z` only after the new one's decryption has been verified.
+
+**A permissions gotcha, worth knowing before it surprises you:** files created via a plain
+shell redirect (`cat > file`, or a tool's own file-write step) don't reliably inherit a
+`umask 077` set in an earlier, separate command — shell state doesn't always carry across
+independent invocations the way you'd expect from one continuous terminal session. Don't
+assume 600; check with `ls -l` and `chmod 600` explicitly right after creating any secret
+file, every time.
+
+## 8. `smoke.py` against a drill or a second environment
 
 `scripts/smoke.py` reads its target and credentials from environment variables, with
 production's own current values as defaults — running it with no environment variables set
@@ -224,7 +288,7 @@ TMSI_BASE_URL=https://<other-host> TMSI_CREDENTIALS_DIR=/path/to/creds python3 s
 
 See the script's own header for the exact variable names and defaults.
 
-## 8. GHCR authentication (item 23 — the package is private)
+## 9. GHCR authentication (item 23 — the package is private)
 
 The VPS pulls `ghcr.io/pdr625/tmsiequipment/tmsi-app` (and, on this same host, also
 `ghcr.io/pdr625/itinera` — one shared `~/.docker/config.json` entry serves every GHCR pull
@@ -246,7 +310,7 @@ can restore the data and rebuild the image, but the very last `docker compose pu
 Rotation: alongside the account's other tokens, planned for January (dossier
 `CREDENTIALS-INVENTORY.md`).
 
-## 9. Moving to the company server (E6, not started)
+## 10. Moving to the company server (E6, not started)
 
 Same procedure as §5's restore, on new hardware, plus:
 
@@ -254,7 +318,7 @@ Same procedure as §5's restore, on new hardware, plus:
    read access; the licence requires written authorisation from the owner before this step).
 2. New `.env` (§2), new domain in `SITE_URL`/`GOTRUE_URI_ALLOW_LIST`/etc. — the same GHCR
    image serves the new hostname with no rebuild (§3, fixed 2026-09-06); pull it
-   authenticated (§8) and deploy by digest as in §1.
+   authenticated (§9) and deploy by digest as in §1.
 3. Point DNS, issue a new certificate, decommission the VPS instance.
 
 Also required before this step, per `docs/ROADMAP.md`'s E6 gate: a first *formal* execution
