@@ -86,19 +86,36 @@ fixture descartável, resíduo zero. Detalhe: `docs/STATE.md`.)
 
 ## 🟡 Médias — decisões tuas e melhorias com contexto
 
-**9. L2 — quem aprova** (inclinação: BM + «quem edita não aprova») → destrava E4/0006.
+**18. Alerta idade-FX** — **promovido 2026-09-06, o mais urgente dos pequenos** (era item
+⚪ 18, "Métrica idade-FX no vps-stats"). Continua pequeno em esforço, mas passa à frente dos
+restantes ⚪ por prioridade do Pedro — próxima sessão executável a seguir à E4.
+~~**9. L2 — quem aprova**~~ ✅ **decidida 2026-09-06** — Branch Manager da filial afectada ou
+um admin, um aprovador basta; «quem edita não aprova» **não se aplica** (admin pode aprovar
+as próprias modificações — decisão consciente da fase piloto, limitação conhecida a
+revisitar com mais utilizadores reais). Implementação: **E4** (migração 0007), esta sessão.
 **10. Âmbitos de override canal/agente** — 2 perguntas de desenho registadas.
 **11. CPI L113-9 por escrito** — pré-condição E6; condiciona a via TI (7).
 **12. Questões do handover §7**: moeda escalões TBM (T2) · taxas SAP (C2, manual no piloto).
-**13. Terceira perna do backup** (hoje 2 cópias/2 máquinas; liga a D-C/D-D do parque).
-**14. Paginação/pesquisa nas listagens** — **medido 2026-09-05** (fixture descartável de 150
-produtos, resíduo zero): `/products` 148ms→717ms (13→163 artigos), `/prices` 159ms→909ms (33→333
-linhas), crescimento real e substancial, não uma suposição. Causa raiz não é só "falta
-`LIMIT`" — `v_products`/`v_branch_prices` avaliam `products_visible()`/`compute_price()` por
-linha antes de poder limitar, dado a forma actual da vista; um `LIMIT` simples reduz o que o
-Next.js renderiza mas não o custo do lado da BD. Decisão de desenho pendente (prioridade/
-timing/âmbito da correcção — mais do que UI, pode pedir repensar a vista), tua. Detalhe
-completo: `docs/STATE.md`.
+**13. Terceira perna do backup** — **SUSPENSO, decisão do Pedro 2026-09-06** (hoje 2
+cópias/2 máquinas; liga a D-C/D-D do parque — sem prazo, sem próxima acção definida).
+**14. Paginação/pesquisa nas listagens** — **re-âmbito 2026-09-06 (decisão do Pedro):**
+catálogo real = **50–70 artigos**, não centenas — a extrapolação da medição de 2026-09-05
+(`/products` 148ms→717ms a 13→163; `/prices` 159ms→909ms a 33→333 linhas) sugere que este
+volume é **aceitável tal como está**. **Próxima acção: MEDIR a esse volume real** (~50–70),
+não redesenhar as vistas já — o redesenho (`v_products`/`v_branch_prices` avaliam
+`products_visible()`/`compute_price()` por linha, não uma condição indexável) só se justifica
+se a medição a essa escala falhar. A paginação dos exports Excel/PDF segue a charte graphique
+da Condat, quando essa existir (item 26). Detalhe da medição original: `docs/STATE.md`.
+**26. White-label + branding dos documentos** *(decisão do Pedro, 2026-09-06 — sessão(ões)
+própria(s), fora da E4)* — o código da app fica independente de tudo o que evoque
+Condat/TMSI (nomes, cores, textos hoje hardcoded); exports/impressões passam a usar a charte
+graphique da Condat, com os textos legais/marketing geridos numa página de edição própria —
+aspecto visual ainda por escolher, conteúdo por placeholders até lá. **Regra que não muda:**
+os dados da licença (copyright, "PROPRIETARY AND CONFIDENTIAL") ficam sempre afixados na
+app, **nunca** impressos nos documentos exportados — o branding é só do que o cliente vê,
+não da titularidade do software. Par provável de trabalho: motor de branding (onde os
+valores vêm de, como se aplicam ao PDF/Excel) + a própria página de edição. Liga ao item 14
+(paginação dos exports segue a charte, uma vez definida).
 **~~15. Ensaio de restauro completo~~** — ✅ **FEITO 2026-09-06**, execução n.º 1 no homelab.
 **RTO medido 13 min 21 s** (camada de dados + API); RPO observado em horas. Os dados sobrevivem
 e voltam a servir com segredos novos — 38 POLICY, RLS e a fronteira de custos 0003/0004 todas
@@ -161,7 +178,6 @@ migrar.
 
 **16.** Dark mode global (paleta dark já validada).
 **17.** `rrsync` na chave homelab→VPS (endurecimento).
-**18.** Métrica idade-FX no vps-stats (quando houver via limpa sem dependência Postgres).
 **19.** Varredura ~/.ssh dos dois hosts (item 13 do dossier — parque, não só TMSI).
 **20.** Swap do VPS — vigilância contínua (T8/tiles já o fazem; só agir se a tendência
 mudar de regime).
