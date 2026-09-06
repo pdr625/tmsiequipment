@@ -104,25 +104,17 @@ Detalhe completo: `docs/STATE.md`.
 **12. Questões do handover §7**: moeda escalões TBM (T2) · taxas SAP (C2, manual no piloto).
 **13. Terceira perna do backup** — **SUSPENSO, decisão do Pedro 2026-09-06** (hoje 2
 cópias/2 máquinas; liga a D-C/D-D do parque — sem prazo, sem próxima acção definida).
-**14. Paginação/pesquisa nas listagens** — **DIAGNOSTICADO 2026-09-06 — a medição de 06/09
-do item 26 estava INVÁLIDA** (não é a extrapolação: menos linhas a custar 5–10× mais é
-impossível se a variável fosse o volume). Sessão de diagnóstico dedicada, sem correcção
-nenhuma (medir, não consertar): **H2 confirmada, H1 refutada** — o custo é pressão de
-memória/swap deste VPS (961 MB/1 vCPU, partilhado por 4 apps + a própria sessão de agente,
-que sozinha já usa ~48% da RAM), provado directamente por `vmstat` a mostrar swap real
-durante as consultas lentas enquanto o Postgres mostrava 100% de acerto em cache (zero
-leitura real de disco) — **não** uma regressão de código da migração 0007 (`v_products` nem
-sequer chama `compute_price()`, o caminho que a 0007 tocou). Remedição limpa (5 execuções
-por ponto, carga registada): 13→309ms, 70→3.382ms, 163→10.555ms (`v_products`) — a 13
-linhas os números são normais (mesma ordem que os 148ms de 05/09), a escala deixa de ser
-linear a partir de 70. **Continua por fechar** — o catálogo real (50-70 artigos) vai
-encontrar este problema em produção. Propostas ordenadas por custo/risco (nenhuma
-executada): (1) mais RAM no VPS — sem tocar em código; (2) disciplina de sessões de agente
-longas neste host; (3) afinar `shared_buffers`/`work_mem` do Postgres; (4) redesenhar
-`products_visible()`/`v_products` para uma condição indexável (o redesenho maior, exige
-reprovar a matriz completa do protocolo); (5) paginação real, só útil combinada com (4).
-**Próxima acção: decisão do Pedro sobre qual seguir** (ou nenhuma, se aceitar o risco por
-agora). Detalhe completo das três medições (05/09, 06/09 inválida, diagnóstico): `docs/STATE.md`.
+~~**14. Paginação/pesquisa nas listagens**~~ ✅ **fechado 2026-09-06.** A medição de 06/09
+do item 26 (3,50–7,25 s a 70 artigos) era mesmo INVÁLIDA (confundida pela própria sessão de
+agente a medir, ~48% da RAM do VPS). Uma medição destacada (sem sessão de agente pesada,
+`systemd-run --user --on-active` + `loginctl enable-linger`, depois revertido) confirmou:
+**H1 (regressão da 0007) refutada, H2 (pressão de memória do host) confirmada — e resolvida**
+ao nível da BD. Números finais, `v_products`: 13→19,0ms, 70→**99,5ms**, 163→254,9ms — escala
+linear, melhor até que a referência pré-0007 de 05/09 (148/717ms). As propostas 3-5
+(afinar Postgres, redesenhar `v_products`, paginação real) não se reabrem — foram desenhadas
+para um sintoma que deixou de existir. Achado novo, não coberto por essas propostas: o custo
+HTTP/PostgREST de `v_products` (não a BD) continua a escalar mal (0,845s→2,945s→6,984s) —
+registado em separado como item **28**. Detalhe completo das quatro medições: `docs/STATE.md`.
 ~~**26. White-label + branding dos documentos**~~ ✅ **fechada 2026-09-06 (opção B).**
 Migração 0008 (`tmsi.branding`/`tmsi.branding_logos`, append-only, admin-only, fora do
 workflow de aprovação da 0007 — é apresentação, não preço); nova página `/config/branding`
@@ -196,6 +188,18 @@ Nenhum segredo em output nesta sessão. Detalhe completo: `docs/STATE.md`.
 `CREDENTIALS-INVENTORY.md` 5.8 do dossier precisa de passar de ⚠️ EXPOSTOS a ✅ rodado — fora
 do que esta sessão VPS escreve directamente, nota já deixada em `VPS.md` §Pendências a
 migrar.
+
+**28. Custo HTTP/PostgREST de `v_products` a volume** — achado da medição destacada do item
+14 (2026-09-06), separado por ter um mecanismo diferente: com a BD já rápida e linear
+(99,5ms a 70 produtos), o mesmo pedido via PostgREST (`/rest/v1/v_products`, bearer token)
+continua a escalar mal — 0,845s→2,945s→6,984s (13→70→163), 27-44× acima do tempo de SQL
+puro no mesmo ponto. `v_branch_prices`, pela mesma via, acompanha bem (0,159s→0,305s→0,881s,
+8-3×). Única diferença estrutural: `v_products` devolve ~32 colunas, `v_branch_prices`
+~8-10; o contentor `supabase-rest` tem `mem_limit: 128m` (mais apertado que a app, 192MB) —
+hipótese não verificada: serialização JSON de um resultado largo dentro desse limite.
+**Nada medido ainda ao nível de causa** (falta `docker stats supabase-rest` durante a
+série, ou uma vista mais estreita para comparar). Detalhe completo: `docs/STATE.md`, secção
+"Item 14 — Medição destacada".
 
 ## ⚪ Baixas — registadas, sem urgência
 

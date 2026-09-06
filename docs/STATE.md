@@ -3,15 +3,14 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 14 — medição destacada de sessão de agente — EM CURSO 2026-09-06
-(agendada, sem sessão de agente ligada; ver secção "Item 14 — medição destacada" abaixo
-para a hora exacta e o caminho do resultado).** O diagnóstico anterior (H2 confirmada, H1
-refutada — pressão de memória/swap, não a 0007) sofria do mesmo defeito que apontava: a
-própria sessão de agente que mediu já ocupava ~48% da RAM do host. Esta sessão escreveu e
-agendou um medidor que corre sem nenhuma sessão de agente activa (`systemd-run --user
---on-active`, sem sudo, com `loginctl enable-linger` activado) — o resultado fica por ler
-numa sessão futura. Nenhuma correcção executada (restrição 1, medir não consertar). E0, E1,
-E2, E3 (i1–i10), E4, E5-VPS e as migrações 0003/0004/0005/0006/0007/0008 estão fechadas.
+**Etapa actual: item 14 — medição destacada e fecho — ✅ FECHADO 2026-09-06** (ver secção
+"Item 14 — Medição destacada sem sessão de agente pesada" abaixo). H1 (regressão da 0007)
+continua refutada, H2 (pressão de memória do host) confirmada — e desta vez resolvida ao
+nível da BD ao retirar a maior parte da pressão da própria sessão de agente que estava a
+medir. Achado novo e distinto (custo HTTP/PostgREST de `v_products` não acompanha a melhoria
+da BD) registado como item 28 do backlog, não coberto pelas propostas 1-5 do diagnóstico
+anterior. E0, E1, E2, E3 (i1–i10), E4, E5-VPS e as migrações 0003/0004/0005/0006/0007/0008
+estão fechadas.
 
 **Regra de processo (item 14, 2026-09-06, escrita também em `~/atelier-vps/CLAUDE.md`):**
 medições de desempenho desta app nunca se fazem com uma sessão de agente aberta neste VPS —
@@ -151,6 +150,104 @@ browser):** o tempo real completo de `/prices`/produto nestas condições.
 `dossier-push.sh`). Fixture zero resíduo confirmado por contagem (`tmsi.products` de volta
 a 13 depois de cada série). `scripts/smoke.py` não foi corrido nesta sessão — nenhuma
 alteração de código/schema foi feita, nada a re-verificar (restrição 1).
+
+## Item 14 — Medição destacada sem sessão de agente pesada — ✅ FECHADO 2026-09-06
+
+**Contexto:** o diagnóstico anterior (secção acima) identificou H2 (pressão de memória do
+host, amplificada pela própria sessão de agente a medir) como causa, mas não fechou porque
+a sessão diagnosticante sofria do mesmo problema que apontava (~48% da RAM). Esta sessão
+escreveu `~/tmp/tmsi-item14/measure.sh` e agendou-o via `systemd-run --user
+--on-active=<atraso>` (sem sudo) com `loginctl enable-linger pedro` activado, terminou, e
+uma sessão seguinte leu o resultado (`~/tmp/tmsi-item14/result-20260906-191858.txt`) — o
+mesmo protocolo pedido no fecho anterior.
+
+**F3 — comparação com as três séries anteriores** (mediana de 5-6 execuções por ponto,
+descartando a 1.ª, fria):
+
+`v_products`:
+
+| Série | 13 (BD) | 70 (BD) | 163 (BD) | 70 (HTTP/PostgREST) | 163 (HTTP/PostgREST) |
+|---|---|---|---|---|---|
+| 05/09, pré-0007 | 148 ms | — | 717 ms | — | — |
+| 06/09, item 26 (inválida) | — | — | — | 3,50–7,25 s | — |
+| 06/09, diagnóstico (sessão a medir ~48% RAM) | 309 ms | 3.382 ms | 10.555 ms | — | — |
+| 06/09, medição destacada (sessão ainda a 29,2% RAM) | **19,0 ms** | **99,5 ms** | **254,9 ms** | **2,945 s** | **6,984 s** |
+
+`v_branch_prices`:
+
+| Série | 13 (BD) | 70 (BD) | 163 (BD) | 70 (HTTP) | 163 (HTTP) |
+|---|---|---|---|---|---|
+| 05/09, pré-0007 (pares produto×filial, não produtos: 33/333) | 159 ms | — | 909 ms | — | — |
+| 06/09, diagnóstico | 50 ms | 309 ms | 1.412 ms | — | — |
+| 06/09, medição destacada | **19,7 ms** | **98,7 ms** | **267,6 ms** | **0,305 s** | **0,881 s** |
+
+**Leitura:** ao nível da BD os números voltaram a escalar de forma linear (19,0→99,5→254,9
+ms para `v_products`; 19,7→98,7→267,6 ms para `v_branch_prices`) e ficaram **melhor** que a
+própria referência pré-0007 de 05/09 (148/717 ms), apesar do schema de hoje já incluir a
+0007 e a 0008 inteiras. `vmstat` durante as três séries mostrou apenas swap modesto e
+intermitente — nada como os picos de 9,6/12,9 MB/s do diagnóstico anterior — excepto um
+pico isolado de `so=8668 KB/s` coincidente com a escrita dos 93 produtos da segunda
+fixture (inserção em massa com triggers de auditoria), não com as consultas em si. Isto
+**confirma, com uma segunda prova independente, o veredicto anterior**: H1 continua
+refutada, H2 confirmada — e mostra-se aqui, directamente, que retirar a maior parte dessa
+pressão já basta para pôr a BD numa escala saudável. Nota de honestidade: a sessão de
+agente que escreveu o medidor **não terminou de facto** — desceu de 477 MB/48% para
+288 MB/29,2% (mesmo PID, 4211), confirmando que "terminar o turno" não mata o processo
+`claude` subjacente, só sair do CLI o faria; mesmo assim, mesmo com essa pressão residual,
+os números já são bons — um host verdadeiramente livre deve ser, na pior das hipóteses,
+igual ou melhor.
+
+**Achado novo, distinto, não coberto pelas propostas 1-5 do diagnóstico:** ao nível HTTP
+(PostgREST, bearer token, mesma vista — não a página Next.js renderizada, limitação de
+cookie de sessão já registada e não contornável), `v_products` **não acompanha** a melhoria
+da BD: 0,845 s→2,945 s→6,984 s (13→70→163), um factor de 44×/30×/27× acima do tempo de SQL
+puro no mesmo ponto. `v_branch_prices`, pela mesma via, acompanha muito melhor: 0,159 s→
+0,305 s→0,881 s (factor 8×/3×/3×). A única diferença estrutural entre as duas vistas é a
+largura: `v_products` devolve ~32 colunas por linha, `v_branch_prices` ~8-10. O contentor
+`supabase-rest` tem `mem_limit: 128m` no `docker-compose.yml` (mais apertado que o da app,
+192 MB) — hipótese mais provável: custo de serialização JSON de um resultado largo dentro
+desse limite de memória, não pressão de swap do host (o próprio `vmstat` desta série já
+mostrou pressão baixa) nem o Postgres (o SQL já está rápido). **Não verificado ao nível de
+causa** — não foi medido `docker stats supabase-rest` durante a série nem comparada uma
+vista mais estreita artificialmente — só caracterizado com dados reais, ponta-a-ponta.
+
+**F4 — veredicto:** a pergunta original do item 14 ("o catálogo real vai encontrar este
+problema em produção, é uma regressão da 0007?") está respondida — **não**: a 70 produtos
+o tempo de BD é 99,5/98,7 ms, uma ordem de grandeza abaixo de qualquer limiar de
+preocupação, e a escala voltou a ser linear. As propostas 3-5 do diagnóstico anterior
+(afinar `shared_buffers`/`work_mem`, redesenhar `products_visible()`/`v_products`,
+paginação real) foram desenhadas para um sintoma — custo super-linear ao nível da BD — que
+**deixou de existir** depois de a medição deixar de estar confundida pela própria sessão a
+medir; não há razão para as reabrir. **Item 14 fecha-se com este veredicto.** O achado do
+PostgREST é real, medido, e afecta o utilizador (2,9 s a 70 produtos é a mesma ordem de
+segundos que motivou a preocupação original) — mas é um mecanismo diferente (contentor
+`supabase-rest`, não Postgres/host), não coberto pelas propostas 1-5, e por isso **não
+reabre o item 14** — regista-se como item novo do backlog (**28**), para investigar/decidir
+separadamente.
+
+**Confirmação de resíduo zero e parque na baseline:** o próprio `measure.sh` tinha um bug
+de limpeza (`delete ... where id like 'T-92%'` só apanha `T-9200`–`T-9299`; a segunda
+fixture subiu até `T-9349`) — confirmado pelo resultado do script (`total_apos_limpeza: 63`,
+não 13) e por consulta directa (`T-93%` = 50 linhas residuais). Corrigido nesta sessão via
+`delete from tmsi.products where id like 'T-93%';` → `DELETE 50`; `tmsi.products`
+confirmado de volta a **13**, com os IDs exactos do catálogo real (`T-0001`..`T-0010`,
+`T-8515`, `T-9002`, `T-9004`). `tmsi.audit_log` confirmado consistente (a própria limpeza
+manual aparece correctamente registada; timestamps sempre em UTC — o host corre em
+WEST/UTC+1, mesma classe de cuidado do item 25). `~/tmp/tmsi-item14/measure.sh` fica como
+está, com o bug de limpeza documentado aqui — não é código do repositório, não voltará a
+correr sem revisão.
+
+**Decisão sobre `loginctl enable-linger`:** revertida nesta sessão
+(`loginctl disable-linger pedro`, confirmado `Linger=no`) — serviu exactamente o propósito
+único para que foi activado (esta medição) e não há outro temporizador `--user` a precisar
+dele; manter linger sem necessidade só aumenta a superfície de processos de utilizador a
+sobreviver a logout, sem benefício agora. Reactivar (`loginctl enable-linger pedro`) faz
+parte do próprio protocolo de uma futura medição destacada, não é um estado permanente.
+
+**F5 (este fecho):** `docs/BACKLOG.md` (item 14 fechado; item 28 novo — PostgREST/vista
+larga); este ficheiro; dossier (`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`), incluindo a
+decisão sobre o linger. `scripts/smoke.py` não corrido nesta sessão (nenhuma alteração de
+código/schema).
 
 ## Item 26 — White-label + branding (opção B) — ✅ FECHADA 2026-09-06
 
