@@ -10,29 +10,32 @@
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageAnyPriceOverride, isAdmin } from '@/lib/auth-guard';
+import { proposeChange } from '@/lib/propose-change';
 import type { ActionState } from '@/lib/action-state';
 
 export type OverrideActionState = ActionState;
 
-// Real gate first, caller's own session — tmsi.overrides_write/ref_write
-// (RLS) are the actual boundary; this only avoids a wasted round trip for
-// a caller who'd be denied anyway (and, for price overrides, only a
-// coarse check — the exact kind/branch conditions for branch_manager/
-// logistics stay entirely on RLS, never re-implemented here).
+// 0007 (E4): price_overrides no longer takes a direct write here —
+// overrides_write was dropped, proposeChange() inserts a
+// tmsi.price_proposals row instead, and tmsi.proposals_insert (RLS)
+// re-derives overrides_write's own per-kind/per-branch conditions
+// (branch_manager: transport/margin/coef only, own branch; logistics:
+// duty only) exactly. canManageAnyPriceOverride() below stays a coarse
+// convenience check, same as before — it only decides whether to render
+// the form at all; the real boundary is that RLS policy now, not this
+// in-app check. The existing "reason" field doubles as both the
+// proposal's own reason and the override's own reason column once
+// materialised — they describe the same thing here, so no second field.
 //
-// created_by is never read from the form (restriction 3 of the prompt:
-// the author is the authenticated session, not an editable field) — set
-// here from auth.getUser(), same session the RLS check itself uses.
+// created_by/proposed_by is never read from the form (restriction 3 of
+// the original prompt: the author is the authenticated session, not an
+// editable field) — proposeChange() sets it from auth.getUser() itself,
+// the same session tmsi.proposals_insert's own check relies on.
 export async function createPriceOverride(
   _prevState: OverrideActionState,
   formData: FormData,
 ): Promise<OverrideActionState> {
   if (!(await canManageAnyPriceOverride())) return { error: 'Forbidden' };
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const product_id = String(formData.get('product_id') ?? '');
   const branch_id = String(formData.get('branch_id') ?? '');
@@ -42,21 +45,17 @@ export async function createPriceOverride(
   const valid_from = String(formData.get('valid_from') ?? '');
   const validToRaw = String(formData.get('valid_to') ?? '');
 
-  const { error } = await supabase.schema('tmsi').from('price_overrides').insert({
-    product_id,
+  const result = await proposeChange(
+    'price_overrides',
     branch_id,
-    kind,
-    value,
+    { product_id, branch_id, kind, value, reason, valid_from, valid_to: validToRaw === '' ? null : validToRaw },
     reason,
-    valid_from,
-    valid_to: validToRaw === '' ? null : validToRaw,
-    created_by: user?.id ?? null,
-  });
-
-  if (error) return { error: error.message };
+  );
+  if (result && 'error' in result) return result;
 
   revalidatePath('/overrides');
   revalidatePath(`/products/${product_id}`);
+  revalidatePath('/proposals');
   return { success: true };
 }
 

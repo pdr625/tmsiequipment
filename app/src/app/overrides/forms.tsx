@@ -88,10 +88,10 @@ export function PriceOverrideForm({
         disabled={pending}
         className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
       >
-        {pending ? 'Creating…' : 'Create override'}
+        {pending ? 'Submitting…' : 'Propose override'}
       </button>
       <ErrorText state={state} />
-      {state && 'success' in state && <p className="text-xs text-green-700">Created.</p>}
+      {state && 'success' in state && <p className="text-xs text-green-700">Submitted — pending approval.</p>}
     </form>
   );
 }

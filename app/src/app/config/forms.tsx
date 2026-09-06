@@ -75,15 +75,24 @@ export function ExchangeRateForm({ currencies }: { currencies: { code: string }[
           className="rounded-md border border-gray-300 px-2 py-1 text-sm"
         />
       </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Reason</label>
+        <input
+          name="reason"
+          required
+          placeholder="Why this change?"
+          className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm"
+        />
+      </div>
       <button
         type="submit"
         disabled={pending}
         className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
       >
-        {pending ? 'Adding…' : 'Add rate'}
+        {pending ? 'Submitting…' : 'Propose rate'}
       </button>
       <ErrorText state={state} />
-      {state && 'success' in state && <p className="text-xs text-green-700">Added.</p>}
+      {state && 'success' in state && <p className="text-xs text-green-700">Submitted — pending approval.</p>}
     </form>
   );
 }
@@ -127,14 +136,26 @@ export function IntercoFeeRow({
       </td>
       {canWrite && (
         <td className="py-2 pr-4">
+          <input
+            form={formId}
+            name="reason"
+            required
+            placeholder="Why this change?"
+            className="w-36 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          />
+        </td>
+      )}
+      {canWrite && (
+        <td className="py-2 pr-4">
           <button
             form={formId}
             type="submit"
             disabled={pending}
             className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
           >
-            {pending ? '…' : 'Save'}
+            {pending ? '…' : 'Propose'}
           </button>
+          {state && 'success' in state && <p className="mt-1 text-xs text-green-700">Submitted.</p>}
         </td>
       )}
     </tr>
@@ -208,14 +229,26 @@ export function TransportTierRow({
       </td>
       {canWrite && (
         <td className="py-2 pr-4">
+          <input
+            form={formId}
+            name="reason"
+            required
+            placeholder="Why this change?"
+            className="w-36 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          />
+        </td>
+      )}
+      {canWrite && (
+        <td className="py-2 pr-4">
           <button
             form={formId}
             type="submit"
             disabled={pending}
             className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
           >
-            {pending ? '…' : 'Save'}
+            {pending ? '…' : 'Propose'}
           </button>
+          {state && 'success' in state && <p className="mt-1 text-xs text-green-700">Submitted.</p>}
         </td>
       )}
     </tr>
@@ -263,14 +296,26 @@ export function CustomsRateRow({
       </td>
       {canWrite && (
         <td className="py-2 pr-4">
+          <input
+            form={formId}
+            name="reason"
+            required
+            placeholder="Why this change?"
+            className="w-36 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          />
+        </td>
+      )}
+      {canWrite && (
+        <td className="py-2 pr-4">
           <button
             form={formId}
             type="submit"
             disabled={pending}
             className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
           >
-            {pending ? '…' : 'Save'}
+            {pending ? '…' : 'Propose'}
           </button>
+          {state && 'success' in state && <p className="mt-1 text-xs text-green-700">Submitted.</p>}
         </td>
       )}
     </tr>
@@ -331,14 +376,26 @@ export function MarginGridRow({
       </td>
       {canWrite && (
         <td className="py-2 pr-4">
+          <input
+            form={formId}
+            name="reason"
+            required
+            placeholder="Why this change?"
+            className="w-36 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          />
+        </td>
+      )}
+      {canWrite && (
+        <td className="py-2 pr-4">
           <button
             form={formId}
             type="submit"
             disabled={pending}
             className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
           >
-            {pending ? '…' : 'Save'}
+            {pending ? '…' : 'Propose'}
           </button>
+          {state && 'success' in state && <p className="mt-1 text-xs text-green-700">Submitted.</p>}
         </td>
       )}
     </tr>

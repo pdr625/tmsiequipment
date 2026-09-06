@@ -11,6 +11,8 @@ import { canManageAnyPriceOverride, isAdmin } from '@/lib/auth-guard';
 import { overrideStatus } from '@/lib/override-status';
 import { PriceOverrideForm, HsOverrideForm } from './forms';
 
+type PendingProposal = { id: number };
+
 type PriceOverride = {
   id: number;
   product_id: string;
@@ -43,26 +45,43 @@ const STATUS_STYLE: Record<string, string> = {
 export default async function OverridesPage() {
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: priceOverrides }, { data: hsOverrides }, { data: products }, { data: branches }, { data: hsCodes }, canWritePrice, canWriteHs] =
-    await Promise.all([
-      supabase
-        .schema('tmsi')
-        .from('price_overrides')
-        .select('id, product_id, branch_id, kind, value, reason, valid_from, valid_to')
-        .order('valid_from', { ascending: false })
-        .overrideTypes<PriceOverride[], { merge: false }>(),
-      supabase
-        .schema('tmsi')
-        .from('product_hs_overrides')
-        .select('product_id, scope_type, scope_id, hs_code, reason')
-        .order('product_id')
-        .overrideTypes<HsOverride[], { merge: false }>(),
-      supabase.schema('tmsi').from('products').select('id, name').order('id').overrideTypes<Product[], { merge: false }>(),
-      supabase.schema('tmsi').from('branches').select('id, name').eq('active', true).order('id').overrideTypes<Branch[], { merge: false }>(),
-      supabase.schema('tmsi').from('hs_codes').select('code, description').order('code').overrideTypes<HsCode[], { merge: false }>(),
-      canManageAnyPriceOverride(),
-      isAdmin(),
-    ]);
+  const [
+    { data: priceOverrides },
+    { data: hsOverrides },
+    { data: products },
+    { data: branches },
+    { data: hsCodes },
+    canWritePrice,
+    canWriteHs,
+    { data: pendingOverrideProposals },
+  ] = await Promise.all([
+    supabase
+      .schema('tmsi')
+      .from('price_overrides')
+      .select('id, product_id, branch_id, kind, value, reason, valid_from, valid_to')
+      .order('valid_from', { ascending: false })
+      .overrideTypes<PriceOverride[], { merge: false }>(),
+    supabase
+      .schema('tmsi')
+      .from('product_hs_overrides')
+      .select('product_id, scope_type, scope_id, hs_code, reason')
+      .order('product_id')
+      .overrideTypes<HsOverride[], { merge: false }>(),
+    supabase.schema('tmsi').from('products').select('id, name').order('id').overrideTypes<Product[], { merge: false }>(),
+    supabase.schema('tmsi').from('branches').select('id, name').eq('active', true).order('id').overrideTypes<Branch[], { merge: false }>(),
+    supabase.schema('tmsi').from('hs_codes').select('code, description').order('code').overrideTypes<HsCode[], { merge: false }>(),
+    canManageAnyPriceOverride(),
+    isAdmin(),
+    // Visibility is tmsi.proposals_read (RLS, 0007) — whatever this
+    // session can see is exactly what's relevant to badge here.
+    supabase
+      .schema('tmsi')
+      .from('price_proposals')
+      .select('id')
+      .eq('status', 'pending')
+      .eq('target_table', 'price_overrides')
+      .overrideTypes<PendingProposal[], { merge: false }>(),
+  ]);
 
   const productName = (id: string) => products?.find((p) => p.id === id)?.name ?? id;
 
@@ -76,10 +95,18 @@ export default async function OverridesPage() {
       </div>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Price overrides</h2>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold text-gray-700">Price overrides</h2>
+          {(pendingOverrideProposals?.length ?? 0) > 0 && (
+            <Link href="/proposals" className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
+              {pendingOverrideProposals?.length} pending approval
+            </Link>
+          )}
+        </div>
         <p className="mb-2 text-xs text-gray-500">
           Each replaces one engine input (fx / fee / transport / duty / margin / coef), never
-          the result. To correct one, create a new entry — never edit an existing override.
+          the result. To correct one, propose a new entry — never edit an existing override. It
+          takes effect once approved.
         </p>
         <table className="mb-3 w-full border-collapse text-sm">
           <thead>

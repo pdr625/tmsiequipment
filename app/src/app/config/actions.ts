@@ -10,20 +10,25 @@
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageFinanceConfig, canManageOperationalConfig } from '@/lib/auth-guard';
+import { proposeChange } from '@/lib/propose-change';
 import type { ActionState } from '@/lib/action-state';
 
 export type ConfigActionState = ActionState;
 
-// Real gate first, caller's own session, before any write is attempted —
-// config_write (RLS) on each table is the actual boundary; this just
-// avoids a wasted round trip for a caller who'd be denied anyway. Every
-// error returned below is the raw one Postgres/PostgREST produced
-// (constraint violations, RLS denials) — never a client-side re-guess.
+// 0007 (E4): none of the five actions below writes exchange_rates/
+// interco_fees/transport_tiers/customs_rates/margin_grids directly any
+// more — tmsi.config_write was dropped from all five, proposeChange()
+// inserts into tmsi.price_proposals instead, and tmsi.proposals_insert
+// (RLS) re-derives exactly the same per-table eligibility config_write
+// used to enforce. canManageFinanceConfig()/canManageOperationalConfig()
+// below are convenience only, same as before — the real boundary is that
+// RLS policy now, not this in-app check.
 
 // exchange_rates is append-only by design (tmsi.fx_rate() always picks
-// the latest effective_date <= the query date) — no update/delete here,
-// only insert. source is NOT NULL already at the schema level (0001 §2);
-// this form just makes the field required, it doesn't invent the rule.
+// the latest effective_date <= the query date) — a proposal here inserts
+// a brand new row on approval, never edits history. source is NOT NULL
+// already at the schema level (0001 §2); this form just makes the field
+// required, it doesn't invent the rule.
 export async function addExchangeRate(_prevState: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
   if (!(await canManageFinanceConfig())) return { error: 'Forbidden' };
 
@@ -31,16 +36,13 @@ export async function addExchangeRate(_prevState: ConfigActionState, formData: F
   const rate_per_eur = Number(formData.get('rate_per_eur') ?? 0);
   const effective_date = String(formData.get('effective_date') ?? '');
   const source = String(formData.get('source') ?? '');
+  const reason = String(formData.get('reason') ?? '');
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .schema('tmsi')
-    .from('exchange_rates')
-    .insert({ currency, rate_per_eur, effective_date, source });
-
-  if (error) return { error: error.message };
+  const result = await proposeChange('exchange_rates', null, { currency, rate_per_eur, effective_date, source }, reason);
+  if (result && 'error' in result) return result;
 
   revalidatePath('/config');
+  revalidatePath('/proposals');
   return { success: true };
 }
 
@@ -50,18 +52,13 @@ export async function updateIntercoFee(_prevState: ConfigActionState, formData: 
   const supplier_branch = String(formData.get('supplier_branch') ?? '');
   const seller_branch = String(formData.get('seller_branch') ?? '');
   const fee = Number(formData.get('fee') ?? 0);
+  const reason = String(formData.get('reason') ?? '');
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .schema('tmsi')
-    .from('interco_fees')
-    .update({ fee })
-    .eq('supplier_branch', supplier_branch)
-    .eq('seller_branch', seller_branch);
-
-  if (error) return { error: error.message };
+  const result = await proposeChange('interco_fees', null, { supplier_branch, seller_branch, fee }, reason);
+  if (result && 'error' in result) return result;
 
   revalidatePath('/config');
+  revalidatePath('/proposals');
   return { success: true };
 }
 
@@ -73,18 +70,18 @@ export async function updateTransportTier(_prevState: ConfigActionState, formDat
   const maxWeightRaw = String(formData.get('max_weight_kg') ?? '');
   const cost = Number(formData.get('cost') ?? 0);
   const currency = String(formData.get('currency') ?? '');
+  const reason = String(formData.get('reason') ?? '');
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .schema('tmsi')
-    .from('transport_tiers')
-    .update({ max_weight_kg: maxWeightRaw === '' ? null : Number(maxWeightRaw), cost, currency })
-    .eq('branch_id', branch_id)
-    .eq('tier', tier);
-
-  if (error) return { error: error.message };
+  const result = await proposeChange(
+    'transport_tiers',
+    branch_id,
+    { branch_id, tier, max_weight_kg: maxWeightRaw === '' ? null : Number(maxWeightRaw), cost, currency },
+    reason,
+  );
+  if (result && 'error' in result) return result;
 
   revalidatePath('/config');
+  revalidatePath('/proposals');
   return { success: true };
 }
 
@@ -94,18 +91,13 @@ export async function updateCustomsRate(_prevState: ConfigActionState, formData:
   const hs_code = String(formData.get('hs_code') ?? '');
   const zone = String(formData.get('zone') ?? '');
   const rate = Number(formData.get('rate') ?? 0);
+  const reason = String(formData.get('reason') ?? '');
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .schema('tmsi')
-    .from('customs_rates')
-    .update({ rate })
-    .eq('hs_code', hs_code)
-    .eq('zone', zone);
-
-  if (error) return { error: error.message };
+  const result = await proposeChange('customs_rates', null, { hs_code, zone, rate }, reason);
+  if (result && 'error' in result) return result;
 
   revalidatePath('/config');
+  revalidatePath('/proposals');
   return { success: true };
 }
 
@@ -116,18 +108,18 @@ export async function updateMarginGrid(_prevState: ConfigActionState, formData: 
   const tier = Number(formData.get('tier') ?? 0);
   const maxCostRaw = String(formData.get('max_cost_eur') ?? '');
   const margin = Number(formData.get('margin') ?? 0);
+  const reason = String(formData.get('reason') ?? '');
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .schema('tmsi')
-    .from('margin_grids')
-    .update({ max_cost_eur: maxCostRaw === '' ? null : Number(maxCostRaw), margin })
-    .eq('branch_id', branch_id)
-    .eq('tier', tier);
-
-  if (error) return { error: error.message };
+  const result = await proposeChange(
+    'margin_grids',
+    branch_id,
+    { branch_id, tier, max_cost_eur: maxCostRaw === '' ? null : Number(maxCostRaw), margin },
+    reason,
+  );
+  if (result && 'error' in result) return result;
 
   revalidatePath('/config');
+  revalidatePath('/proposals');
   return { success: true };
 }
 
@@ -137,6 +129,10 @@ export async function updateMarginGrid(_prevState: ConfigActionState, formData: 
 // are JSON numbers, some are JSON strings). Parsed and validated before
 // being sent, rather than always wrapping as a JSON string, which would
 // silently change the value's type for every non-string setting.
+//
+// Untouched by 0007: tmsi.settings tunes alert thresholds, not a value
+// compute_price() returns to a caller — out of scope for the approval
+// workflow (0007 F0, migration header). Still a direct write.
 export async function updateSetting(_prevState: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
   if (!(await canManageFinanceConfig())) return { error: 'Forbidden' };
 

@@ -38,6 +38,7 @@ const TABLES = [
   'transport_tiers',
   'customs_rates',
   'margin_grids',
+  'price_proposals',
   'settings',
   'branches',
   'channels',

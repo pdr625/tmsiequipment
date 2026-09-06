@@ -61,6 +61,12 @@ export default async function HomePage() {
         >
           Overrides
         </Link>
+        <Link
+          href="/proposals"
+          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+        >
+          Proposals
+        </Link>
         {canReadAudit && (
           <Link
             href="/audit"
