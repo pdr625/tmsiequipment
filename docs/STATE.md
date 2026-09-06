@@ -3,11 +3,156 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 18 — alerta de idade dos câmbios — ✅ FECHADA 2026-09-06.** Ver secção
-própria abaixo. Próximo, por `docs/BACKLOG.md` e prioridade do Pedro: item 14 (medição a
-50-70 artigos reais) · item 26 (white-label/branding, sessão(ões) própria(s)). Ordem e
-critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E4, E5-VPS e
-as migrações 0003/0004/0005/0006/0007 estão fechadas.
+**Etapa actual: item 26 — white-label/branding (opção B) — ✅ FECHADA 2026-09-06.** Ver
+secção própria abaixo — inclui a remedição do item 14, que **não fechou** (números reais
+piores do que a extrapolação de 05/09, reaberto). Próximo, por `docs/BACKLOG.md` e decisão
+do Pedro: prioridade/timing do redesenho do item 14 · CPI/EOP · renome de infra na E6.
+Ordem e critérios de saída de cada etapa: `docs/ROADMAP.md`. E0, E1, E2, E3 (i1–i10), E4,
+E5-VPS e as migrações 0003/0004/0005/0006/0007/0008 estão fechadas.
+
+## Item 26 — White-label + branding (opção B) — ✅ FECHADA 2026-09-06
+
+**Contexto:** decisão do Pedro (06/09) — o código-fonte deixa de conter qualquer elemento
+que evoque Condat/TMSI (nomes, cores, textos); tudo passa a configuração em BD, editável na
+app. O nome do repositório/imagem/domínio ficam intocados — renomeá-los é sessão de infra
+própria, adiada para a E6 (registado, não esquecido).
+
+**F0 — inventário do que estava hardcoded, feito por um agente de pesquisa antes de
+desenhar a 0008 (não assumido de memória):**
+- Bloco de copyright ("TMSI Equipment Price Listing / Copyright (c) 2026 Pedro Alexandre /
+  PROPRIETARY AND CONFIDENTIAL") em 55 ficheiros `.ts`/`.tsx` — decisão: **mantido
+  deliberadamente**, é a titularidade do código (mesma coisa que `NOTICE`/`LICENSE`), não
+  branding de cliente — mesma categoria de excepção que a opção B já concede ao nome do
+  repo/imagem/domínio.
+- 11 ocorrências REAIS de "TMSI" fora desse bloco: `layout.tsx` (título da aba), `page.tsx`/
+  `login/page.tsx` (`&lt;h1&gt;`), `prices/page.tsx` (cabeçalho de impressão), os dois
+  `.../export/route.ts` (título do relatório, ×2 cada), o rótulo "TMSI code" no formulário
+  de novo produto, os dois templates de email (convite/recuperação), e `lib/notice.ts`'s
+  `NOTICE_TEXT` — uma cópia do `/NOTICE` do repositório embutida no rodapé de **ambos** os
+  documentos exportados. **Achado real, não uma suposição:** isto já era exactamente a
+  violação que a restrição (d) do prompt proíbe — dados de licença a aparecer num documento
+  exportado. Zero "Condat" em `app/src` (a única ocorrência é um comentário de código sobre
+  um incidente real com um endereço `condat.fr`, não uma referência de marca).
+- Sem `public/`, sem `&lt;img&gt;`/`next/image`, sem favicon, sem mecanismo de upload de
+  ficheiros nenhum no código existente — tudo construído de raiz.
+- Convenções a seguir: `admin/users/page.tsx`/`actions.ts` (página admin-only + Server
+  Action) e `config/actions.ts`'s `updateSetting` (escrita directa simples, sem workflow de
+  aprovação) como os dois modelos mais próximos.
+
+**F1 — migração 0008, validada em 9 verificações `BEGIN`/`ROLLBACK` antes de aplicar:**
+duas tabelas append-only — `tmsi.branding_logos` (o binário, PNG/JPEG só — `exceljs.
+addImage()` não aceita SVG) e `tmsi.branding` (nome, tagline, rodapé, texto legal, cor,
+tipografia, referência ao logo) — separadas para que editar só o texto não reinsira nem
+re-audite um logo de centenas de KB que não mudou (`tmsi.audit()` faz `to_jsonb(new)`, que
+hex-codificaria o bytea). RLS desde o primeiro momento: leitura universal +
+`tmsi.branding` **também legível por `anon`** (único caso deste projecto — os templates de
+email do GoTrue não têm sessão nenhuma; seguro porque esta tabela não tem nenhum dado
+sensível a custo). Escrita admin-only em ambas, **fora do workflow de aprovação da 0007**
+(é apresentação, não um preço publicado — decisão registada aqui e no cabeçalho da própria
+migração). **Achado real na validação:** uma política RLS `to anon` sozinha não bastou —
+sem o `GRANT` de base explícito (0001 já tinha o mesmo padrão para `tmsi.settings`), o
+acesso foi recusado com "permission denied" antes de a RLS sequer entrar em jogo; corrigido
+com `grant select ... to anon` em `tmsi.branding` e (sem política de leitura nenhuma) em
+`tmsi.branding_logos` também — o `GRANT` sem política dá zero linhas para `anon`, não um
+erro, exactamente o `LEFT JOIN` gracioso que `tmsi.v_current_branding` precisa para
+`logo_mime_type`.
+
+**F2 — código, com uma saga real de CI vermelho, dois bugs genuínos, corrigidos um a um:**
+`lib/branding.ts` (`getBranding()`/`getBrandingInternal()`/`footerLines()`/`slugify()`/
+`getBrandingLogoBuffer()`, defaults neutros embutidos — "Equipment Price Listing", sem
+nenhum nome de cliente); nova página `/config/branding` (admin-only) + `actions.ts`
+(upload de logo validado no servidor — tipo e tamanho, 2 MB — nunca só no cliente) +
+`api/branding/logo/route.ts` (serve o logo actual). Aplicado a `layout.tsx`
+(`generateMetadata` dinâmico), `page.tsx`/`login/page.tsx` (login dividido em
+`page.tsx`/servidor + `form.tsx`/cliente, mesmo padrão já usado no resto da app), aos dois
+templates de email, aos dois exports `.xlsx` (logo embutido via `exceljs.addImage`, cor,
+tipografia, nome de ficheiro por slug em vez de `"tmsi-"`) e à vista de impressão de
+`/prices`. "TMSI code" passou a "Product code" (a etiqueta descrevia o formato do ID, não
+uma marca). `lib/notice.ts` perdeu `NOTICE_TEXT` — só `PROPRIETARY_NOTICE` sobrevive (o
+rodapé do login, sempre dentro da app).
+
+**CI vermelho duas vezes, dois bugs reais, nenhum deles hipotético:**
+1. `lib/branding.ts` chamava `.maybeSingle()` **depois** de `.overrideTypes()` em dois
+   sítios — a mesma classe de bug já documentada neste projecto (`docs/STATE.md`, E3-i6 F1,
+   `audit/page.tsx`): `overrideTypes()` é um estágio de "transform" que o `postgrest-js`
+   estreita para um tipo sem mais métodos de construção de query. Corrigido invertendo a
+   ordem — não era, no entanto, a causa do CI vermelho (ver achado de processo abaixo).
+2. **A causa real:** `lib/xlsx-export.ts`'s novo embutir do logo
+   (`workbook.addImage({buffer, extension})`) — `exceljs`'s próprio `.d.ts` declara um
+   `interface Buffer extends ArrayBuffer` local ao seu ficheiro, e a lib `esnext` deste
+   projecto acrescentou os membros de `ArrayBuffer` redimensionável
+   (`resize`/`resizable`/`maxByteLength`/`detached`/...) — o `Buffer` real do `@types/node`
+   já não satisfaz estruturalmente o shim do `exceljs`. Corrigido com
+   `as unknown as Parameters&lt;typeof workbook.addImage&gt;[0]` (evita nomear o `Image`
+   interface não exportado do `exceljs`) — mesma classe de discrepância type-checker/lib já
+   documentada neste ficheiro para `Buffer` vs `BodyInit`.
+
+**Achado de processo, registado no fecho:** sem acesso à API de logs do GitHub Actions
+(`403 Must have admin rights`, o PAT GHCR desta VPS é só `read:packages`), o diagnóstico do
+segundo bug foi feito por um agente pedido em isolamento **`remote`** — que na prática caiu
+para um **worktree local** neste mesmo VPS (`.claude/worktrees/agent-...`, confirmado por
+`git worktree list` e por um aumento real de uso de disco durante a corrida) em vez de
+correr numa máquina genuinamente remota. Correu `npm install` + `npx tsc --noEmit` + `npm
+run build` (~12 min, incl. um passo "Compiled successfully in 6.0min") **neste VPS de 961
+MB/1 vCPU** — exactamente o tipo de build que `~/atelier-vps/CLAUDE.md` proíbe fazer aqui.
+Não houve OOM nem impacto visível desta vez (disco 51%→54%, memória recuperada depois), e o
+resultado (o erro exacto TS2740, com ficheiro/linha) valeu a pena — mas a disponibilidade
+real de isolamento `remote` para este tipo de agente fica como algo a **não** voltar a
+assumir sem confirmar primeiro; o worktree foi limpo no fim (`git worktree remove`).
+
+**F3:** CI verde ao terceiro commit (`27199e7`); digest
+`sha256:ad90a1c0fe34b4216edd05f4c340d18a1e77caa6d333a638c2669ba9666117f7`; `tmsi-app`
+saudável; `scripts/smoke.py` 38/38, sem regressão.
+
+**F4 — as 6 provas:**
+1. **Grep de varrimento (restrição 1):** zero "TMSI"/"Condat" em `app/src` fora do bloco de
+   copyright/identificadores de infra; testado contra o seu próprio falso positivo.
+2. **Mudança de identidade reflectida num ecrã real:** admin propôs branding real
+   (`display_name="Acme Test Corp"`, cor `#c0392b`, rodapé e texto legal próprios) via
+   `COMMIT` real (não `ROLLBACK` — tinha de persistir para um pedido HTTP **separado** o
+   ver) → `GET /login` sem sessão nenhuma (`anon`) devolveu de imediato
+   `&lt;title&gt;Acme Test Corp&lt;/title&gt;`/`&lt;h1&gt;Acme Test Corp&lt;/h1&gt;`. Revertido
+   (`DELETE` directo como `postgres` — `tmsi.branding` não tem política de `DELETE` para
+   `authenticated`, por desenho) → título voltou ao placeholder neutro
+   ("Equipment Price Listing"). **Por cobrir (Pedro, browser):** o mesmo em `/prices` e nos
+   dois exports — `/prices/export`/`/products/export`/`/prices` exigem sessão real por
+   cookie, não um `Authorization: Bearer` (confirmado outra vez: um pedido com o token real
+   de `finance.test` devolveu a página HTML de `/login`, não o ficheiro — mesma limitação já
+   registada na adenda i10, não retentada de outra forma).
+3. **Licença ausente dos documentos:** confirmado por leitura de código
+   (`NOTICE_TEXT` removido dos dois); a confirmação por conteúdo do ficheiro real
+   (`unzip`/grep, como a própria AA da i10 já fez) fica para o Pedro, mesmo motivo do
+   ponto 2.
+4. **Papel `sales`/sem custos continua sem custos:** nenhuma linha da query
+   `v_branch_prices`/`v_selling_prices`/`v_products` foi tocada por esta sessão, só
+   metadados de branding à volta — risco de regressão avaliado como baixo por leitura de
+   código; confirmação por ficheiro real fica também para o Pedro.
+5. **Item 14, remedido no mesmo fixture:** ver secção própria abaixo — **não fechou**.
+6. **Sem resíduo:** `tmsi.products` de volta a 13, `tmsi.branding`/`tmsi.branding_logos` a
+   0 linhas cada, `scripts/smoke.py` 38/38 no fim.
+
+**Item 14 — remedido, NÃO fechado:** fixture de 57 produtos sintéticos (`T-9200`..`T-9256`,
+`draft`, HS reais, ciclando as 4 filiais/moedas, cada um vendido em 2 filiais — 13+57=70, o
+topo do catálogo real) inserido/medido/apagado três vezes dentro de `BEGIN`/`ROLLBACK`
+(contagem de produtos confirmada de volta a 13 sempre). `EXPLAIN ANALYZE`, sessão
+`authenticated` real (claims de `finance`): `v_products` (`/products`) — **3,50 s / 3,90 s
+/ 7,25 s** em três execuções independentes (70 linhas); `v_branch_prices` (`/prices`) —
+**506 ms / 559 ms** (147 linhas). Muito mais lento do que a extrapolação linear de 05/09
+sugeria (~300–400 ms esperados a este volume). Causa provável, não uma certeza única: este
+VPS reparte 1 vCPU entre várias apps (`load average` observado 1,0–1,6, swap ~1,3/4 GB
+durante as medições) — explica a severidade e a variância grande entre execuções idênticas,
+mas não torna o pior número menos real: mesmo a mais rápida (3,50 s) já é "ordem de
+segundos" a um volume que É o catálogo real. **Condição de paragem do próprio prompt
+accionada** ("tempos que tornem a app inutilizável → reportar e reabrir o item 14 com o
+número real, não redesenhar aqui") — `docs/BACKLOG.md` item 14 reaberto com estes números,
+prioridade/timing do redesenho ficam por decisão do Pedro.
+
+**F5:** `docs/VERIFICATION-PROTOCOL.md` — linha "Editar branding" na matriz (nota ⁷), passos
+KK/LL (secção 4.8), adenda datada com os resultados exactos e o que fica para o Pedro.
+
+**F6 (este fecho):** `docs/BACKLOG.md` (item 26 riscado; item 14 reaberto com os números
+reais, NÃO fechado); este ficheiro; dossier (`VPS.md`/`CHANGELOG.md` via
+`dossier-push.sh`).
 
 ## Item 18 — Alerta de idade dos câmbios (métrica FX no vps-stats/T8) — ✅ FECHADA 2026-09-06
 

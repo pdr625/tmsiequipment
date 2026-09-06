@@ -104,24 +104,37 @@ Detalhe completo: `docs/STATE.md`.
 **12. Questões do handover §7**: moeda escalões TBM (T2) · taxas SAP (C2, manual no piloto).
 **13. Terceira perna do backup** — **SUSPENSO, decisão do Pedro 2026-09-06** (hoje 2
 cópias/2 máquinas; liga a D-C/D-D do parque — sem prazo, sem próxima acção definida).
-**14. Paginação/pesquisa nas listagens** — **re-âmbito 2026-09-06 (decisão do Pedro):**
-catálogo real = **50–70 artigos**, não centenas — a extrapolação da medição de 2026-09-05
-(`/products` 148ms→717ms a 13→163; `/prices` 159ms→909ms a 33→333 linhas) sugere que este
-volume é **aceitável tal como está**. **Próxima acção: MEDIR a esse volume real** (~50–70),
-não redesenhar as vistas já — o redesenho (`v_products`/`v_branch_prices` avaliam
-`products_visible()`/`compute_price()` por linha, não uma condição indexável) só se justifica
-se a medição a essa escala falhar. A paginação dos exports Excel/PDF segue a charte graphique
-da Condat, quando essa existir (item 26). Detalhe da medição original: `docs/STATE.md`.
-**26. White-label + branding dos documentos** *(decisão do Pedro, 2026-09-06 — sessão(ões)
-própria(s), fora da E4)* — o código da app fica independente de tudo o que evoque
-Condat/TMSI (nomes, cores, textos hoje hardcoded); exports/impressões passam a usar a charte
-graphique da Condat, com os textos legais/marketing geridos numa página de edição própria —
-aspecto visual ainda por escolher, conteúdo por placeholders até lá. **Regra que não muda:**
-os dados da licença (copyright, "PROPRIETARY AND CONFIDENTIAL") ficam sempre afixados na
-app, **nunca** impressos nos documentos exportados — o branding é só do que o cliente vê,
-não da titularidade do software. Par provável de trabalho: motor de branding (onde os
-valores vêm de, como se aplicam ao PDF/Excel) + a própria página de edição. Liga ao item 14
-(paginação dos exports segue a charte, uma vez definida).
+**14. Paginação/pesquisa nas listagens** — **MEDIDO a ~70 artigos reais 2026-09-06 (item
+26), NÃO FECHADO — números reais bem piores do que a extrapolação de 05/09 sugeria.**
+Fixture de 57 produtos sintéticos (13 reais + 57 = 70, o topo do catálogo real) medido em
+`EXPLAIN ANALYZE` como sessão `authenticated` real: `v_products` (`/products`) **3,50 s /
+3,90 s / 7,25 s** em três execuções — não os ~300–400 ms que a extrapolação linear de
+148ms→717ms (13→163) previa. `v_branch_prices` (`/prices`) ficou muito melhor comportado,
+506–559 ms. Nota honesta: este VPS reparte 1 vCPU entre várias apps (`load average`
+~1,0–1,6, swap ~1,3/4 GB durante as medições) — explica a variância grande entre execuções,
+mas não torna o pior número menos real: mesmo a execução mais rápida (3,50 s) já é "ordem de
+segundos" a um volume que **é** o catálogo real, não um cenário hipotético. **Próxima acção:
+decisão do Pedro sobre prioridade/timing do redesenho** (mover `products_visible()` para uma
+condição `WHERE` indexável em vez de uma função por linha — âmbito maior que uma sessão de
+medição) — esta entrada já não é "aceitável tal como está". A paginação dos exports
+Excel/PDF já segue a charte Condat, uma vez carregada (item 26, ✅ fechado). Detalhe
+completo das duas medições (05/09 e 06/09): `docs/STATE.md`.
+~~**26. White-label + branding dos documentos**~~ ✅ **fechada 2026-09-06 (opção B).**
+Migração 0008 (`tmsi.branding`/`tmsi.branding_logos`, append-only, admin-only, fora do
+workflow de aprovação da 0007 — é apresentação, não preço); nova página `/config/branding`
+(nome, tagline, logo PNG/JPEG, cor, tipografia, rodapé, texto legal — placeholders neutros
+por omissão, sem nenhum nome de cliente); aplicado ao título da app, aos dois exports
+`.xlsx` (incl. logo embutido) e à vista de impressão. Corrigido um vazamento real de
+licença: o rodapé de ambos os documentos embutia `NOTICE_TEXT` (cópia do `/NOTICE` do
+repositório — "Copyright... PROPRIETARY AND CONFIDENTIAL"), exactamente o que a regra da
+licença proíbe — removido dos dois, `PROPRIETARY_NOTICE` (o rodapé do login) fica a única
+menção, sempre dentro da app. Grep de varrimento confirma zero literais "TMSI"/"Condat" em
+`app/src` fora do bloco de copyright (mantido deliberadamente, mesma categoria do
+repo/imagem/domínio que a opção B já mantém). Renome de repo/imagem/domínio fica
+explicitamente para a E6 (decisão do Pedro, 06/09), registado aqui para não ser esquecido.
+Prova de ficheiro real (`.xlsx`/impressão) fica para o Pedro — mesma limitação já conhecida
+desde a i10 (sessão por cookie, não replicável por `curl`). Detalhe completo:
+`docs/STATE.md`.
 **~~15. Ensaio de restauro completo~~** — ✅ **FEITO 2026-09-06**, execução n.º 1 no homelab.
 **RTO medido 13 min 21 s** (camada de dados + API); RPO observado em horas. Os dados sobrevivem
 e voltam a servir com segredos novos — 38 POLICY, RLS e a fronteira de custos 0003/0004 todas
