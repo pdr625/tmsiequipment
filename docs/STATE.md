@@ -3,15 +3,12 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 28 — custo HTTP/PostgREST de `v_products` — ✅ FECHADO 2026-09-06,
-artefacto de medição, não defeito da app** (ver secção "Item 28 — Custo HTTP/PostgREST de
-`v_products`" abaixo). O achado do item 14 media `v_products` pedido por inteiro
-(`select=*`, ~32 colunas) — uma forma que a app **nunca envia**: `/products` e o export só
-pedem 7 colunas. Medido com o `select` real da app, o tempo cai 8,6-9,5× e fica ao nível de
-`v_branch_prices` (o controlo saudável). Subir o `mem_limit` do `supabase-rest` (128m→512m,
-temporário, revertido e confirmado) não mudou nada — exclui H-B. Item 14 continua fechado
-(secção própria abaixo); E0, E1, E2, E3 (i1–i10), E4, E5-VPS e as migrações
-0003/0004/0005/0006/0007/0008 estão fechadas.
+**Etapa actual: ferramentas de paridade motor-vs-Excel prontas — ✅ 2026-09-07** (ver secção
+"Ferramentas de paridade" abaixo). Template CSV + guia de preenchimento + validador
+(stdlib, read-only) entregues para o Pedro preencher sozinho, derivados do schema real
+(0001/0005/0007), sem dados reais nesta sessão. Item 28 (custo HTTP/PostgREST de
+`v_products`) e item 14 continuam fechados (secções próprias abaixo); E0, E1, E2, E3
+(i1–i10), E4, E5-VPS e as migrações 0003/0004/0005/0006/0007/0008 estão fechadas.
 
 **Regra de processo (item 14, 2026-09-06, escrita também em `~/atelier-vps/CLAUDE.md`):**
 medições de desempenho desta app nunca se fazem com uma sessão de agente aberta neste VPS —
@@ -249,6 +246,71 @@ parte do próprio protocolo de uma futura medição destacada, não é um estado
 larga); este ficheiro; dossier (`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`), incluindo a
 decisão sobre o linger. `scripts/smoke.py` não corrido nesta sessão (nenhuma alteração de
 código/schema).
+
+## Ferramentas de paridade motor-vs-Excel — ✅ ENTREGUE 2026-09-07
+
+**Contexto:** o Pedro precisa de entregar um CSV para a sessão de paridade motor-vs-Excel
+(comparar, artigo × filial, o que `tmsi.compute_price()` calcula com o que o Excel de
+referência calcula), mas o formato tem de nascer do schema real, não de suposição — e ele
+não tem de escrever código nenhum para o preencher.
+
+**F0 — o schema real, não memória:** colunas derivadas de `tmsi.products` (0001 §3) e do
+que `tmsi.compute_price()` consome (0001 §7, assinatura `(p_product, p_branch, p_date)`,
+mais as tabelas de configuração que já traz — `branches`, `interco_fees`,
+`transport_tiers`, `customs_rates`, `margin_grids`, `price_overrides`, `exchange_rates`,
+todas com o versionamento efectivo-datado da 0005/0007). **Nenhum achado** — o schema já
+cobre tudo o que a paridade precisa; não há campo nenhum a inventar.
+
+**Desenho:** uma linha por artigo × filial. Colunas de identificação (`product_id`,
+`product_name`, `branch_id`), de input (`item_type`, `currency`, `exw_price`,
+`primary_branch`, `hs_code`, `gross_weight_kg`, `sold_in`, `data_calculo` opcional) e o
+resultado esperado (`excel_price`) — a coluna que faz deste ficheiro um ficheiro de
+*paridade*, não de importação. `notas` livre. `;` como separador (Excel PT/FR), decimal
+vírgula ou ponto (o validador aceita os dois, nunca misturados na mesma célula).
+
+**Três entregáveis em `~/tmp/tmsi-paridade/` (700, ficheiros 600), fora do git:**
+1. `paridade-template.csv` — cabeçalho real + 2 linhas de exemplo (T-0001×SA, T-0004×SA,
+   dados do seed fictício `supabase/seed/0001_test_data.sql` — a segunda tem uma margem
+   forçada activa, propositadamente, para mostrar esse caso). Apagar antes de preencher.
+2. `PREENCHIMENTO.md` — guia coluna a coluna, em português, para quem conhece o negócio e
+   não a BD: significado, unidade, formato, e nota explícita de que `excel_price` pode
+   corresponder a `min_price` OU `ref_price` do motor (são conceitos diferentes — confirmar
+   com quem construiu o Excel qual dos dois, usar sempre o mesmo em todo o ficheiro).
+3. `validar.py` — stdlib puro (sem pip/node), read-only sobre a BD via PostgREST (GET, com
+   as credenciais de teste do `finance`, mesmo padrão do `scripts/smoke.py` — ficheiro 600,
+   nunca em argv/output). Verifica colunas presentes, `item_type`/moeda/filial/HS válidos,
+   `hs_code`/`gross_weight_kg` obrigatórios para artigos físicos (mesma regra do gatilho de
+   activação, 0001), números parseáveis, `excel_price` não vazio. Avisa (sem bloquear) se o
+   ficheiro ainda não cobre: as 4 filiais, um artigo perto (±2 kg) de um limite de escalão
+   de transporte, um caso onde direitos aduaneiros se aplicam de facto (filial ≠ origem,
+   artigo físico, taxa > 0 para o HS/zona), um caso com override activo.
+
+**F2 — provado nos dois ramos, não só o ✅:** corrido contra o próprio template (2 linhas
+de exemplo) → **0 erros**, 2 avisos correctos (só a filial SA representada; nenhuma linha
+perto de um limite de escalão — as duas linhas de exemplo não foram desenhadas para isso).
+Corrido contra três cópias com erros deliberados — **todos os 7 apanhados, linha certa**:
+filial inexistente (`ZZZ`, linha 2) · HS inexistente (`000000`, linha 3) · número com texto
+(`exw_price='abc'`, linha 4) · `excel_price` vazio (linha 5) · coluna em falta (`hs_code`,
+ficheiro à parte) · `item_type` inválido (`maquina`) · moeda inexistente (`XYZ`) · data mal
+formatada (`31-12-2026`) · artigo físico sem HS/peso. Ficheiros de teste apagados depois
+(não fazem parte do entregável).
+
+**F3 — versionado no repo, sem dados reais:** `docs/paridade-template.csv` (excepção
+estreita ao `.gitignore`, que bloqueia `*.csv` por regra — `!docs/paridade-template.csv`,
+mesmo padrão já usado para `supabase/seed/*.csv`), `docs/PARIDADE-PREENCHIMENTO.md`,
+`scripts/validar_paridade.py` — idênticos byte-a-byte às cópias de trabalho em
+`~/tmp/tmsi-paridade/` no momento do commit, exclusivamente com os dados fictícios do seed
+já público no repo. Commit `59876ea`, push feito.
+
+**Instruções dadas ao Pedro (3 passos):** copiar `paridade-template.csv` para um nome novo,
+apagar as 2 linhas de exemplo, preencher uma linha por artigo × filial a partir do Excel;
+correr `python3 validar.py o-ficheiro.csv` e corrigir o que apontar; entregar para a sessão
+de paridade.
+
+**F4 (este fecho):** este ficheiro; sem novo item no `docs/BACKLOG.md` (F0 não encontrou
+achado — nada por decidir ou corrigir, só entregar a ferramenta); dossier
+(`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`). `scripts/smoke.py` não corrido (nenhuma
+alteração ao schema/app).
 
 ## Item 28 — Custo HTTP/PostgREST de `v_products` — ✅ FECHADO 2026-09-06 (artefacto de medição)
 
