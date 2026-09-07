@@ -12,6 +12,7 @@ data/
 *.xlsm
 *.csv
 !supabase/seed/*.csv
+!docs/paridade-template.csv
 
 # node / next
 node_modules/
