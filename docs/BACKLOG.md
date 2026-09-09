@@ -200,6 +200,62 @@ contentor. **Nada a corrigir** — o único consumidor com `select('*')` é a p�
 de um produto (uma linha, não escala com o catálogo). Detalhe completo: `docs/STATE.md`,
 secção "Item 28".
 
+**29. Motor sem regra de cálculo para canais (APAC e futuros)** — **DIAGNOSTICADO
+2026-09-09**, a maior lacuna da reconciliação com o Excel real. `tmsi.compute_price()` só
+recebe `(p_produto, p_filial, p_data)` — sem parâmetro de canal; `channel_id`/`my_channels()`
+só entram em predicados de visibilidade (quem vê a linha), nunca no cálculo;
+`tmsi.channels.margin_delta` (o `-0,10` da APAC) tem zero leituras em todo o schema/app —
+já documentado no próprio código (`app/src/app/overrides/page.tsx:158-160`: *"channel/agent
+scope exists in the schema but the pricing engine does not read it yet"*). Consequência: uma
+venda por canal (sem fee intercompany, sem direitos aduaneiros, `margin_delta` a entrar na
+margem — a regra do Excel) é hoje calculada com a cadeia completa de filial, sempre errada
+para canais. **Bloqueia a paridade** para qualquer linha de canal, e bloqueia o próprio
+negócio — o Pedro já avisou que vêm mais territórios de agente. Proposta: migração que dê a
+`compute_price()` forma de saber que está a calcular para um canal (não só uma filial) e
+aplique a cadeia alternativa. Detalhe completo: `docs/MODEL-GAP-ANALYSIS.md`, itens 5/6.
+
+**30. Sem regra própria para linhas não-equipamento (margem zero, preço=EXW)** —
+**DIAGNOSTICADO 2026-09-09.** O Excel trata opções com ajuste, CONDATLINK, aluguer mensal e
+artigo não devolvido como "margem zero, preço interco = EXW" — o motor não implementa nada
+disto: transporte/direitos são zerados para `option`/`service` (0001:447,458), mas a taxa
+intercompany só zera em venda "em casa", sem condição nenhuma de `item_type` (0001:436); a
+margem de uma opção é **herdada do produto-pai** (0001:476-478), não zero; um `service` cai
+na grelha normal da filial, como um `equipment`. "Artigo não devolvido" não tem campo nenhum
+no schema. **Bloqueia a paridade** para qualquer linha fora de `equipment`/`spare_part`.
+Detalhe completo: `docs/MODEL-GAP-ANALYSIS.md`, item 11.
+
+**31. `origin_country` não está atrás da fronteira de custos** — **DIAGNOSTICADO
+2026-09-09.** A decisão do Pedro (2026-09-09, "Supplier e Origin Country ficam atrás da
+fronteira de custos, como o EXW") não bate certo com o código: `supplier_id` está
+correctamente em `can_read_costs()` (0003:153), mas `origin_country` ficou na camada
+"operational" (0003:140), visível também a `logistics`. Não bloqueia paridade nem
+importação — é higiene de acesso, correcção pequena e de baixo risco (mover uma coluna de
+tier no `tmsi.v_products`, mesmo padrão do `supplier_id` ao lado). Detalhe completo:
+`docs/MODEL-GAP-ANALYSIS.md`, item 9.
+
+**32. Base do direito aduaneiro fixa, não configurável por zona** — **REGISTADO
+2026-09-09**, pergunta em aberto do Pedro, não uma correcção pedida ainda. `v_duty :=
+v_interco * v_duty_rate` (0001:468) é uma única fórmula para todas as zonas — bate certo com
+o Excel hoje (direitos incidem só sobre o preço interco, sem o transporte na base), mas não
+há forma de a app ter uma base diferente por zona se um dia for preciso. Sem urgência — só
+decidir depois de confirmar com quem trata de alfândega. Detalhe completo:
+`docs/MODEL-GAP-ANALYSIS.md`, item 7.
+
+**33. Zona "CH" do Excel sem correspondência no enum de zonas do schema** — **REGISTADO
+2026-09-09**, pergunta ao Pedro, não resolvido por inferência. `tmsi.customs_zone` (0001:20)
+tem `EU/CN/US/UK` — o prompt desta sessão refere `EU/CH/US/UK` para o Excel. Pode bloquear
+linhas específicas da paridade se o Excel tiver mesmo artigos/filiais associados a uma zona
+`CH` distinta — por confirmar antes de decidir se é um enum a alargar ou uma leitura a
+corrigir. Detalhe completo: `docs/MODEL-GAP-ANALYSIS.md`, achado A5.
+
+**34. `ref_factor`/`list_coef` sem interface de edição na app** — **REGISTADO 2026-09-09.**
+O cálculo já está correcto (`v_ref := min_price × branches.ref_factor`, 0001:489; valor por
+omissão 1,100 em todas as filiais, batendo certo com "REFERENCE PRICE = MINIMUM × 1,10" do
+Excel) — só falta forma de editar pela app quando precisar de deixar de ser uniforme, e
+`branches` não é um dos 6 `target_table` do workflow de aprovação da 0007, por isso uma
+edição directa à tabela também não passa por aprovação hoje. Sem urgência. Detalhe completo:
+`docs/MODEL-GAP-ANALYSIS.md`, item 4.
+
 ## ⚪ Baixas — registadas, sem urgência
 
 **16.** Dark mode global (paleta dark já validada).

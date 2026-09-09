@@ -2,96 +2,153 @@
 
 Cópia versionada de referência (para futuras importações/reaproveitamento). A cópia de
 trabalho, onde preenches os teus dados reais, vive em `~/tmp/tmsi-paridade/` — nunca aqui
-(este directório é git; dados reais nunca entram no repositório).
+(este directório é git; dados reais nunca entram no repositório). `validar.py` aqui no repo
+chama-se `scripts/validar_paridade.py`; em `~/tmp/tmsi-paridade/` (a cópia de trabalho) tens
+os três ficheiros juntos e chama-se só `validar.py` — os exemplos abaixo assumem essa cópia.
 
 Este ficheiro (`paridade-template.csv`, ao lado deste guia) serve para comparar, artigo a
-artigo e filial a filial, o que o **motor** (a app TMSI) calcula com o que o **teu Excel**
-de referência calcula. Uma linha = um artigo vendido numa filial concreta.
+filial (ou canal a canal), o que o **motor** (a app TMSI) calcula com o que o **teu Excel**
+de referência (`TMSI_PriceList Final.xlsx`) calcula. Uma linha = um artigo vendido numa
+filial ou canal concreto.
+
+**Versão 2 deste ficheiro** (sessão de reconciliação com o Excel real, 2026-09-09): trocou a
+única coluna `excel_price` por 8 colunas que seguem a cadeia de cálculo do Excel passo a
+passo, e acrescentou colunas para overrides por artigo e para linhas de canal (ex. `APAC`).
+**Ainda não tinhas começado a preencher** (confirmado antes de mudar nada) — por isso não há
+nada teu a recuperar; se já tiveres um ficheiro a meio a partir da versão 1, os `excel_price`
+antigos correspondem aproximadamente ao novo `excel_reference_price` (ou `excel_min_price`,
+consoante o que preencheste — ver a nota sobre os dois preços mais abaixo).
 
 **As duas primeiras linhas são exemplo** (dados fictícios do catálogo de teste, os mesmos
 que já existem na app) — só para veres a forma e o formato. **Apaga-as antes de começar a
 preencher a sério.**
 
+## ⚠️ Nota honesta sobre este guia
+
+Esta sessão não teve acesso ao ficheiro Excel em si (não há cópia neste VPS) — as regras
+usadas para desenhar as colunas abaixo vêm de uma análise feita antes, fora desta sessão.
+**Não consigo indicar-te a folha/coluna exacta de onde tirar cada valor** — só o significado
+de negócio de cada campo. Se quiseres essa precisão (útil sobretudo para `excel_duty_pct`,
+`excel_transport` e os overrides por artigo), a forma mais rápida é tu confirmares comigo o
+nome da folha à medida que preenches, ou dizeres-me onde no VPS posso ler o ficheiro.
+
 ## Formato do ficheiro
-- Abre em Excel normalmente — é um CSV com `;` a separar colunas (funciona directo em
-  Excel PT/FR, que usa `;` por o `,` já ser o separador decimal aí).
-- Números: podes escrever `895,00` ou `895.00` — o validador aceita os dois, mas **não
-  misturado dentro da mesma célula** (`8.95,00` não é válido).
-- Deixa uma célula em branco quando não se aplica (ex.: `hs_code` num serviço) — não
-  escrevas "N/A" nem "-".
+- Abre em Excel normalmente — é um CSV com `;` a separar colunas.
+- Números: `895,00` ou `895.00`, nunca os dois juntos na mesma célula.
+- Célula em branco quando não se aplica — nunca "N/A" nem "-".
 
-## Colunas, uma a uma
+## Colunas de identificação e de input (do artigo)
 
-**`product_id`** — o código do artigo tal como está na app (`T-XXXX`). Está na ficha do
-artigo em `/products/<código>` ou na listagem `/products`.
+**`product_id`**, **`product_name`** — código (`T-XXXX`) e nome do artigo, da ficha em `/products`.
 
-**`product_name`** — o nome do artigo, só para tu te orientares (não é usado em cálculo
-nenhum). Copia da ficha do artigo.
+**`branch_id`** — **filial** (`SA`, `TBM`, `CORP`, `LTD`) **ou canal** (`APAC`, e outros que
+venham a existir). Ver secção própria sobre linhas de canal, mais abaixo.
 
-**`branch_id`** — a filial que está a vender, uma de `SA` (Condat SA, França/EUR),
-`TBM` (Condat TBM, China/CNY), `CORP` (Condat Corp, EUA/USD), `LTD` (Condat Ltd,
-Reino Unido/GBP). É a filial cujo preço estás a comparar nesta linha — não confundir com a
-filial de origem do artigo (`primary_branch`, coluna seguinte).
+**`item_type`** — `equipment`, `spare_part`, `option` ou `service`.
+**Atenção, achado desta sessão**: o motor ainda não aplica a regra do Excel "margem zero,
+preço = EXW" para opções/serviços/artigos não devolvidos — vai calcular margem e taxas como
+se fossem equipamento normal (ver `docs/MODEL-GAP-ANALYSIS.md`, item 11). Se incluíres estas
+linhas na amostra, **regista na coluna `notas`**: "não vai bater certo — falta a regra no
+motor", para a sessão de paridade não gastar tempo a investigar uma diferença já conhecida.
 
-**`item_type`** — `equipment`, `spare_part`, `option` ou `service`, tal como está na ficha
-do artigo. Importa porque `option` e `service` **não pagam transporte nem direitos
-aduaneiros** no motor — se testares um destes, não esperes esses custos no cálculo.
+**`currency`**, **`exw_price`** — moeda e preço EXW do artigo (não da filial).
 
-**`currency`** — a moeda **do artigo** (não da filial que vende), 3 letras (`EUR`, `USD`,
-`GBP`, `CNY`). Está na ficha do artigo, é a moeda em que o preço EXW abaixo está expresso.
+**`primary_branch`** — a filial de origem do artigo. **Nunca um canal** — é sempre a filial
+física, mesmo numa linha de canal.
 
-**`exw_price`** — o preço EXW (à saída de fábrica) do artigo, na moeda de cima. É o ponto
-de partida do cálculo, antes de qualquer taxa, transporte, direitos ou margem.
+**`hs_code`** — código pautal do artigo. Em branco para `option`/`service`.
 
-**`primary_branch`** — a filial de origem do artigo (quem o fabrica/fornece). Se for igual
-à `branch_id` desta linha, o motor não cobra transporte nem direitos aduaneiros (é venda
-"em casa"); se for diferente, cobra os dois.
+**`hs_code_zona`** — só preenches se houver um código HS **diferente do de cima**,
+especificamente para esta filial (um "override" de HS por zona/filial). A maioria das linhas
+fica em branco. **Nota**: o motor só lê este tipo de override quando é `scope_type='branch'`
+— um override à escala de canal/agente existe no schema mas ainda não tem efeito nenhum no
+cálculo (mesmo achado #5/#6).
 
-**`hs_code`** — o código pautal do artigo (4-10 dígitos), usado para calcular direitos
-aduaneiros. Em branco para `option`/`service` (não se aplica).
+**`gross_weight_kg`** — peso bruto em kg. Em branco para `option`/`service`.
 
-**`gross_weight_kg`** — peso bruto do artigo em kg, usado para escolher o escalão de
-transporte da filial. Em branco para `option`/`service`.
+**`fee_interco_artigo`**, **`margem_artigo`**, **`transporte_artigo`** — só preenches se o
+Excel usar, para ESTE artigo nesta filial, uma taxa intercompany / margem / custo de
+transporte **diferente** do valor normal da filial (20% de fee, a grelha de margens, o
+escalão de peso). Em branco = usa o valor normal. O validador confirma se o que preencheres
+aqui bate certo com os overrides que já existem na app.
 
-**`sold_in`** — as filiais onde este artigo está autorizado a vender, separadas por vírgula
-(ex.: `SA,TBM,CORP,LTD`). É só confirmação — se a `branch_id` desta linha não estiver nesta
-lista, é sinal de que a app também não mostraria preço aí, vale a pena confirmar antes de
-gastar tempo a comparar.
+**`sold_in`** — filiais onde o artigo vende, separadas por vírgula.
 
-**`data_calculo`** — a data para a qual queres o cálculo (`AAAA-MM-DD`). **Podes deixar em
-branco** — o validador e a app assumem "hoje" nesse caso. Só precisas de preencher se
-quiseres comparar um preço de uma data passada (por exemplo, para confirmar uma taxa de
-câmbio ou um escalão que já mudou entretanto).
+**`data_calculo`** — `AAAA-MM-DD`, opcional (em branco = hoje).
 
-**`excel_price`** — **o valor que o teu Excel dá para este artigo nesta filial.** Esta é a
-coluna que faz deste ficheiro um ficheiro de *paridade* e não um ficheiro de importação — é
-o número contra o qual o motor vai ser comparado. **Confirma com quem construiu o Excel se
-este número é o "preço mínimo" ou o "preço de referência/lista"** — o motor calcula os
-dois (`min_price` e `ref_price`) e não são o mesmo valor (o de referência inclui uma margem
-comercial extra sobre o mínimo). Usa sempre o mesmo conceito em todas as linhas do
-ficheiro, para a comparação fazer sentido.
+## As 8 colunas do resultado esperado (o que o Excel calcula)
 
-**`notas`** — livre. Usa para o que quiseres registar sobre o caso (ex.: «está no limite do
-escalão 2/3», «testar depois de corrigir a taxa GBP»).
+Seguem a cadeia do Excel, cada uma um passo:
+
+```
+excel_price_interco     = EXW × (1 + fee intercompany), na moeda da filial
+excel_transport         = custo do escalão de transporte (0 se for venda "em casa")
+excel_duty_pct          = taxa de direitos aduaneiros aplicável (0 se "em casa")
+excel_duty_amount       = excel_price_interco × excel_duty_pct   (SEM o transporte na base)
+excel_total_cost        = excel_price_interco + excel_transport + excel_duty_amount
+excel_margin            = a margem usada (decimal, ex. 0,35 = 35%)
+excel_min_price         = excel_total_cost ÷ (1 − excel_margin)
+excel_reference_price   = excel_min_price × 1,10   (o preço de lista/referência)
+```
+
+Preenche as 8, mesmo quando o valor é zero (linha "em casa": `excel_transport=0`,
+`excel_duty_pct=0`, `excel_duty_amount=0` — zero escrito, não em branco). Em branco só nas
+duas colunas que não se aplicam a canais (ver a seguir).
+
+**Porque são 8 e não uma só**: se um dia o `excel_min_price`/`excel_reference_price` não
+bater certo com o motor, veres os passos intermédios diz logo ONDE a diferença nasce (câmbio?
+transporte? direitos?) — sem os passos, só sabes que "está diferente", não porquê.
+
+## Linhas de canal (`APAC`, e futuros)
+
+Um canal **não é uma filial** — vende através de uma filial (ex. `APAC` vende através da
+`TBM`), mas com uma regra diferente: **sem fee intercompany, sem direitos aduaneiros**.
+
+```
+excel_price_interco (canal) = EXW, sem fee nenhum
+excel_transport (canal)     = escalão da filial por trás do canal (ex. TBM para a APAC)
+excel_duty_pct / excel_duty_amount = deixar em BRANCO (não se aplica a canais)
+excel_total_cost             = excel_price_interco + excel_transport
+excel_min_price               = excel_total_cost ÷ (1 − margem)
+excel_reference_price         = excel_min_price × 1,10
+```
+
+Numa linha de canal: `branch_id` = o código do canal (`APAC`), `primary_branch` continua a
+ser a filial física de origem do artigo, `excel_duty_pct`/`excel_duty_amount` ficam em
+branco (o validador aceita, só nestas linhas), as outras 6 colunas preenchem-se na mesma.
+
+**Achado desta sessão, o mais importante**: o motor **ainda não sabe calcular canais** — só
+usa a filial/canal para decidir quem PODE VER o preço, nunca para mudar a fórmula
+(`docs/MODEL-GAP-ANALYSIS.md`, itens 5/6). Uma linha de canal no ficheiro serve para
+**registar** o valor esperado, mas a sessão de paridade não vai conseguir compará-la com o
+motor até essa migração existir — o validador avisa disto automaticamente (nota `ℹ️`, não
+erro) quando vê uma linha de canal.
+
+## Os três artigos com valor forçado no Excel
+
+Se incluíres **PROFOAM CE**, **PROFOAM US** ou **EASY BRUSH FILLER ASSEMBLY** na amostra:
+o Excel publica, para estes três, um preço mínimo diferente do calculado pela própria
+fórmula (PROFOAM CE e PROFOAM US: ×1,10 acima do calculado; EASY BRUSH FILLER ASSEMBLY:
+×1,40). Se os incluíres, preenche `excel_min_price`/`excel_reference_price` com **o valor
+calculado pela fórmula**, não o valor forçado publicado — e assinala isso na coluna `notas`
+("valor forçado no Excel, ×1,10/×1,40 acima do calculado — preenchido aqui com o
+calculado"). Senão a paridade vai acusar uma diferença que não é do motor nem um erro teu.
 
 ## O que o validador confirma por ti
 
-`validar.py` aqui no repo chama-se `scripts/validar_paridade.py` — em `~/tmp/tmsi-paridade/`
-(a cópia de trabalho) tens os três ficheiros juntos e chama-se só `validar.py`; os exemplos
-abaixo assumem essa cópia de trabalho.
+`python3 validar.py o-teu-ficheiro.csv` verifica: colunas presentes, filiais/canais/moedas/
+códigos HS que existem na app, tipos de artigo válidos, números parseáveis, as colunas
+sempre-obrigatórias preenchidas (as duas de direitos ficam por preencher só em linhas de
+canal). Cruza também os overrides por artigo que preencheres com o que já existe activo na
+app, e avisa das duas direcções (preencheste mas não existe / existe mas não preencheste).
 
-Corre `python3 validar.py o-teu-ficheiro.csv` antes de entregar. Ele verifica, linha a
-linha: colunas em falta, filiais e códigos HS que não existem na app, números que não dão
-para ler, e `excel_price` vazio. E avisa-te (sem bloquear) se o ficheiro, no conjunto, ainda
-não cobre os casos que a sessão de paridade quer ver: as 4 filiais representadas, algum
-artigo perto do limite entre escalões de transporte, algum caso com direitos aduaneiros a
-aplicar-se, e algum caso com uma margem/taxa forçada (override) activa.
+E avisa (sem bloquear) da cobertura: as 4 filiais representadas, algum artigo perto do
+limite de um escalão de transporte, algum caso com direitos aduaneiros a aplicar-se, algum
+caso com override activo.
 
 ## Os 3 passos
 
-1. Copia `paridade-template.csv` para um novo nome (ex.: `paridade-2026-09.csv`), apaga as
-   duas linhas de exemplo, preenche uma linha por artigo × filial a partir do Excel.
-2. Corre `python3 validar.py paridade-2026-09.csv` e corrige o que ele apontar (os ❌ têm
-   de ficar a zero antes de entregar; os ⚠️ são para pensares se o ficheiro já cobre o que
-   a sessão de paridade precisa).
+1. Copia `paridade-template.csv` para um novo nome, apaga as duas linhas de exemplo,
+   preenche uma linha por artigo × filial/canal a partir do Excel.
+2. Corre `python3 validar.py o-teu-ficheiro.csv` e corrige o que apontar.
 3. Entrega o ficheiro corrigido para a sessão de paridade motor-vs-Excel.

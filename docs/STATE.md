@@ -3,12 +3,16 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: ferramentas de paridade motor-vs-Excel prontas — ✅ 2026-09-07** (ver secção
-"Ferramentas de paridade" abaixo). Template CSV + guia de preenchimento + validador
-(stdlib, read-only) entregues para o Pedro preencher sozinho, derivados do schema real
-(0001/0005/0007), sem dados reais nesta sessão. Item 28 (custo HTTP/PostgREST de
-`v_products`) e item 14 continuam fechados (secções próprias abaixo); E0, E1, E2, E3
-(i1–i10), E4, E5-VPS e as migrações 0003/0004/0005/0006/0007/0008 estão fechadas.
+**Etapa actual: reconciliação do modelo com o Excel real — ✅ MEDIDO 2026-09-09** (ver secção
+"Reconciliação com o Excel real" abaixo). `docs/MODEL-GAP-ANALYSIS.md` novo: 12 pontos
+verificados contra o código/schema reais, com citação de linha; 2 lacunas bloqueiam a
+paridade directamente (canais sem regra própria no motor, linhas não-equipamento sem
+"margem zero, preço=EXW") — registadas como items 29-34 do `docs/BACKLOG.md`, nenhuma
+corrigida ainda (sessão de medição, restrição 1). Template/guia/validador de paridade
+corrigidos para a v2 (8 colunas de resultado esperado em vez de uma, colunas de override por
+artigo, linhas de canal). Item 28 (custo HTTP/PostgREST de `v_products`) e item 14 continuam
+fechados (secções próprias abaixo); E0, E1, E2, E3 (i1–i10), E4, E5-VPS e as migrações
+0003/0004/0005/0006/0007/0008 estão fechadas.
 
 **Regra de processo (item 14, 2026-09-06, escrita também em `~/atelier-vps/CLAUDE.md`):**
 medições de desempenho desta app nunca se fazem com uma sessão de agente aberta neste VPS —
@@ -246,6 +250,89 @@ parte do próprio protocolo de uma futura medição destacada, não é um estado
 larga); este ficheiro; dossier (`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`), incluindo a
 decisão sobre o linger. `scripts/smoke.py` não corrido nesta sessão (nenhuma alteração de
 código/schema).
+
+## Reconciliação com o Excel real — ✅ MEDIDO 2026-09-09
+
+**Contexto:** o Excel real (`TMSI_PriceList Final.xlsx`, 52 artigos, 11 folhas) foi
+analisado antes desta sessão, na camada de desenho, e revelou regras e campos que o
+template de paridade (secção acima) não cobria. Esta sessão **mediu e documentou, não
+corrigiu** — nenhuma migração, nenhuma linha de `app/src` mudou. Nota honesta: esta sessão
+não teve acesso ao próprio ficheiro Excel (não existe cópia neste VPS) — as regras do Excel
+usadas vêm da análise já feita; tudo o que é sobre o schema/código foi verificado aqui, ao
+vivo, linha a linha.
+
+**F0/F1 — `docs/MODEL-GAP-ANALYSIS.md` (novo):** tabela dos 12 pontos pedidos, cada um
+`suportado`/`parcial`/`inexistente` com a linha exacta da migração/código que prova. Achados
+principais:
+- **Overrides por artigo×filial (margem, transporte, fee) já suportados** — `price_overrides`
+  lido em `compute_price()`, sem gaps.
+- **Preço de referência já calculado correctamente** (`branches.ref_factor`, 0001:41,489) —
+  só falta interface de edição na app (hoje só escrita directa à tabela, admin-only, fora do
+  workflow de aprovação da 0007).
+- **Canais sem qualquer efeito no cálculo** — a maior lacuna: `compute_price()` não tem
+  parâmetro de canal, `channel_id` só entra em predicados de visibilidade,
+  `channels.margin_delta` (o `-0,10` da APAC) tem zero leituras em todo o projecto —
+  já documentado no próprio código (`app/src/app/overrides/page.tsx:158-160`). **Bloqueia a
+  paridade** para qualquer linha de canal.
+- **Sem regra "margem zero, preço=EXW" para linhas não-equipamento** — transporte/direitos
+  zeram para `option`/`service`, mas a margem de uma opção é **herdada do produto-pai**
+  (não zero), um `service` usa a grelha normal, e a taxa intercompany só zera em venda "em
+  casa". **Bloqueia a paridade** para qualquer linha fora de `equipment`/`spare_part`.
+- **Direitos aduaneiros: a base (interco, sem transporte) já bate certo com o Excel** —
+  mas é uma única fórmula para todas as zonas, não configurável, pendente de confirmação do
+  Pedro com quem trata de alfândega.
+- **Divergência de acesso**: `origin_country` não está atrás de `can_read_costs()` como o
+  Pedro decidiu nesta sessão (`supplier_id` está, 0003:153; `origin_country` ficou em
+  "operational", 0003:140, visível também a `logistics`).
+- **Achado A5, pergunta em aberto**: o prompt refere uma zona `CH` do Excel sem
+  correspondência no enum `tmsi.customs_zone` (`EU/CN/US/UK`, 0001:20) — não resolvido por
+  inferência, fica para o Pedro confirmar.
+
+Seis lacunas registadas como `docs/BACKLOG.md` items **29-34** (29/30 bloqueiam a paridade;
+31 é higiene de acesso; 32/33 são perguntas em aberto; 34 é conveniência de gestão, sem
+urgência), ordenadas por bloqueio, com uma fila de sessões proposta.
+
+**F2 — template de paridade corrigido para v2** (mesma pasta, mesmo validador — confirmado
+antes de mexer que o Pedro ainda não tinha começado a preencher, nada dele a recuperar):
+- 8 colunas de resultado esperado em vez de uma só (`excel_price_interco`,
+  `excel_transport`, `excel_duty_pct`, `excel_duty_amount`, `excel_total_cost`,
+  `excel_margin`, `excel_min_price`, `excel_reference_price`), espelhando a cadeia do Excel
+  passo a passo.
+- Colunas novas de input: `hs_code_zona`, `fee_interco_artigo`, `margem_artigo`,
+  `transporte_artigo` (overrides por artigo, quando o Excel os tiver).
+- `branch_id` aceita canais (`APAC`, e futuros) — `excel_duty_pct`/`excel_duty_amount`
+  ficam por preencher só nessas linhas (o validador aceita, distinguindo de vazio indevido
+  numa filial); `primary_branch` continua sempre uma filial física, nunca um canal.
+- Exemplos trocados de `T-0001`/`T-0004` (CNY — ver nota abaixo) para `T-0003`×`SA`
+  (venda em casa) e `T-0003`×`CORP` (venda cruzada, cadeia completa), ambos recalculados ao
+  vivo nesta sessão.
+- `validar.py`/`scripts/validar_paridade.py`: filiais **ou** canais válidos (busca
+  `tmsi.channels` ao vivo), colunas de direitos condicionalmente obrigatórias, nota
+  informativa (não erro) em linhas de canal a apontar para o achado #5/#6, e um cruzamento
+  novo — coluna de override por artigo preenchida sem override activo na BD, ou vice-versa,
+  avisa nos dois sentidos.
+
+**F2, prova nos dois ramos:** contra o próprio template → **0 erros**, 3 avisos correctos
+(só filial SA nos exemplos; nenhuma perto de um limite de escalão; nenhum override nos dois
+exemplos). Contra um ficheiro com 8 erros/avisos deliberados — **todos apanhados, linha
+certa**: filial/canal inexistente, HS inexistente, número não parseável, coluna
+sempre-obrigatória vazia (×2), override preenchido sem par na BD, override na BD sem coluna
+preenchida, e uma linha de canal válida a dar nota informativa em vez de erro. Um bug
+apanhado nesta prova (`branches | channels`, `TypeError` — `channels` é um dict, não um
+`set`) foi corrigido antes de fechar, não depois.
+
+**Achado lateral, fora do âmbito desta sessão (registado, não corrigido — é a mesma
+restrição 1):** durante o trabalho anterior com o Pedro sobre o significado de
+`excel_price`, confirmei ao vivo que `tmsi.exchange_rates` tem, neste momento, taxas
+implausíveis em vigor para CNY (8554, devia ser ~8,26) e GBP (10, devia ser ~0,87) — datadas
+de 2026-09-04/06, sem etiqueta de teste. Isto **não foi corrigido nesta sessão** (fora do
+âmbito, e escrever configuração de câmbio não é medição) — mas continua a afectar qualquer
+comparação de paridade em CNY/GBP até ser corrigido pelo `/config` da app. Não voltou a ser
+verificado no fecho desta sessão — o Pedro decide se e quando corrigir.
+
+**F4 (este fecho):** `docs/BACKLOG.md` (items 29-34, novos); este ficheiro; dossier
+(`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`). `scripts/smoke.py` não corrido (nenhuma
+alteração de código/schema).
 
 ## Ferramentas de paridade motor-vs-Excel — ✅ ENTREGUE 2026-09-07
 

@@ -1,3 +1,3 @@
-product_id;product_name;branch_id;item_type;currency;exw_price;primary_branch;hs_code;gross_weight_kg;sold_in;data_calculo;excel_price;notas
-T-0001;FoamMaster X1 unit (test);SA;equipment;CNY;48000.00;TBM;842430;180.00;SA,TBM,CORP,LTD;;895.00;EXEMPLO — apagar esta linha antes de preencher
-T-0004;Dosing pump P-40 (test);SA;equipment;USD;1450.00;CORP;841370;22.00;SA,CORP,LTD,TBM;;3038.00;EXEMPLO — este artigo tem uma margem forçada (override) na SA, ver PREENCHIMENTO.md
+product_id;product_name;branch_id;item_type;currency;exw_price;primary_branch;hs_code;hs_code_zona;gross_weight_kg;fee_interco_artigo;margem_artigo;transporte_artigo;sold_in;data_calculo;excel_price_interco;excel_transport;excel_duty_pct;excel_duty_amount;excel_total_cost;excel_margin;excel_min_price;excel_reference_price;notas
+T-0003;Generator G200 (test);SA;equipment;EUR;3350.00;SA;842430;;65.00;;;;SA,CORP,LTD;;3350.00;0.00;0.000;0.00;3350.00;0.35;5154.00;5669.00;EXEMPLO — venda em casa (SA=primary_branch): fee/transporte/direitos ficam a 0. Apagar antes de preencher.
+T-0003;Generator G200 (test);CORP;equipment;EUR;3350.00;SA;842430;;65.00;;;;SA,CORP,LTD;;4657.97;250.00;0.017;79.19;4987.16;0.35;7673.00;8440.00;EXEMPLO — venda fora da filial de origem: fee 20%, escalão de transporte, direitos 1,7%. Apagar antes de preencher.
