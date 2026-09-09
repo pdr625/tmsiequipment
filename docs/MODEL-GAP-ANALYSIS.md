@@ -30,11 +30,11 @@ código da app** foi verificado directamente aqui; tudo o que é sobre **o Excel
 
 ## Achados adicionais, fora da grelha dos 12 (mas encontrados a verificar F0)
 
-- **A5 — zona "CH" sem correspondência**: se o Excel tem mesmo uma zona/coluna `CH`
-  (Suíça?) distinta de `EU`, isso não tem hoje nenhum lugar no schema — nem no enum
-  `customs_zone`, nem em `tmsi.branches.zone` (as 4 filiais mapeiam para `EU/CN/US/UK`,
-  1:1). **Por confirmar com o Pedro** antes de decidir se é um enum a alargar ou um erro de
-  leitura do Excel.
+- **A5 — zona "CH" sem correspondência.** ✅ **Resolvido pelo Pedro, 2026-09-09 — falso
+  alarme, nada a mudar.** `CH` no Excel significa **China** (bloco da Condat TBM,
+  `CONFIGURATION`: `Condat TBM | CNY | China`), não Suíça; a quarta coluna chamada `GBP`
+  significa **Reino Unido**. `tmsi.customs_zone` já era `EU/CN/US/UK` — exactamente certo. A
+  confusão estava na leitura do Excel, nunca no schema. `docs/BACKLOG.md` item 33 fechado.
 
 ## F1 — relatório de lacunas, por ordem de bloqueio
 

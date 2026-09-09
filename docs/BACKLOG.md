@@ -200,19 +200,19 @@ contentor. **Nada a corrigir** — o único consumidor com `select('*')` é a p�
 de um produto (uma linha, não escala com o catálogo). Detalhe completo: `docs/STATE.md`,
 secção "Item 28".
 
-**29. Motor sem regra de cálculo para canais (APAC e futuros)** — **DIAGNOSTICADO
-2026-09-09**, a maior lacuna da reconciliação com o Excel real. `tmsi.compute_price()` só
-recebe `(p_produto, p_filial, p_data)` — sem parâmetro de canal; `channel_id`/`my_channels()`
-só entram em predicados de visibilidade (quem vê a linha), nunca no cálculo;
-`tmsi.channels.margin_delta` (o `-0,10` da APAC) tem zero leituras em todo o schema/app —
-já documentado no próprio código (`app/src/app/overrides/page.tsx:158-160`: *"channel/agent
-scope exists in the schema but the pricing engine does not read it yet"*). Consequência: uma
-venda por canal (sem fee intercompany, sem direitos aduaneiros, `margin_delta` a entrar na
-margem — a regra do Excel) é hoje calculada com a cadeia completa de filial, sempre errada
-para canais. **Bloqueia a paridade** para qualquer linha de canal, e bloqueia o próprio
-negócio — o Pedro já avisou que vêm mais territórios de agente. Proposta: migração que dê a
-`compute_price()` forma de saber que está a calcular para um canal (não só uma filial) e
-aplique a cadeia alternativa. Detalhe completo: `docs/MODEL-GAP-ANALYSIS.md`, itens 5/6.
+~~**29. Motor sem regra de cálculo para canais (APAC e futuros)**~~ ✅ **fechado
+2026-09-09 — migração 0009.** `tmsi.compute_price()` ganhou um âmbito explícito
+(`p_scope_type`/`p_scope_id`, `'branch'` ou `'channel'`) — um preço de canal calcula-se a
+partir do EXW, sem fee intercompany, sem direitos aduaneiros, sempre (a regra selecciona-se
+pelo tipo de âmbito, nunca pelo nome do canal). `tmsi.channels.margin_delta` removido (não
+migrado — o seu único valor, `-0,10`, não sobrevive ao modelo novo, margem por artigo×canal
+via override, nunca uma grelha); margem de canal é sempre um override explícito (0009 §5),
+que segue o mesmo workflow de aprovação da 0007, admin-only (nenhum `branch_manager` tem um
+canal em `my_branches()`). Preços de filial confirmados **byte-idênticos** a uma baseline
+pré-migração (restrição 1), duas vezes. `docs/VERIFICATION-PROTOCOL.md` secção 4.10 (passos
+MM–SS) tem as 7 provas completas; `scripts/smoke.py` 45/45. Export/impressão de uma lista de
+canal (o ficheiro real) fica por confirmar pelo Pedro — mesma limitação de cookie de sempre.
+Detalhe completo: `docs/STATE.md`, secção "Canais no motor de preços".
 
 **30. Sem regra própria para linhas não-equipamento (margem zero, preço=EXW)** —
 **DIAGNOSTICADO 2026-09-09.** O Excel trata opções com ajuste, CONDATLINK, aluguer mensal e
@@ -241,12 +241,14 @@ há forma de a app ter uma base diferente por zona se um dia for preciso. Sem ur
 decidir depois de confirmar com quem trata de alfândega. Detalhe completo:
 `docs/MODEL-GAP-ANALYSIS.md`, item 7.
 
-**33. Zona "CH" do Excel sem correspondência no enum de zonas do schema** — **REGISTADO
-2026-09-09**, pergunta ao Pedro, não resolvido por inferência. `tmsi.customs_zone` (0001:20)
-tem `EU/CN/US/UK` — o prompt desta sessão refere `EU/CH/US/UK` para o Excel. Pode bloquear
-linhas específicas da paridade se o Excel tiver mesmo artigos/filiais associados a uma zona
-`CH` distinta — por confirmar antes de decidir se é um enum a alargar ou uma leitura a
-corrigir. Detalhe completo: `docs/MODEL-GAP-ANALYSIS.md`, achado A5.
+~~**33. Zona "CH" do Excel sem correspondência no enum de zonas do schema**~~ ✅ **fechado
+2026-09-09 — falso alarme, resolvido pelo Pedro sem tocar em código.** `CH` no Excel
+significa **China** (o bloco da Condat TBM — `CONFIGURATION`: `Condat TBM | CNY | China`),
+não Suíça, e a quarta coluna chamada `GBP` significa **Reino Unido**. `tmsi.customs_zone`
+(0001:20) já é `EU/CN/US/UK` — exactamente o que devia ser, desde sempre. A confusão estava
+inteiramente na leitura das colunas do Excel, nunca no schema — nada a alargar, nada a
+renomear, nada a corrigir. Único efeito prático: nos 18 códigos HS, a percentagem é hoje
+igual nas quatro zonas, por isso nenhum número muda com este achado.
 
 **34. `ref_factor`/`list_coef` sem interface de edição na app** — **REGISTADO 2026-09-09.**
 O cálculo já está correcto (`v_ref := min_price × branches.ref_factor`, 0001:489; valor por

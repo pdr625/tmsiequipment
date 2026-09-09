@@ -3,16 +3,16 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: reconciliação do modelo com o Excel real — ✅ MEDIDO 2026-09-09** (ver secção
-"Reconciliação com o Excel real" abaixo). `docs/MODEL-GAP-ANALYSIS.md` novo: 12 pontos
-verificados contra o código/schema reais, com citação de linha; 2 lacunas bloqueiam a
-paridade directamente (canais sem regra própria no motor, linhas não-equipamento sem
-"margem zero, preço=EXW") — registadas como items 29-34 do `docs/BACKLOG.md`, nenhuma
-corrigida ainda (sessão de medição, restrição 1). Template/guia/validador de paridade
-corrigidos para a v2 (8 colunas de resultado esperado em vez de uma, colunas de override por
-artigo, linhas de canal). Item 28 (custo HTTP/PostgREST de `v_products`) e item 14 continuam
-fechados (secções próprias abaixo); E0, E1, E2, E3 (i1–i10), E4, E5-VPS e as migrações
-0003/0004/0005/0006/0007/0008 estão fechadas.
+**Etapa actual: canais no motor de preços — ✅ FECHADO 2026-09-09, migração 0009** (ver
+secção "Canais no motor de preços" abaixo). Item 29 do `docs/BACKLOG.md` (a maior lacuna da
+reconciliação com o Excel real, secção anterior) fechado: `tmsi.compute_price()` ganhou um
+âmbito explícito (`p_scope_type`/`p_scope_id`), um preço de canal calcula-se do EXW sem fee
+nem direitos, sempre; margem de canal só por override explícito, mesmo workflow de aprovação
+da 0007, admin-only. Item 33 (zona "CH") também fechado — falso alarme, o Pedro confirmou que
+`CH`=China no Excel, o schema já estava certo. Items 30/31/32/34 continuam por fazer. Preços
+de filial confirmados byte-idênticos a uma baseline pré-migração, duas vezes; smoke 45/45.
+Item 28 e item 14 continuam fechados (secções próprias abaixo); E0, E1, E2, E3 (i1–i10), E4,
+E5-VPS e as migrações 0003/0004/0005/0006/0007/0008 estão fechadas.
 
 **Regra de processo (item 14, 2026-09-06, escrita também em `~/atelier-vps/CLAUDE.md`):**
 medições de desempenho desta app nunca se fazem com uma sessão de agente aberta neste VPS —
@@ -250,6 +250,95 @@ parte do próprio protocolo de uma futura medição destacada, não é um estado
 larga); este ficheiro; dossier (`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`), incluindo a
 decisão sobre o linger. `scripts/smoke.py` não corrido nesta sessão (nenhuma alteração de
 código/schema).
+
+## Canais no motor de preços — ✅ FECHADO 2026-09-09 (migração 0009)
+
+**Contexto:** a reconciliação com o Excel real (secção abaixo) provou o que a i6 já tinha
+registado como pendência: `tmsi.compute_price()` nunca recebeu parâmetro de canal, e
+`tmsi.channels.margin_delta` tinha zero leituras em todo o projecto. O Excel publica uma
+lista **APAC Agents** com regra própria (sem fee intercompany, sem direitos aduaneiros,
+`EXW + transporte` como base), e o Pedro confirmou que vêm mais territórios de agente a
+seguir — deixou de ser dívida de desenho, é uma dimensão do negócio.
+
+**F0/F1 — desenho:** `compute_price()` ganhou `(p_product, p_scope_type, p_scope_id,
+p_date)` — um âmbito explícito, nunca inferido de sessão/papel, seleccionando a cadeia
+alternativa pelo **tipo** de âmbito, não pelo nome do canal. `tmsi.channels.margin_delta`
+removido, não migrado — o seu único valor (`-0,10`, APAC) não tinha para onde ir no modelo
+novo (margem de canal é sempre um override explícito por artigo, nunca uma grelha — o Excel
+não escreve a margem, deduz-se do preço publicado). `tmsi.price_overrides` generalizado de
+`branch_id` para `scope_type`/`scope_id` (mesma forma que `product_hs_overrides` já tinha,
+0001 §3) para poder ser overridado também por canal. Preço de referência (`× 1,10`) confirma-
+se "partilhado com filiais" — usa `branches.ref_factor` da filial de **origem** do canal, não
+uma constante nova.
+
+**F1 — migração 0009**, processo consagrado:
+- Desenhada contra o schema real, citando linha (`docs/MODEL-GAP-ANALYSIS.md` itens 5/6).
+- Validada em `BEGIN`/`ROLLBACK` **antes** de qualquer coisa — um bug real de ordenação de
+  dependências (`v_branch_prices`/`v_selling_prices` dependem de `compute_price()`, Postgres
+  recusa `DROP FUNCTION` com dependentes) apanhado e corrigido nessa validação, não depois.
+- Commitada e pushed **antes** de aplicar (commit `66b6e37`).
+- Backup fresco tirado e verificado (`tmsi-pre-0009-20260909-224735.dump`, 689 entradas TOC
+  confirmadas) antes do DDL real.
+- Aplicada; preços de filial confirmados **byte-idênticos** a uma baseline capturada antes
+  de tocar em qualquer DDL — 33/33 linhas, as 18 colunas originais, `diff` limpo — duas
+  vezes (dentro do `BEGIN`/`ROLLBACK` de validação, e outra vez contra a BD real já
+  migrada).
+
+**F2 — código:** `/prices` ganhou botões de filtro de canal (fetch de `tmsi.channels`, sem
+mudar o parâmetro `?branch=` já existente — o export e a vista de impressão herdaram canais
+de graça, zero código novo, já eram agnósticos de filial/canal); `/products/[id]` mostra os
+preços de canal elegíveis para o artigo (mesmo predicado de `v_branch_prices`); `/overrides`
+ganhou um selector de âmbito (filial/canal) no formulário de propor, com o menu de `kind`
+a estreitar para `margin`/`transport` quando é canal — reflecte a fronteira real da RLS, não
+a substitui. `scripts/smoke.py`: todas as chamadas a `compute_price()` actualizadas à nova
+assinatura; bloco **T** novo prova o workflow de canal de ponta a ponta.
+
+**F3 — deploy:** CI verde (confirmado pelo Pedro) → digest
+`sha256:72547485e4140155e8528d893c9e636b9acb2263b20b99b3829e34d7e16022f9` → `up -d --no-deps
+tmsi-app` → `healthy` → smoke **45/45** (live, contra a produção já redeployada).
+
+**F4 — as 7 provas, todas confirmadas** (detalhe completo, com os números e o achado do
+arredondamento do CNY apanhado a meio da própria verificação:
+`docs/VERIFICATION-PROTOCOL.md`, secção 4.10, passos MM–SS):
+1. Não-regressão — byte-idêntico, duas vezes.
+2. Fórmula do canal conferida à mão — bate certo (achado próprio: o CNY arredonda à dezena,
+   `tmsi.currencies.rounding`, a primeira conferência à mão esqueceu-se disso e "falhou" por
+   engano — corrigido antes de fechar, não escondido).
+3. Cadeia isolada — mudar `customs_rates` move o preço de filial, o de canal (mesmo artigo,
+   mesma filial de origem) não mexe nada.
+4. Ramos negados — papel sem role de canal vê zero linhas; agent do canal A não vê o canal B
+   (canal de teste `TESTCH2`, efémero, `BEGIN`/`ROLLBACK`); escrita directa recusada pela RLS.
+5. Workflow — propor → pendente invisível ao motor → aprovação só admin (nenhum
+   `branch_manager` tem um canal em `my_branches()`, mesma mecânica de `exchange_rates`) →
+   materializado, motor reflecte de imediato. Aprovação real provada com um papel `admin`
+   efémero (só dentro da transacção, nunca commitado — nunca uma conta admin de teste
+   persistente).
+6. Export/impressão — dados subjacentes (`v_branch_prices`/`v_selling_prices` filtrados a
+   `branch_id=eq.APAC`) confirmados correctos e com a fronteira de custos respeitada, via
+   HTTP real com bearer token; **o ficheiro `.xlsx`/a pré-visualização de impressão em si
+   ficam por confirmar pelo Pedro** — `/prices/export` exige sessão por cookie
+   (`@supabase/ssr`), mesma limitação já documentada em i9/i10/item 26/item 14, confirmada
+   de novo (tentativa por bearer token devolveu redirect para `/login`).
+7. Smoke completo — 45/45, duas vezes (antes e depois do deploy).
+
+**Achado registado, não uma falha:** `has_role('logistics')` concede visibilidade de venda a
+**qualquer** canal, sem verificar `my_channels()` — herdado tal e qual da cláusula da 0007,
+nunca tinha condição de âmbito. Não é uma fronteira nova a fechar; fica registado para o
+Pedro decidir, com conhecimento, se algum dia quiser estreitar (`docs/VERIFICATION-
+PROTOCOL.md`, nota ⁸).
+
+**Achado lateral, fora do âmbito, não corrigido:** `T-0004`×`APAC` mostrou
+`min_price=10.704.550,00` CNY para um artigo de USD 1.450 — a mesma taxa de câmbio CNY
+implausível já registada na secção seguinte (8554 em vigor, devia ser ~8,26) distorce
+também os preços de canal, não só os de filial.
+
+**F5 — protocolo:** `docs/VERIFICATION-PROTOCOL.md` — matriz (secção 3, nota ⁸, 2 linhas
+novas: propor/aprovar overrides de canal) e secção 4.10 (passos MM–SS) no mesmo commit;
+adenda registada na secção 7 com âmbito, resultado, migração e digest.
+
+**F6 (este fecho):** `docs/BACKLOG.md` (item 29 fechado; item 33 também fechado — falso
+alarme, resolvido pelo Pedro na secção seguinte; itens 30/31/32/34 continuam por fazer);
+este ficheiro; dossier (`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`).
 
 ## Reconciliação com o Excel real — ✅ MEDIDO 2026-09-09
 
