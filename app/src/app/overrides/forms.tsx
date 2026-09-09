@@ -7,6 +7,7 @@
 
 'use client';
 
+import { useState, type ChangeEvent } from 'react';
 import { useActionState } from 'react';
 import { ErrorText } from '@/lib/error-text';
 import { createPriceOverride, createHsOverride, type OverrideActionState } from './actions';
@@ -14,14 +15,24 @@ import { createPriceOverride, createHsOverride, type OverrideActionState } from 
 export function PriceOverrideForm({
   products,
   branches,
+  channels,
   kinds,
+  channelKinds,
 }: {
   products: { id: string; name: string }[];
   branches: { id: string; name: string }[];
+  channels: { id: string; name: string }[];
   kinds: string[];
+  channelKinds: string[];
 }) {
   const [state, formAction, pending] = useActionState<OverrideActionState, FormData>(createPriceOverride, undefined);
   const today = new Date().toISOString().slice(0, 10);
+  // 0009: which scope_id dropdown (and which kinds) to show — the engine
+  // only ever reads a channel-scoped override for margin/transport
+  // (docs/MODEL-GAP-ANALYSIS.md items 5/6; proposals_insert RLS enforces
+  // the real boundary, this just avoids offering a dead combination).
+  const [scopeType, setScopeType] = useState<'branch' | 'channel'>('branch');
+  const availableKinds = scopeType === 'channel' ? channelKinds : kinds;
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 p-3">
@@ -36,9 +47,21 @@ export function PriceOverrideForm({
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Branch</label>
-        <select name="branch_id" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
-          {branches.map((b) => (
+        <label className="mb-1 block text-xs text-gray-500">Scope</label>
+        <select
+          name="scope_type"
+          value={scopeType}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => setScopeType(e.target.value as 'branch' | 'channel')}
+          className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+        >
+          <option value="branch">Branch</option>
+          <option value="channel">Channel</option>
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">{scopeType === 'channel' ? 'Channel' : 'Branch'}</label>
+        <select name="scope_id" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+          {(scopeType === 'channel' ? channels : branches).map((b) => (
             <option key={b.id} value={b.id}>
               {b.id}
             </option>
@@ -48,7 +71,7 @@ export function PriceOverrideForm({
       <div>
         <label className="mb-1 block text-xs text-gray-500">Kind</label>
         <select name="kind" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
-          {kinds.map((k) => (
+          {availableKinds.map((k) => (
             <option key={k} value={k}>
               {k}
             </option>

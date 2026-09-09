@@ -32,6 +32,7 @@ type SellingPriceRow = {
 };
 
 type Branch = { id: string; name: string };
+type Channel = { id: string; name: string };
 
 // Which view a user gets (full costs vs selling-price-only) is a security
 // decision, not a UI one — the page asks Postgres (tmsi.can_read_costs(),
@@ -66,6 +67,18 @@ export default async function PricesPage({
     .eq('active', true)
     .order('id')
     .overrideTypes<Branch[], { merge: false }>();
+
+  // 0009: channels get their own filter row, never mixed into "branches" —
+  // a channel is a distinct pricing scope (v_branch_prices/v_selling_prices
+  // union branch and channel rows, docs/MODEL-GAP-ANALYSIS.md items 5/6),
+  // not a filial with a different name.
+  const { data: channels } = await supabase
+    .schema('tmsi')
+    .from('channels')
+    .select('id, name')
+    .eq('active', true)
+    .order('id')
+    .overrideTypes<Channel[], { merge: false }>();
 
   // i10: same metadata the .xlsx export carries in its own header block —
   // shown here only for print (the screen already has the branch filter
@@ -122,6 +135,15 @@ export default async function PricesPage({
             className={`rounded-md border px-3 py-1 text-sm ${branch === b.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
           >
             {b.name}
+          </Link>
+        ))}
+        {channels?.map((c) => (
+          <Link
+            key={c.id}
+            href={`/prices?branch=${c.id}`}
+            className={`rounded-md border px-3 py-1 text-sm ${branch === c.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
+          >
+            {c.name} (channel)
           </Link>
         ))}
       </div>

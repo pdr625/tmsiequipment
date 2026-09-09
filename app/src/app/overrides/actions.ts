@@ -38,17 +38,23 @@ export async function createPriceOverride(
   if (!(await canManageAnyPriceOverride())) return { error: 'Forbidden' };
 
   const product_id = String(formData.get('product_id') ?? '');
-  const branch_id = String(formData.get('branch_id') ?? '');
+  const scope_type = String(formData.get('scope_type') ?? 'branch');
+  const scope_id = String(formData.get('scope_id') ?? '');
   const kind = String(formData.get('kind') ?? '');
   const value = Number(formData.get('value') ?? 0);
   const reason = String(formData.get('reason') ?? '');
   const valid_from = String(formData.get('valid_from') ?? '');
   const validToRaw = String(formData.get('valid_to') ?? '');
 
+  // 0009: proposals_insert (RLS) re-derives eligibility from payload.scope_type
+  // + payload.scope_id, not from the top-level branch_id column's value alone
+  // — but that column still has to CONTAIN the same scope id (branch or
+  // channel) for the policy's own anti-spoofing match (branch_id =
+  // payload->>'scope_id') to pass, same shape 0007 already used.
   const result = await proposeChange(
     'price_overrides',
-    branch_id,
-    { product_id, branch_id, kind, value, reason, valid_from, valid_to: validToRaw === '' ? null : validToRaw },
+    scope_id,
+    { product_id, scope_type, scope_id, kind, value, reason, valid_from, valid_to: validToRaw === '' ? null : validToRaw },
     reason,
   );
   if (result && 'error' in result) return result;

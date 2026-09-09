@@ -16,7 +16,8 @@ type PendingProposal = { id: number };
 type PriceOverride = {
   id: number;
   product_id: string;
-  branch_id: string;
+  scope_type: string;
+  scope_id: string;
   kind: string;
   value: number;
   reason: string;
@@ -26,9 +27,17 @@ type PriceOverride = {
 type HsOverride = { product_id: string; scope_type: string; scope_id: string; hs_code: string; reason: string };
 type Product = { id: string; name: string };
 type Branch = { id: string; name: string };
+type Channel = { id: string; name: string };
 type HsCode = { code: string; description: string | null };
 
 const KINDS = ['fx', 'fee', 'transport', 'duty', 'margin', 'coef'];
+// 0009: what the engine actually reads for a channel-scoped override —
+// fee/duty are hard-zeroed for every channel regardless (docs/MODEL-GAP-ANALYSIS.md
+// items 5/6), fx/coef aren't part of the Excel's channel rule either, so
+// proposing them would be a dead, confusing path. Mirrors proposals_insert's
+// own RLS check exactly (migration 0009 §5) — this is a UI convenience, the
+// real boundary is that policy.
+const CHANNEL_KINDS = ['margin', 'transport'];
 
 const STATUS_STYLE: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
@@ -50,6 +59,7 @@ export default async function OverridesPage() {
     { data: hsOverrides },
     { data: products },
     { data: branches },
+    { data: channels },
     { data: hsCodes },
     canWritePrice,
     canWriteHs,
@@ -58,7 +68,7 @@ export default async function OverridesPage() {
     supabase
       .schema('tmsi')
       .from('price_overrides')
-      .select('id, product_id, branch_id, kind, value, reason, valid_from, valid_to')
+      .select('id, product_id, scope_type, scope_id, kind, value, reason, valid_from, valid_to')
       .order('valid_from', { ascending: false })
       .overrideTypes<PriceOverride[], { merge: false }>(),
     supabase
@@ -69,6 +79,7 @@ export default async function OverridesPage() {
       .overrideTypes<HsOverride[], { merge: false }>(),
     supabase.schema('tmsi').from('products').select('id, name').order('id').overrideTypes<Product[], { merge: false }>(),
     supabase.schema('tmsi').from('branches').select('id, name').eq('active', true).order('id').overrideTypes<Branch[], { merge: false }>(),
+    supabase.schema('tmsi').from('channels').select('id, name').eq('active', true).order('id').overrideTypes<Channel[], { merge: false }>(),
     supabase.schema('tmsi').from('hs_codes').select('code, description').order('code').overrideTypes<HsCode[], { merge: false }>(),
     canManageAnyPriceOverride(),
     isAdmin(),
@@ -112,7 +123,7 @@ export default async function OverridesPage() {
           <thead>
             <tr className="border-b border-gray-200 text-left text-gray-500">
               <th className="py-2 pr-4">Product</th>
-              <th className="py-2 pr-4">Branch</th>
+              <th className="py-2 pr-4">Scope</th>
               <th className="py-2 pr-4">Kind</th>
               <th className="py-2 pr-4">Value</th>
               <th className="py-2 pr-4">Reason</th>
@@ -130,7 +141,9 @@ export default async function OverridesPage() {
                       {productName(o.product_id)}
                     </Link>
                   </td>
-                  <td className="py-2 pr-4">{o.branch_id}</td>
+                  <td className="py-2 pr-4">
+                    {o.scope_id} {o.scope_type === 'channel' && <span className="text-xs text-gray-400">(channel)</span>}
+                  </td>
                   <td className="py-2 pr-4">{o.kind}</td>
                   <td className="py-2 pr-4">{o.value}</td>
                   <td className="py-2 pr-4">{o.reason}</td>
@@ -148,7 +161,15 @@ export default async function OverridesPage() {
         {(!priceOverrides || priceOverrides.length === 0) && (
           <p className="mb-3 text-sm text-gray-500">No price overrides visible for your role.</p>
         )}
-        {canWritePrice && <PriceOverrideForm products={products ?? []} branches={branches ?? []} kinds={KINDS} />}
+        {canWritePrice && (
+          <PriceOverrideForm
+            products={products ?? []}
+            branches={branches ?? []}
+            channels={channels ?? []}
+            kinds={KINDS}
+            channelKinds={CHANNEL_KINDS}
+          />
+        )}
       </section>
 
       <section className="mb-10">

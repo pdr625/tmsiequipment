@@ -71,13 +71,15 @@ type PriceBreakdown = {
   alert: string | null;
   overrides: string[] | null;
   errors: string[] | null;
+  scope_type: 'branch' | 'channel';
 };
 
 type PriceVersion = { id: number; version: number; currency: string; exw_price: number; changed_at: string; note: string | null };
 type AuditEntry = { id: number; at: string; actor: string | null; action: string; old_row: unknown; new_row: unknown };
 type PriceOverride = {
   id: number;
-  branch_id: string;
+  scope_type: string;
+  scope_id: string;
   kind: string;
   value: number;
   reason: string;
@@ -86,6 +88,7 @@ type PriceOverride = {
 };
 type HsOverride = { scope_type: string; scope_id: string; hs_code: string; reason: string };
 type Branch = { id: string; name: string };
+type Channel = { id: string; name: string; branch_id: string };
 type RefRow = { id?: string; code?: string; name?: string; description?: string };
 
 // Everything a role should not see is decided by Postgres, not this page:
@@ -130,6 +133,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   const [
     { data: branches },
+    { data: channels },
     { data: categories },
     { data: units },
     { data: suppliers },
@@ -138,9 +142,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     { data: auditEntries },
     { data: priceOverrides },
     { data: hsOverrides },
-    priceResults,
   ] = await Promise.all([
     supabase.schema('tmsi').from('branches').select('id, name').eq('active', true).order('id').overrideTypes<Branch[], { merge: false }>(),
+    supabase.schema('tmsi').from('channels').select('id, name, branch_id').eq('active', true).order('id').overrideTypes<Channel[], { merge: false }>(),
     supabase.schema('tmsi').from('categories').select('id, name').order('id').overrideTypes<RefRow[], { merge: false }>(),
     supabase.schema('tmsi').from('units').select('code, name').order('code').overrideTypes<RefRow[], { merge: false }>(),
     supabase.schema('tmsi').from('suppliers').select('id, name').order('id').overrideTypes<RefRow[], { merge: false }>(),
@@ -163,7 +167,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     supabase
       .schema('tmsi')
       .from('price_overrides')
-      .select('id, branch_id, kind, value, reason, valid_from, valid_to')
+      .select('id, scope_type, scope_id, kind, value, reason, valid_from, valid_to')
       .eq('product_id', id)
       .order('valid_from', { ascending: false })
       .overrideTypes<PriceOverride[], { merge: false }>(),
@@ -173,10 +177,21 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       .select('scope_type, scope_id, hs_code, reason')
       .eq('product_id', id)
       .overrideTypes<HsOverride[], { merge: false }>(),
-    Promise.all(
-      branchIds.map((b) => supabase.schema('tmsi').rpc('compute_price', { p_product: id, p_branch: b })),
-    ),
   ]);
+
+  // 0009: a channel is eligible for this product on the SAME condition
+  // tmsi.v_branch_prices itself uses — its own origin branch (channels.branch_id)
+  // in sold_in/primary_branch — never every channel unconditionally.
+  const channelScopes = (channels ?? []).filter((c) => branchIds.includes(c.branch_id));
+  const scopes = [
+    ...branchIds.map((b) => ({ scopeType: 'branch' as const, scopeId: b })),
+    ...channelScopes.map((c) => ({ scopeType: 'channel' as const, scopeId: c.id })),
+  ];
+  const priceResults = await Promise.all(
+    scopes.map((s) =>
+      supabase.schema('tmsi').rpc('compute_price', { p_product: id, p_scope_type: s.scopeType, p_scope_id: s.scopeId }),
+    ),
+  );
 
   // compute_price() has no generated Database type behind it (this app has
   // none — E1), so .rpc() falls back to a loose result shape that
@@ -185,20 +200,21 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // through unknown since the inferred single-row shape and the real
   // setof-row array don't structurally overlap enough for a direct `as`.
   //
-  // priceResults lines up with branchIds by index (Promise.all preserves
+  // priceResults lines up with scopes by index (Promise.all preserves
   // input order) — a real RPC error (missing fx_rate row, etc.) must not
-  // read the same as "no price for this branch" (empty data, no error), so
+  // read the same as "no price for this scope" (empty data, no error), so
   // it's tracked separately here rather than folded into priceRows via ??.
   const priceRows = priceResults.flatMap((r) => (r.error ? [] : ((r.data ?? []) as unknown as PriceBreakdown[])));
   const priceErrors = priceResults
-    .map((r, i) => (r.error ? { branchId: branchIds[i], message: r.error.message } : null))
+    .map((r, i) => (r.error ? { branchId: scopes[i].scopeId, message: r.error.message } : null))
     .filter((e): e is { branchId: string; message: string } => e !== null);
   const seesCosts = priceRows.some((r) => r.total_cost_eur !== null);
 
-  // Only scope_type='branch' actually reaches compute_price()'s duty
-  // calculation (F0 finding, E3-i6/STATE.md) — a channel/agent override
-  // for this product would never show up here, matching what the engine
-  // itself does.
+  // Only scope_type='branch' actually reaches compute_price()'s HS-override
+  // duty calculation (F0 finding, E3-i6/STATE.md, unchanged by 0009 — see
+  // docs/MODEL-GAP-ANALYSIS.md item 11 for what 0009 did and did not touch)
+  // — a channel/agent HS override for this product would never show up
+  // here, matching what the engine itself does.
   const hsOverrideFor = (branchId: string) => hsOverrides?.find((h) => h.scope_type === 'branch' && h.scope_id === branchId);
 
   return (
@@ -236,15 +252,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Price by branch</h2>
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">Price by branch / channel</h2>
         {priceRows.length === 0 && priceErrors.length === 0 && (
-          <p className="text-sm text-gray-500">Not priced for any branch visible to you.</p>
+          <p className="text-sm text-gray-500">Not priced for any branch or channel visible to you.</p>
         )}
         {(priceRows.length > 0 || priceErrors.length > 0) && (
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-left text-gray-500">
-                <th className="py-2 pr-4">Branch</th>
+                <th className="py-2 pr-4">Branch / channel</th>
                 {seesCosts && (
                   <>
                     <th className="py-2 pr-4">Total cost (EUR)</th>
@@ -259,11 +275,13 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             </thead>
             <tbody>
               {priceRows.map((r) => {
-                const hsOverride = hsOverrideFor(r.branch_id);
+                const hsOverride = r.scope_type === 'branch' ? hsOverrideFor(r.branch_id) : undefined;
                 const overriddenInputs = [...(r.overrides ?? []), ...(hsOverride ? ['hs_code'] : [])];
                 return (
-                  <tr key={r.branch_id} className="border-b border-gray-100">
-                    <td className="py-2 pr-4">{r.branch_id}</td>
+                  <tr key={`${r.scope_type}-${r.branch_id}`} className="border-b border-gray-100">
+                    <td className="py-2 pr-4">
+                      {r.branch_id} {r.scope_type === 'channel' && <span className="text-xs text-gray-400">(channel)</span>}
+                    </td>
                     {seesCosts && (
                       <>
                         <td className="py-2 pr-4">{r.total_cost_eur ?? '—'}</td>
@@ -350,7 +368,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             <table className="mb-3 w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-gray-500">
-                  <th className="py-2 pr-4">Branch</th>
+                  <th className="py-2 pr-4">Scope</th>
                   <th className="py-2 pr-4">Kind</th>
                   <th className="py-2 pr-4">Value</th>
                   <th className="py-2 pr-4">Reason</th>
@@ -361,7 +379,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               <tbody>
                 {priceOverrides.map((o) => (
                   <tr key={o.id} className="border-b border-gray-100">
-                    <td className="py-2 pr-4">{o.branch_id}</td>
+                    <td className="py-2 pr-4">
+                      {o.scope_id} {o.scope_type === 'channel' && <span className="text-xs text-gray-400">(channel)</span>}
+                    </td>
                     <td className="py-2 pr-4">{o.kind}</td>
                     <td className="py-2 pr-4">{o.value}</td>
                     <td className="py-2 pr-4">{o.reason}</td>

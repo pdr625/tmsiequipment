@@ -183,7 +183,7 @@ def block_no_cost_role(token):
         "POST",
         f"{REST}/price_overrides",
         token=token,
-        body={"product_id": "T-0001", "branch_id": "SA", "kind": "margin", "value": 1, "reason": "smoke"},
+        body={"product_id": "T-0001", "scope_type": "branch", "scope_id": "SA", "kind": "margin", "value": 1, "reason": "smoke"},
     )
     check("I: price_overrides INSERT refused for no-cost role", status in (401, 403), f"http_{status}")
 
@@ -253,12 +253,12 @@ def block_cost_role_and_engine(token, claims_uuid, role_label):
         "POST",
         f"{REST}/rpc/compute_price",
         token=token,
-        body={"p_product": product_id, "p_branch": branch_id},
+        body={"p_product": product_id, "p_scope_type": "branch", "p_scope_id": branch_id},
     )
     check(f"B: {role_label} compute_price() RPC reachable", status == 200, f"http_{status}")
 
     db_rows = psql_rows(
-        f"select min_price, ref_price, total_cost_eur, margin from tmsi.compute_price('{product_id}','{branch_id}');",
+        f"select min_price, ref_price, total_cost_eur, margin from tmsi.compute_price('{product_id}','branch','{branch_id}');",
         claims_uuid=claims_uuid,
     )
     api_row = api_result[0] if isinstance(api_result, list) and api_result else api_result
@@ -311,7 +311,7 @@ def block_override_reason_guard(token):
         "POST",
         f"{REST}/price_overrides",
         token=token,
-        body={"product_id": "T-0001", "branch_id": "SA", "kind": "margin", "value": 1},
+        body={"product_id": "T-0001", "scope_type": "branch", "scope_id": "SA", "kind": "margin", "value": 1},
     )
     check("Q: price_overrides insert without a reason is refused", status >= 400, f"http_{status}")
 
@@ -483,7 +483,10 @@ def block_proposal_workflow_overrides(finance_token, finance_uuid, bm_token, bm_
     today = db_today()
 
     def compute_margin(branch_id):
-        status, result = http("POST", f"{REST}/rpc/compute_price", token=finance_token, body={"p_product": product_id, "p_branch": branch_id})
+        status, result = http(
+            "POST", f"{REST}/rpc/compute_price", token=finance_token,
+            body={"p_product": product_id, "p_scope_type": "branch", "p_scope_id": branch_id},
+        )
         row = result[0] if isinstance(result, list) and result else None
         return status, (float(row["margin"]) if row and row.get("margin") is not None else None)
 
@@ -502,7 +505,7 @@ def block_proposal_workflow_overrides(finance_token, finance_uuid, bm_token, bm_
                 "target_table": "price_overrides",
                 "branch_id": branch_id,
                 "payload": {
-                    "product_id": product_id, "branch_id": branch_id, "kind": "margin", "value": margin,
+                    "product_id": product_id, "scope_type": "branch", "scope_id": branch_id, "kind": "margin", "value": margin,
                     "reason": reason, "valid_from": str(today), "valid_to": None,
                 },
                 "reason": reason,
@@ -570,6 +573,97 @@ def block_proposal_workflow_overrides(finance_token, finance_uuid, bm_token, bm_
     )
 
 
+# ---------------------------------------------------------------------------
+# T — migration 0009: channel-scoped price_overrides. A channel id can never
+# equal a member of any branch_manager's my_branches() (different id
+# spaces), so approval falls to admin-only by the SAME mechanism block R
+# already exercises for exchange_rates — no branch_manager-approves path
+# exists for a channel, unlike block S's branch-scoped one. Channel/product
+# pair discovered at runtime (tmsi.channels join products on sold_in/
+# primary_branch, the exact predicate tmsi.v_branch_prices itself uses),
+# never a hardcoded id.
+# ---------------------------------------------------------------------------
+def block_proposal_workflow_channel(finance_token, finance_uuid, bm_token, bm_uuid):
+    candidates = psql_rows(
+        "select ch.id, p.id from tmsi.channels ch "
+        "join tmsi.products p on ch.branch_id = any(p.sold_in) or ch.branch_id = p.primary_branch "
+        "where ch.active limit 1;"
+    )
+    if not candidates:
+        check("T: approval workflow (price_overrides, channel scope)", True, "SKIP — no active channel with an eligible product found")
+        return
+    channel_id, product_id = candidates[0]
+    today = db_today()
+
+    def compute_channel_min(cid):
+        status, result = http(
+            "POST", f"{REST}/rpc/compute_price", token=finance_token,
+            body={"p_product": product_id, "p_scope_type": "channel", "p_scope_id": cid},
+        )
+        row = result[0] if isinstance(result, list) and result else None
+        return status, (float(row["min_price"]) if row and row.get("min_price") is not None else None)
+
+    status, baseline_min = compute_channel_min(channel_id)
+    check("T: compute_price reachable for the channel baseline", status == 200 and baseline_min is not None, f"http_{status}")
+    if baseline_min is None:
+        return
+
+    status, direct_insert = http(
+        "POST", f"{REST}/price_overrides", token=finance_token,
+        body={"product_id": product_id, "scope_type": "channel", "scope_id": channel_id, "kind": "margin", "value": 0.3, "reason": "smoke"},
+    )
+    check("T: direct price_overrides INSERT refused even for finance (proposals is the only path in)", status in (401, 403), f"http_{status}")
+
+    status, created = http(
+        "POST",
+        f"{REST}/price_proposals",
+        token=finance_token,
+        body={
+            "target_table": "price_overrides",
+            "branch_id": channel_id,
+            "payload": {
+                "product_id": product_id, "scope_type": "channel", "scope_id": channel_id, "kind": "margin", "value": 0.3,
+                "reason": "smoke: channel approval-flow proposal", "valid_from": str(today), "valid_to": None,
+            },
+            "reason": "smoke: channel approval-flow proposal",
+            "proposed_by": finance_uuid,
+        },
+        prefer="return=representation",
+    )
+    proposal_ok = status == 201 and isinstance(created, list) and len(created) == 1
+    check("T: finance can propose a channel-scoped price_overrides change", proposal_ok, f"http_{status}")
+    if not proposal_ok:
+        return
+    proposal_id = created[0]["id"]
+
+    status, pending_min = compute_channel_min(channel_id)
+    check(
+        "T: a pending channel proposal is invisible to compute_price()",
+        status == 200 and pending_min == baseline_min,
+        f"before={baseline_min} pending={pending_min}",
+    )
+
+    status, _body = http(
+        "POST", f"{REST}/rpc/decide_price_proposal", token=bm_token,
+        body={"p_proposal_id": proposal_id, "p_decision": "approved", "p_reason": None},
+    )
+    check("T: branch_manager approving a channel-scoped proposal is refused (no branch identity to match)", status >= 400, f"http_{status}")
+
+    status, _body = http(
+        "POST", f"{REST}/rpc/decide_price_proposal", token=finance_token,
+        body={"p_proposal_id": proposal_id, "p_decision": "approved", "p_reason": None},
+    )
+    check("T: finance approving their OWN channel proposal is refused (admin-only, same as exchange_rates)", status >= 400, f"http_{status}")
+
+    psql_rows(f"delete from tmsi.price_proposals where id = {proposal_id};")
+    remaining = psql_rows(f"select count(*) from tmsi.price_proposals where id = {proposal_id};")
+    check(
+        "T: no residue — the test proposal was deleted",
+        bool(remaining) and remaining[0][0] == "0",
+        f"remaining={remaining[0][0] if remaining else '?'}",
+    )
+
+
 def main():
     print(f"=== TMSI smoke — {BASE} — {date.today().isoformat()} ===")
     block_health()
@@ -598,6 +692,7 @@ def main():
     block_exw_review_transition(claims["product_manager"])
     block_proposal_workflow_exchange_rates(tokens["finance"], claims["finance"])
     block_proposal_workflow_overrides(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
+    block_proposal_workflow_channel(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
 
     total = len(RESULTS)
     print(f"\n=== {total - FAILURES}/{total} passed ===")
