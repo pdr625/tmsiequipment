@@ -52,7 +52,7 @@ partir do desenho original. 16 correcções feitas à proposta inicial; detalhe 
 
 | Capacidade | admin | product_mgr | finance | branch_mgr | logistics | sales | agent | viewer |
 |---|---|---|---|---|---|---|---|---|
-| Preços de venda | ✅ | ✅ | ✅ | ◐ | ✅ | ◐ | ◐ | ✅ |
+| Preços de venda | ✅ | ✅ | ✅ | ◐ | ✅ ⁸ | ◐ | ◐ ⁸ | ✅ |
 | Custos (EXW, custo total, margens, fees) | ✅ | ✅ | ✅ | ◐ ¹ | ❌ | ❌ | ❌ | ✅ |
 | Códigos SAP / fornecedor | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
 | HS / peso / dimensões (operacional) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
@@ -68,6 +68,8 @@ partir do desenho original. 16 correcções feitas à proposta inicial; detalhe 
 | Reset de password (a outro utilizador) — i9, 0006 ⁴ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Editar branding (item 26, 0008) ⁷ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Artigos não-activos (draft/review/…) | ✅ | ✅ | ✅ | ◐ | ✅ | ❌ | ❌ | ✅ |
+| Propor overrides de canal (margem/transporte, 0009) ⁸ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Aprovar overrides de canal (0009) ⁸ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ¹ **Duas fontes distintas, com regras diferentes.** O EXW e os códigos SAP/fornecedor vêm de
 `tmsi.v_products` (gate: `can_read_costs()`, sem verificação de filial nenhuma — o
@@ -151,6 +153,24 @@ Append-only como o resto da configuração deste projecto (0005/0007): editar nu
 versão anterior, insere uma nova — sem política de `UPDATE`/`DELETE` para `authenticated`
 em nenhuma das duas tabelas (`tmsi.branding`/`tmsi.branding_logos`). Testado na secção 4.8,
 passos KK–LL.
+
+⁸ **Migração 0009 (2026-09-09) — canais deixam de ser só metadado de visibilidade e passam a
+ter cálculo próprio.** `tmsi.compute_price()` ganha um âmbito explícito (`p_scope_type`,
+`p_scope_id`) — um preço de canal é um cálculo independente a partir do EXW (**sem** fee
+intercompany, **sem** direitos aduaneiros, sempre, nunca uma condição sobre o nome do
+canal), não "o preço da filial com um desconto" — `tmsi.channels.margin_delta`, nunca lido
+por ninguém antes desta migração, foi removido, não migrado (o seu valor não sobrevive ao
+novo modelo de margem por artigo × canal, via override — nunca uma grelha). `logistics` vê
+o preço de venda de **qualquer** canal sem restrição (célula acima) — herdado tal e qual da
+sua própria cláusula da 0007, nunca teve condição de âmbito; um `agent` vê apenas o(s)
+canal(is) do seu próprio `tmsi.user_roles.channel_id` (célula "◐"), a mesma fronteira que já
+tinha para a filial de origem do seu canal, agora também directamente pelo âmbito canal. As
+duas linhas novas da matriz (propor/aprovar overrides de canal) seguem exactamente o
+workflow da 0007 (nota ⁶) — só `kind` `margin`/`transport` fazem sentido para um canal
+(fee/direitos são sempre zero, propô-los seria um caminho morto) e a aprovação cai sempre em
+admin-only pela mesma mecânica que já cobre `exchange_rates`/`interco_fees`/`customs_rates`
+(nenhum `branch_manager` tem um canal em `my_branches()`). Testado na secção 4.10, passos
+MM–SS.
 
 ## 4. Protocolo de teste por papel
 Para cada papel testado: um utilizador dedicado a testes (em produção: conta de teste real
@@ -342,6 +362,61 @@ não substitui a execução formal deste protocolo** (secção 7) — os passos 
 real e email continuam a exigir os passos manuais que só um humano pode dar; o smoke é a rede
 rápida entre execuções formais, corrível após cada deploy, não um substituto da própria
 execução assinada.
+
+### 4.10 Canais no motor de preços (migração 0009, adicionado nesta revisão)
+MM. **Motor insensível a pendente (canal):** uma proposta `price_overrides` de âmbito
+    `channel` `pending` não é vista por `tmsi.compute_price('...','channel',...)` — o valor
+    em vigor antes de propor (tipicamente o "erro: falta override de margem de canal", já
+    que um canal não tem grelha de margem para onde cair — nota ⁸) continua o mesmo depois
+    de propor, só muda depois de aprovada.
+NN. **Fluxo completo, sem branch_manager elegível:** proponente (admin/finance) cria a
+    proposta → **só admin aprova** (um id de canal nunca é membro de `my_branches()` de
+    nenhum `branch_manager` — a mesma mecânica que já torna `exchange_rates`/`interco_fees`/
+    `customs_rates` admin-only, nota ⁶, não uma regra nova escrita para canais) → motor
+    recalcula de imediato para o novo valor (prova "motor-vivo").
+OO. **Fórmula do canal conferida à mão:** `total_cost = EXW (convertido) + transporte da
+    filial de origem` (sem fee, sem direitos — nota ⁸); `min_price = total_cost/(1-margem)`;
+    `ref_price = min_price × branches.ref_factor` (da filial de origem — "partilhado com
+    filiais", não uma constante nova). **Atenção ao arredondamento por moeda**
+    (`tmsi.currencies.rounding`, 0001 §2) — CNY arredonda à dezena; um valor à mão que não
+    tenha isto em conta parece "errado" por alguns cêntimos/dezenas sem ser (achado desta
+    própria verificação, corrigido antes de fechar — a fórmula estava certa, a conferência
+    à mão é que se esqueceu do arredondamento).
+PP. **Fee/direitos isolados da filial:** alterar `customs_rates` (HS/zona de um artigo
+    testado) muda o preço de **filial** desse artigo, o preço de **canal** do mesmo artigo
+    (mesma filial de origem) **não muda nada** — prova directa, não inferência, de que a
+    cadeia do canal nunca lê `customs_rates`/`interco_fees`.
+QQ. **Três ramos negados, canal:** (1) um papel sem `logistics`/`admin`/`product_manager`/
+    `finance`/`viewer` e sem role `agent` do próprio canal (ex. `branch_manager` sozinho) vê
+    **zero linhas** ao pedir um âmbito `channel` — não uma linha com custos a `NULL`, zero
+    linhas, porque não há cláusula nenhuma de `branch_manager`/`sales` para âmbito canal; (2)
+    um `agent` do canal A pede o canal B (`p_scope_id` diferente do seu próprio
+    `my_channels()`) → zero linhas, confirmado com um segundo canal de teste temporário
+    (`BEGIN`/`ROLLBACK`, nunca commitado) já que só existe um canal real (APAC) hoje; (3)
+    escrita directa em `tmsi.price_overrides` com `scope_type='channel'` → recusada pela RLS
+    (não há política de `INSERT` nenhuma para `authenticated`, canal ou filial — a proposta
+    continua a ser o único caminho, herdado tal e qual de 0007).
+RR. **Achado registado, não uma falha:** `has_role('logistics')` concede visibilidade de
+    **venda** (nunca custos) a **qualquer** canal, sem verificar `my_channels()` — herdado
+    verbatim da cláusula da 0007 (nunca tinha uma condição de âmbito, só existia para
+    filiais até agora); confirmado ao vivo que `logistics.test`, sem role `agent` nenhuma,
+    vê o preço de venda de um canal de teste onde não tem scope nenhum atribuído. Não é uma
+    fronteira nova a fechar — é a mesma amplitude que `logistics` já tinha para filiais,
+    agora também alcançando canais; registado aqui para o Pedro decidir, com conhecimento,
+    se algum dia quiser estreitar.
+SS. **Sweep de regressão pós-deploy:** `scripts/smoke.py` completo sem falhas (45/45,
+    2026-09-09) — inclui os blocos G–J/O–R/EE–JJ anteriores **inalterados** (restrição 1,
+    prova de não-regressão) mais o novo bloco T (propor/pendente-invisível/branch_manager-
+    recusado/auto-aprovação-recusada/sem resíduo, mesmo padrão do bloco R para
+    `exchange_rates`).
+
+📌 **Cobertura automatizada:** o bloco **T** de `scripts/smoke.py` cobre MM (parte), NN
+(parte — só a recusa, não a aprovação real, mesma limitação de GG: sem conta admin de
+teste) e QQ(3). **OO, PP, QQ(1)/(2) e a aprovação real de NN não têm cobertura em
+`scripts/smoke.py`** (precisam de fixtures efémeras — um segundo canal, um override
+temporário, um papel `admin` temporário — todas coisas que só fazem sentido dentro de
+`BEGIN`/`ROLLBACK`, nunca commitadas) — confirmadas directamente contra a BD, claims JWT
+reais, nesta sessão; ver secção 7.
 
 ## 5. Regras de execução em produção
 - Executor: o administrador + uma segunda pessoa como testemunha para os testes do ramo
@@ -660,3 +735,82 @@ Confirmado ao vivo (`scripts/smoke.py` 38/38, sem regressão nenhuma):
 **Gate de produção satisfeito para o estado actual** (migrações 0001–0008 + digest acima)
 para as capacidades já cobertas pela execução n.º 1 + as adendas anteriores — item 14
 continua **por fechar**, não é coberto por este gate.
+
+**Adenda, 2026-09-09 — migração 0009, canais no motor de preços (secção 4.10, passos
+MM–SS):** migração 0009 aplicada sobre 0001–0008; digest
+`sha256:72547485e4140155e8528d893c9e636b9acb2263b20b99b3829e34d7e16022f9`. Executor: agente
+(API/BD) — o `.xlsx` real de um canal e a página `/prices` em si ficam para o Pedro, mesma
+limitação de cookie já registada nas adendas i10/item 26.
+
+**Restrição 1 (não-regressão), provada duas vezes, não assumida:** `tmsi.v_branch_prices`
+filtrado a `scope_type='branch'`, as 18 colunas originais, `diff` byte-a-byte contra uma
+baseline capturada **antes** de tocar em qualquer DDL — idêntico, uma vez dentro do
+`BEGIN`/`ROLLBACK` de validação da própria migração, outra vez contra a BD real já com 0009
+aplicada. `scripts/smoke.py` 45/45 — os 38 testes anteriores (blocos A–S) inalterados no
+resultado, mais os 7 novos do bloco T.
+
+Confirmado ao vivo, por passo:
+- **MM/NN:** proposta de margem de canal (`T-0002`×`APAC`) criada por `finance` →
+  `compute_price('T-0002','channel','APAC')` mostra `alert=error`/`errors=[missing channel
+  margin override]` tanto antes como com a proposta `pending` (motor insensível, confirmado);
+  `branch_manager` a tentar aprovar → recusado (`Forbidden`, nenhum id de canal bate certo
+  com `my_branches()`); aprovação real feita com um papel `admin` **efémero**, concedido só
+  dentro da mesma transacção a um utilizador de teste já existente (nunca committed, nunca
+  uma conta admin de teste persistente — a mesma disciplina de sempre) → `price_overrides`
+  materializada com `scope_type='channel'`, `scope_id='APAC'`, `kind='margin'`,
+  `value=0.25`; `compute_price()` reflectiu de imediato `min_price=410.00`.
+- **OO:** `T-0001`×`APAC` (canal, filial de origem TBM), override de margem 0,20 inserido
+  directamente (mesma transacção efémera): `total_cost=48300,0000` (48000 CNY de EXW + 300
+  CNY do escalão 3 de transporte da TBM, sem fee) confirmado; `min_price` devolvido pela BD:
+  **60380,00**. Conferência à mão inicial (60375,00) **não batia** — achado a meio da própria
+  verificação, não silenciado: o CNY arredonda à dezena (`tmsi.currencies.rounding=10`,
+  0001 §2); `round_to(48300/(1-0,20), 10) = round_to(60375, 10) = 60380`;
+  `round_to(60380×1,10, 10) = round_to(66418, 10) = 66420` — bate exactamente com o
+  `ref_price` devolvido. A fórmula estava certa desde o início; o erro era só da
+  conferência à mão, corrigido antes de registar esta linha como OK.
+- **PP:** `T-0001`×`SA` (filial) com `customs_rates` original: `min_price=814,00`,
+  `duty=0,1145`. `customs_rates` de `842430`/`EU` alterado para `0,50` (linha
+  efectivo-datada nova, mesma transacção): `T-0001`×`SA` passou a `min_price=820,00`,
+  `duty=3,3668` — mudou, como esperado. **`T-0001`×`APAC`, mesmo artigo, mesma filial de
+  origem (TBM), medido antes e depois da mesma alteração: `min_price=60380,00` nos dois
+  casos, `duty=0` nos dois casos — zero movimento.** Prova directa de que a cadeia do canal
+  nunca lê `customs_rates`.
+- **QQ(1):** `branch_manager.test`, sem nenhuma outra role, a pedir `compute_price(...,
+  'channel','APAC')` → **zero linhas** (não uma linha com custos `NULL` — zero linhas,
+  `see_sell` nunca fica verdadeiro para este papel em âmbito canal).
+- **QQ(2):** canal de teste temporário `TESTCH2` criado (mesma transacção, filial `SA`),
+  role `agent`/`APAC` atribuída a `branch_manager.test` (escolhido precisamente por não ter
+  `logistics`/`finance`/etc. já concedendo visibilidade — teste limpo, não confundido por
+  outra role): `compute_price(...,'channel','APAC')` → 1 linha (o seu próprio canal);
+  `compute_price(...,'channel','TESTCH2')` → **0 linhas** (canal alheio).
+- **QQ(3):** `INSERT` directo em `tmsi.price_overrides` com `scope_type='channel'`, sessão
+  `finance` real → `new row violates row-level security policy` — confirmado, mesmo padrão
+  de filial (0007).
+- **RR (achado, registado, não corrigido — decisão do Pedro se algum dia quiser estreitar):**
+  o mesmo `branch_manager.test` com a role `agent`/`APAC` acrescentada foi comparado com
+  `logistics.test` **sem role de canal nenhuma**: `logistics.test` a pedir
+  `compute_price(...,'channel','TESTCH2')` (canal onde não tem scope nenhum) → **1 linha**,
+  preço de venda visível. `has_role('logistics')` no `see_sell` não tem condição de âmbito
+  nenhuma — heranda da 0007, nunca restrita a filial, agora naturalmente também alcança
+  canais. Nota ⁸, secção 3.
+- **SS:** `scripts/smoke.py` — 45/45, contra a produção já com 0009 aplicada e o digest
+  acima em vigor.
+
+Zero resíduo confirmado depois de cada bloco: `tmsi.channels` de volta a 1 linha (só APAC),
+`tmsi.price_overrides` de volta a 6 linhas, `tmsi.user_roles` com role `admin` de volta a 1
+(só o Pedro), `tmsi.customs_rates` de `842430`/`EU` de volta a 1 linha (a original) — tudo
+dentro de transacções `ROLLBACK`, nunca commitado, à excepção da aprovação real de NN, que
+foi deliberadamente isolada na sua própria transacção `ROLLBACK` também.
+
+**Achado lateral, fora do âmbito desta migração, registado e não corrigido:** a mesma taxa
+de câmbio CNY implausível já registada em `docs/STATE.md` (item da reconciliação com o
+Excel, 2026-09-09) torna-se visível de outra forma aqui — `T-0004`×`APAC` mostrou
+`min_price=10.704.550,00` CNY para um artigo de USD 1.450 (câmbio EUR→CNY em vigor: 8554,
+devia ser ~8,26). Não é um defeito desta migração — é o mesmo dado corrompido já flagado,
+agora também a distorcer canais, não só filiais.
+
+**Gate de produção satisfeito para o estado actual** (migrações 0001–0009 + digest
+`sha256:72547485e4140155e8528d893c9e636b9acb2263b20b99b3829e34d7e16022f9`) para canais no
+motor de preços — export/impressão de uma lista de canal (o ficheiro real, não só os dados
+que o alimentam) e o varrimento visual continuam **por confirmar pelo Pedro**, mesma
+limitação de cookie de sempre. Item 14 continua por fechar, não é coberto por este gate.
