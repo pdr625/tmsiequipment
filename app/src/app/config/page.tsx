@@ -11,7 +11,6 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageFinanceConfig, canManageOperationalConfig, pricingConfigReadAccess } from '@/lib/auth-guard';
 import {
   ExchangeRateForm,
-  IntercoFeeRow,
   TransportTierRow,
   CustomsRateRow,
   MarginGridRow,
@@ -30,7 +29,9 @@ type ExchangeRate = {
 // 0007 (E4) gave these four the same effective_date/created_at
 // versioning exchange_rates already had — id is now the primary key, the
 // old natural key can carry more than one historical row per identity.
-type IntercoFee = { id: number; supplier_branch: string; seller_branch: string; fee: number; effective_date: string; created_at: string };
+// (interco_fees, the fifth, lost its section here in 0012 — the engine
+// stopped reading it, replaced by tmsi.products.interco_margin; the table
+// itself stays in the DB, history intact, just no longer a live config.)
 type TransportTier = {
   id: number;
   branch_id: string;
@@ -128,7 +129,6 @@ export default async function ConfigPage() {
 
   const [
     { data: exchangeRates },
-    { data: intercoFeesAll },
     { data: transportTiersAll },
     { data: customsRatesAll },
     { data: marginGridsAll },
@@ -146,13 +146,6 @@ export default async function ConfigPage() {
       .order('effective_date', { ascending: false })
       .order('created_at', { ascending: false })
       .overrideTypes<ExchangeRate[], { merge: false }>(),
-    supabase
-      .schema('tmsi')
-      .from('interco_fees')
-      .select('id, supplier_branch, seller_branch, fee, effective_date, created_at')
-      .order('supplier_branch')
-      .order('seller_branch')
-      .overrideTypes<IntercoFee[], { merge: false }>(),
     supabase
       .schema('tmsi')
       .from('transport_tiers')
@@ -196,7 +189,6 @@ export default async function ConfigPage() {
   const hsDescription = (code: string) => hsCodes?.find((h) => h.code === code)?.description ?? '';
   const pendingCount = (table: string) => pendingProposals?.filter((p) => p.target_table === table).length ?? 0;
 
-  const intercoFees = pickActive(intercoFeesAll, (f) => `${f.supplier_branch}|${f.seller_branch}`);
   const transportTiers = pickActive(transportTiersAll, (t) => `${t.branch_id}|${t.tier}`);
   const customsRates = pickActive(customsRatesAll, (c) => `${c.hs_code}|${c.zone}`);
   const marginGrids = pickActive(marginGridsAll, (g) => `${g.branch_id}|${g.tier}`);
@@ -277,31 +269,6 @@ export default async function ConfigPage() {
             </tbody>
           </table>
           {canWriteFinance && <ExchangeRateForm currencies={currencies ?? []} />}
-        </section>
-      )}
-
-      {readCosts && (
-        <section className="mb-10">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-gray-700">Interco fees</h2>
-            <PendingBadge count={pendingCount('interco_fees')} />
-          </div>
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
-                <th className="py-2 pr-4">Supplier branch</th>
-                <th className="py-2 pr-4">Seller branch</th>
-                <th className="py-2 pr-4">Fee</th>
-                {canWriteFinance && <th className="py-2 pr-4">Reason</th>}
-                {canWriteFinance && <th className="py-2 pr-4"></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {intercoFees.map((f) => (
-                <IntercoFeeRow key={f.id} fee={f} canWrite={canWriteFinance} />
-              ))}
-            </tbody>
-          </table>
         </section>
       )}
 

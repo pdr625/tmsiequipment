@@ -15,14 +15,15 @@ import type { ActionState } from '@/lib/action-state';
 
 export type ConfigActionState = ActionState;
 
-// 0007 (E4): none of the five actions below writes exchange_rates/
-// interco_fees/transport_tiers/customs_rates/margin_grids directly any
-// more — tmsi.config_write was dropped from all five, proposeChange()
+// 0007 (E4): none of the actions below writes exchange_rates/
+// transport_tiers/customs_rates/margin_grids directly any more —
+// tmsi.config_write was dropped from all of them, proposeChange()
 // inserts into tmsi.price_proposals instead, and tmsi.proposals_insert
 // (RLS) re-derives exactly the same per-table eligibility config_write
 // used to enforce. canManageFinanceConfig()/canManageOperationalConfig()
 // below are convenience only, same as before — the real boundary is that
-// RLS policy now, not this in-app check.
+// RLS policy now, not this in-app check. (interco_fees had the same shape
+// until 0012 removed its UI — the engine stopped reading that table.)
 
 // exchange_rates is append-only by design (tmsi.fx_rate() always picks
 // the latest effective_date <= the query date) — a proposal here inserts
@@ -46,21 +47,7 @@ export async function addExchangeRate(_prevState: ConfigActionState, formData: F
   return { success: true };
 }
 
-export async function updateIntercoFee(_prevState: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
-  if (!(await canManageFinanceConfig())) return { error: 'Forbidden' };
-
-  const supplier_branch = String(formData.get('supplier_branch') ?? '');
-  const seller_branch = String(formData.get('seller_branch') ?? '');
-  const fee = Number(formData.get('fee') ?? 0);
-  const reason = String(formData.get('reason') ?? '');
-
-  const result = await proposeChange('interco_fees', null, { supplier_branch, seller_branch, fee }, reason);
-  if (result && 'error' in result) return result;
-
-  revalidatePath('/config');
-  revalidatePath('/proposals');
-  return { success: true };
-}
+// updateIntercoFee removed in 0012 — see forms.tsx's note on IntercoFeeRow.
 
 export async function updateTransportTier(_prevState: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
   if (!(await canManageOperationalConfig())) return { error: 'Forbidden' };

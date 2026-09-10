@@ -26,14 +26,16 @@ export async function createProduct(_prevState: CreateProductState, formData: Fo
   const primary_branch = String(formData.get('primary_branch') ?? '');
   const exw_price = Number(formData.get('exw_price') ?? 0);
   const currency = String(formData.get('currency') ?? '');
+  const interco_margin = Number(formData.get('interco_margin') ?? 0);
 
   if (!Number.isFinite(exw_price)) return { error: 'Invalid EXW price' };
+  if (!Number.isFinite(interco_margin)) return { error: 'Invalid interco margin' };
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .schema('tmsi')
     .from('products')
-    .insert({ id, name, item_type, primary_branch, exw_price, currency });
+    .insert({ id, name, item_type, primary_branch, exw_price, currency, interco_margin });
 
   if (error) return { error: error.message };
 

@@ -3,7 +3,14 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: arredondamento, margem plana, fronteiras — ✅ FECHADO 2026-09-10, migrações
+**Etapa actual: margem interco como propriedade do artigo — Fase 1 ✅ FECHADA 2026-09-10,
+migração 0012; Fase 2 (ecrã de filiais/canais, migração 0013) por fazer** (ver secção
+"Margem interco no artigo (migração 0012)" abaixo). Motivação: ao rever a amostra real de
+paridade motor-vs-Excel, o Pedro esclareceu que a comissão/fee interco não é uma
+configuração por par de filiais — é uma propriedade do próprio artigo, variável artigo a
+artigo, nunca cobrada quando a filial vendedora é a de origem.
+
+**Etapa anterior: arredondamento, margem plana, fronteiras — ✅ FECHADO 2026-09-10, migrações
 0010+0011** (ver secção "Arredondamento, margem plana e fronteiras" abaixo). Items 30, 31 e
 34 do `docs/BACKLOG.md` fechados: arredondamento por moeda em configuração (EUR/USD/GBP ao
 cêntimo, CNY à dezena, mínimo sempre para cima); linhas não-equipamento com margem zero e
@@ -25,6 +32,68 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Margem interco no artigo (migração 0012) — Fase 1 ✅ FECHADA 2026-09-10
+
+**Contexto real:** ao encher a amostra de paridade com dados reais (`~/tmp/tmsi-paridade/`,
+nunca entrou no git nem na BD de teste — ver regra na secção correspondente do
+`docs/PARIDADE-PREENCHIMENTO.md`), a comparação motor-vs-Excel isolou uma divergência de
+câmbio, mas ao explicá-la ao Pedro ele redirigiu a sessão: a fee interco não devia ser
+configuração por par de filiais (`tmsi.interco_fees`, `supplier_branch`→`seller_branch`,
+0001) — é "o que a filial de origem ganha por comprar o produto e o vender às restantes
+filiais", variável artigo a artigo, nunca cobrada quando a filial vendedora é a própria
+filial de origem (essa última regra já estava certa desde 0001 — só a fonte do valor muda).
+
+**Desenho, confirmado com o Pedro antes de mexer em código** (`AskUserQuestion`, 3
+perguntas): grelha de margem por escalão mantém-se como está (sem alteração); ecrã novo de
+filiais fica "tudo num ecrã" (Fase 2, por fazer); a fee interco passa a **campo no próprio
+artigo**, não uma tabela à parte.
+
+**Migração 0012** (`supabase/migrations/0012_article_interco_margin.sql`), três peças:
+
+1. `tmsi.products.interco_margin numeric(6,4) not null default 0` (mesmo domínio 0≤x<1 que
+   `interco_fees.fee` já tinha), `default 0` para não partir os 13 produtos reais existentes.
+2. `tmsi.v_products` (0003/0004/0010) ganha `interco_margin`, gated por `can_read_costs()`
+   como `exw_price` — teve de ser **acrescentado no FIM da lista de colunas**, não a seguir a
+   `exw_price` como fazia sentido de leitura: Postgres recusa `CREATE OR REPLACE VIEW` que
+   insira uma coluna a meio da lista (`cannot change name of view column "currency" to
+   "interco_margin"`, apanhado ao vivo na primeira tentativa, não assumido). Achado lateral:
+   ao contrário do que uma sessão anterior tinha registado para 0010, `tmsi.v_products` está
+   hoje na posse de `postgres`, não de `supabase_admin` — confirmado com `pg_views.viewowner`
+   antes de decidir a ligação; `-U postgres` bastou.
+3. `compute_price()` — o bloco da fee (antes: override → flat-priced=0 → canal=0 →
+   venda-a-si-própria=0 → senão `select fee from tmsi.interco_fees where supplier_branch=...
+   and seller_branch=...`, com erro `'missing interco fee'` se a linha não existisse) passa o
+   último passo para `v_fee := p.interco_margin`. Como a coluna é `not null`, o caminho de
+   erro `'missing interco fee'` deixa de poder acontecer — removido, não escondido.
+   `tmsi.interco_fees` mantém-se na BD com o histórico intacto (auditoria), só deixa de ser
+   lida pelo motor.
+
+**Limpeza:** a secção "Interco fees" do `/config` (componente `IntercoFeeRow`, acção
+`updateIntercoFee`, `'interco_fees'` na união `ProposalTargetTable`) foi removida — deixar
+um ecrã editável para uma tabela que o motor já não lê seria enganador, não apenas inútil.
+O ramo de materialização correspondente em `decide_price_proposal()` ficou órfão mas
+inofensivo, não vale a pena mexer.
+
+**Verificação:**
+- `BEGIN`/`ROLLBACK` directo (T-0001, `interco_margin=0.2`): filial não-origem (SA) →
+  `fee=0.2000`; filial de origem (TBM) → `fee=0`; canal (APAC) → `fee=0`
+  (`missing channel margin override` continua a aparecer, condição pré-existente e alheia).
+- Aplicada à BD viva (coluna, vista, função) e confirmada por `psql` directo — sem
+  `interco_fees` no corpo de `compute_price()` a não ser num comentário explicativo.
+- `scripts/smoke.py`: bloco novo `X` (descoberta dinâmica de candidato, `BEGIN`/`ROLLBACK`
+  como `product_manager`, sem tocar em `tmsi.interco_fees`) confirma fee = `interco_margin`
+  do artigo numa filial não-origem, fee = 0 na filial de origem, e ausência de resíduo depois
+  do `ROLLBACK`. **54/54 a passar** ao vivo contra `https://tmsiequipment.duckdns.org`.
+- Formulário do artigo (criar/editar) ganhou o campo; `next build` **não** corrido neste VPS
+  (961 MB RAM, regra em `~/atelier-vps/CLAUDE.md` — builds fora do VPS) — falta confirmação
+  do Pedro via CI verde antes de aplicar o código React em produção (a migração da BD já
+  está aplicada; o código da app ainda não foi implantado).
+
+**Fase 2 (por fazer):** ecrã `/branches` novo para criar/configurar filiais e canais
+("tudo num ecrã", `proposeChange()` + `decide_price_proposal()` estendidos para
+`'branches'`/`'channels'`), e limpeza das colunas vestigiais `tmsi.branches.list_coef`/
+`ref_factor` (mortas desde a 0010, nunca lidas por `compute_price()`).
 
 ## Item 14 — Diagnóstico do desempenho (medição inválida de 06/09) — ✅ DIAGNOSTICADO 2026-09-06
 

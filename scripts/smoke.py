@@ -788,6 +788,62 @@ def block_logistics_channel_scope(logistics_token):
     )
 
 
+# ---------------------------------------------------------------------------
+# X — migration 0012: interco margin/fee is now tmsi.products.interco_margin
+# (an article field), not a lookup in tmsi.interco_fees by (supplier_branch,
+# seller_branch) any more. Dynamic candidate (same shape as block U), single
+# BEGIN/ROLLBACK as product_manager (RLS: tmsi.products_write_pm) — never
+# touches tmsi.interco_fees itself, that table is inert history now, not
+# what this checks.
+# ---------------------------------------------------------------------------
+def block_interco_margin(claims_uuid):
+    candidates = psql_rows(
+        "select p.id, p.primary_branch, b.id from tmsi.products p cross join tmsi.branches b "
+        "where (b.id = any(p.sold_in) or b.id = p.primary_branch) and b.id <> p.primary_branch "
+        "and p.item_type in ('equipment','spare_part') and p.status = 'active' limit 1;"
+    )
+    if not candidates:
+        check("X: interco margin is an article property", True, "SKIP — no cross-branch active equipment/spare_part product found")
+        return
+    product_id, origin_branch_id, other_branch_id = candidates[0]
+
+    current_rows = psql_rows(f"select interco_margin from tmsi.products where id = '{product_id}';")
+    current_margin = Decimal(current_rows[0][0])
+    new_margin = min(current_margin + Decimal("0.15"), Decimal("0.9"))
+
+    sql = f"""
+begin;
+update tmsi.products set interco_margin = {new_margin} where id = '{product_id}';
+select fee from tmsi.compute_price('{product_id}','branch','{other_branch_id}');
+select fee from tmsi.compute_price('{product_id}','branch','{origin_branch_id}');
+rollback;
+"""
+    rc, out, err = psql(sql, claims_uuid=claims_uuid)
+    lines = [l for l in out.splitlines() if l != ""]
+    if rc != 0 or len(lines) < 2:
+        check("X: interco margin write + compute_price (transactional)", False, f"psql error: {err}")
+        return
+    other_fee, origin_fee = Decimal(lines[0]), Decimal(lines[1])
+    check(
+        "X: a non-origin branch's fee == the article's own interco_margin (not a per-branch-pair lookup)",
+        other_fee == new_margin,
+        f"interco_margin={new_margin} got_fee={other_fee}",
+    )
+    check(
+        "X: the origin branch selling to itself is still always fee 0, regardless of interco_margin",
+        origin_fee == 0,
+        f"got_fee={origin_fee}",
+    )
+
+    # Confirm ROLLBACK really left no trace.
+    confirm = psql_rows(f"select interco_margin from tmsi.products where id = '{product_id}';")
+    check(
+        "X: no residue after ROLLBACK — interco_margin back to its pre-test value",
+        confirm and Decimal(confirm[0][0]) == current_margin,
+        f"got={confirm[0][0] if confirm else None} expected={current_margin}",
+    )
+
+
 def main():
     print(f"=== TMSI smoke — {BASE} — {date.today().isoformat()} ===")
     block_health()
@@ -820,6 +876,7 @@ def main():
     block_rounding(tokens["finance"])
     block_origin_country_boundary(tokens["finance"], tokens["logistics"])
     block_logistics_channel_scope(tokens["logistics"])
+    block_interco_margin(claims["product_manager"])
 
     total = len(RESULTS)
     print(f"\n=== {total - FAILURES}/{total} passed ===")

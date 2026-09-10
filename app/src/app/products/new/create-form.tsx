@@ -119,6 +119,26 @@ export function CreateProductForm({
         </div>
       </div>
 
+      <div>
+        <label htmlFor="interco_margin" className="mb-1 block text-sm font-medium">
+          Interco margin (0–1, e.g. 0.20 = 20%)
+        </label>
+        <input
+          id="interco_margin"
+          name="interco_margin"
+          type="number"
+          step="0.0001"
+          min="0"
+          max="0.9999"
+          defaultValue="0"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          What the primary branch earns reselling this article to the other branches. Never charged
+          when the primary branch sells to itself.
+        </p>
+      </div>
+
       {state?.error && (
         <p role="alert" className="text-sm text-red-600">
           {state.error}

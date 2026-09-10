@@ -11,7 +11,6 @@ import { useActionState } from 'react';
 import { ErrorText } from '@/lib/error-text';
 import {
   addExchangeRate,
-  updateIntercoFee,
   updateTransportTier,
   updateCustomsRate,
   updateMarginGrid,
@@ -98,70 +97,10 @@ export function ExchangeRateForm({ currencies }: { currencies: { code: string }[
   );
 }
 
-export function IntercoFeeRow({
-  fee,
-  canWrite,
-}: {
-  fee: { supplier_branch: string; seller_branch: string; fee: number };
-  canWrite: boolean;
-}) {
-  const [state, formAction, pending] = useActionState<ConfigActionState, FormData>(updateIntercoFee, undefined);
-  const formId = `fee-${fee.supplier_branch}-${fee.seller_branch}`;
-
-  return (
-    <tr className="border-b border-gray-100">
-      <td className="py-2 pr-4">
-        {fee.supplier_branch}
-        {canWrite && (
-          <form id={formId} action={formAction}>
-            <input type="hidden" name="supplier_branch" value={fee.supplier_branch} />
-            <input type="hidden" name="seller_branch" value={fee.seller_branch} />
-          </form>
-        )}
-      </td>
-      <td className="py-2 pr-4">{fee.seller_branch}</td>
-      <td className="py-2 pr-4">
-        {canWrite ? (
-          <input
-            form={formId}
-            name="fee"
-            type="number"
-            step="0.0001"
-            defaultValue={fee.fee}
-            className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
-          />
-        ) : (
-          fee.fee
-        )}
-        <ErrorText state={state} />
-      </td>
-      {canWrite && (
-        <td className="py-2 pr-4">
-          <input
-            form={formId}
-            name="reason"
-            required
-            placeholder="Why this change?"
-            className="w-36 rounded-md border border-gray-300 px-2 py-1 text-sm"
-          />
-        </td>
-      )}
-      {canWrite && (
-        <td className="py-2 pr-4">
-          <button
-            form={formId}
-            type="submit"
-            disabled={pending}
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
-          >
-            {pending ? '…' : 'Propose'}
-          </button>
-          {state && 'success' in state && <p className="mt-1 text-xs text-green-700">Submitted.</p>}
-        </td>
-      )}
-    </tr>
-  );
-}
+// IntercoFeeRow removed in 0012 — interco fee/margin is now
+// tmsi.products.interco_margin (an article field, products/[id]/edit-form.tsx),
+// not a per (supplier_branch, seller_branch) pair any more. tmsi.interco_fees
+// keeps its history in the DB, just isn't a live config the engine reads.
 
 export function TransportTierRow({
   tier,

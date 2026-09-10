@@ -31,6 +31,7 @@ type Product = {
   origin_country: string | null;
   currency: string | null;
   exw_price: number | null;
+  interco_margin: number | null;
   primary_branch: string;
   hs_code: string | null;
   gross_weight_kg: number | null;
@@ -232,6 +233,25 @@ export function EditProductForm({
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label htmlFor="interco_margin" className="mb-1 block text-sm font-medium">
+            Interco margin (0–1, e.g. 0.20 = 20%)
+          </label>
+          <input
+            id="interco_margin"
+            name="interco_margin"
+            type="number"
+            step="0.0001"
+            min="0"
+            max="0.9999"
+            defaultValue={product.interco_margin ?? 0}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            What the primary branch earns reselling this article to the other branches. Never charged
+            when the primary branch sells to itself.
+          </p>
         </div>
         <div>
           <span className="mb-1 block text-sm font-medium">Sold in</span>

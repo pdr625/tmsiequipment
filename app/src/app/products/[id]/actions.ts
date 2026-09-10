@@ -48,6 +48,7 @@ export async function updateProduct(_prevState: UpdateProductState, formData: Fo
     origin_country: nullableString(formData, 'origin_country'),
     currency: String(formData.get('currency') ?? ''),
     exw_price: Number(formData.get('exw_price') ?? 0),
+    interco_margin: Number(formData.get('interco_margin') ?? 0),
     primary_branch: String(formData.get('primary_branch') ?? ''),
     sold_in: formData.getAll('sold_in').map(String),
     hs_code: nullableString(formData, 'hs_code'),

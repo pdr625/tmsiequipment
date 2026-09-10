@@ -33,6 +33,7 @@ type Product = {
   origin_country: string | null;
   currency: string | null;
   exw_price: number | null;
+  interco_margin: number | null;
   primary_branch: string;
   hs_code: string | null;
   gross_weight_kg: number | null;
@@ -245,6 +246,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         {canReadCosts && (
           <p className="mt-1">
             <span className="text-gray-500">EXW:</span> {product.exw_price} {product.currency} ·{' '}
+            <span className="text-gray-500">Interco margin:</span> {product.interco_margin ?? '—'} ·{' '}
             <span className="text-gray-500">SAP (SA/CN/US/UK):</span> {product.sap_code_sa ?? '—'} /{' '}
             {product.sap_code_cn ?? '—'} / {product.sap_code_us ?? '—'} / {product.sap_code_uk ?? '—'}
           </p>

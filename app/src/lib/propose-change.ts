@@ -8,9 +8,12 @@
 import { createSupabaseServerClient } from './supabase-server';
 import type { ActionState } from './action-state';
 
+// interco_fees dropped in 0012 — the engine stopped reading it (replaced
+// by tmsi.products.interco_margin), so the app no longer proposes changes
+// to it. tmsi.decide_price_proposal() keeps its (now unreachable from the
+// app) interco_fees branch — harmless dead code, not worth touching.
 export type ProposalTargetTable =
   | 'exchange_rates'
-  | 'interco_fees'
   | 'transport_tiers'
   | 'customs_rates'
   | 'margin_grids'
