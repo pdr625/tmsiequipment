@@ -214,24 +214,24 @@ MM–SS) tem as 7 provas completas; `scripts/smoke.py` 45/45. Export/impressão 
 canal (o ficheiro real) fica por confirmar pelo Pedro — mesma limitação de cookie de sempre.
 Detalhe completo: `docs/STATE.md`, secção "Canais no motor de preços".
 
-**30. Sem regra própria para linhas não-equipamento (margem zero, preço=EXW)** —
-**DIAGNOSTICADO 2026-09-09.** O Excel trata opções com ajuste, CONDATLINK, aluguer mensal e
-artigo não devolvido como "margem zero, preço interco = EXW" — o motor não implementa nada
-disto: transporte/direitos são zerados para `option`/`service` (0001:447,458), mas a taxa
-intercompany só zera em venda "em casa", sem condição nenhuma de `item_type` (0001:436); a
-margem de uma opção é **herdada do produto-pai** (0001:476-478), não zero; um `service` cai
-na grelha normal da filial, como um `equipment`. "Artigo não devolvido" não tem campo nenhum
-no schema. **Bloqueia a paridade** para qualquer linha fora de `equipment`/`spare_part`.
-Detalhe completo: `docs/MODEL-GAP-ANALYSIS.md`, item 11.
+~~**30. Sem regra própria para linhas não-equipamento (margem zero, preço=EXW)**~~ ✅
+**fechado 2026-09-10 — migração 0010.** `option`/`service` passam a ter `fee=0` e
+`margin=0` sempre (não só em venda "em casa"), verificado antes do fallback de grelha/canal
+— substitui por completo o caminho antigo de "opção herda a margem do pai". Hand-verificado
+em três casos reais (`T-0006`/`T-0007`/`T-0008`, `docs/VERIFICATION-PROTOCOL.md` passo WW).
+**Por decidir separadamente, registado, não resolvido aqui**: se o catálogo real tiver
+opções que devam continuar a herdar a margem do pai (bundles) em vez desta regra plana,
+precisa de um sub-tipo que o schema não tem hoje — a regra actual aplica-se a **todas** as
+opções/serviços, sem distinção. "Artigo não devolvido" continua sem campo próprio no
+schema — se corresponder a `item_type='service'` na prática, já está coberto; se não, é um
+achado novo, não confirmado ainda.
 
-**31. `origin_country` não está atrás da fronteira de custos** — **DIAGNOSTICADO
-2026-09-09.** A decisão do Pedro (2026-09-09, "Supplier e Origin Country ficam atrás da
-fronteira de custos, como o EXW") não bate certo com o código: `supplier_id` está
-correctamente em `can_read_costs()` (0003:153), mas `origin_country` ficou na camada
-"operational" (0003:140), visível também a `logistics`. Não bloqueia paridade nem
-importação — é higiene de acesso, correcção pequena e de baixo risco (mover uma coluna de
-tier no `tmsi.v_products`, mesmo padrão do `supplier_id` ao lado). Detalhe completo:
-`docs/MODEL-GAP-ANALYSIS.md`, item 9.
+~~**31. `origin_country` não está atrás da fronteira de custos**~~ ✅ **fechado 2026-09-10 —
+migração 0010.** Movido de `can_read_operational()` para `can_read_costs()` em
+`tmsi.v_products`, exactamente a mesma condição do `supplier_id` ao lado. Provado no ramo
+negado, ao nível do payload (`docs/VERIFICATION-PROTOCOL.md` passo VV: papel com custos vê
+o país, papel sem custos recebe `null`) — nunca apareceu em nenhum export (confirmado por
+leitura de código), por isso não há prova de conteúdo de ficheiro a fazer aqui.
 
 **32. Base do direito aduaneiro fixa, não configurável por zona** — **REGISTADO
 2026-09-09**, pergunta em aberto do Pedro, não uma correcção pedida ainda. `v_duty :=
@@ -250,12 +250,17 @@ inteiramente na leitura das colunas do Excel, nunca no schema — nada a alargar
 renomear, nada a corrigir. Único efeito prático: nos 18 códigos HS, a percentagem é hoje
 igual nas quatro zonas, por isso nenhum número muda com este achado.
 
-**34. `ref_factor`/`list_coef` sem interface de edição na app** — **REGISTADO 2026-09-09.**
-O cálculo já está correcto (`v_ref := min_price × branches.ref_factor`, 0001:489; valor por
-omissão 1,100 em todas as filiais, batendo certo com "REFERENCE PRICE = MINIMUM × 1,10" do
-Excel) — só falta forma de editar pela app quando precisar de deixar de ser uniforme, e
-`branches` não é um dos 6 `target_table` do workflow de aprovação da 0007, por isso uma
-edição directa à tabela também não passa por aprovação hoje. Sem urgência. Detalhe completo:
+~~**34. `ref_factor`/`list_coef` sem interface de edição na app**~~ ✅ **fechado 2026-09-10 —
+migração 0010.** `ref_factor`/`list_coef` saíram de `tmsi.branches` para
+`tmsi.branch_pricing_params`, efectivo-datado como `margin_grids`/`transport_tiers`, novo
+`target_table` do workflow de aprovação da 0007 — aprovação cai no mesmo mecanismo genérico
+que já cobre `margin_grids` (um `branch_manager` aprova para a sua própria filial, sem
+código novo). `/config` ganhou uma secção só para `ref_factor` (`list_coef` continua sem
+campo no formulário — carregado do valor actual pelo próprio servidor, nunca de um campo).
+Fluxo completo propor→aprovar→efeito provado ao vivo (`docs/VERIFICATION-PROTOCOL.md`
+passo YY) — **apanhou um bug real no caminho** (as duas tabelas novas ficaram sem
+privilégios para `authenticated`/`postgres`, corrigido pela migração 0011 antes de fechar).
+Detalhe completo:
 `docs/MODEL-GAP-ANALYSIS.md`, item 4.
 
 ## ⚪ Baixas — registadas, sem urgência
