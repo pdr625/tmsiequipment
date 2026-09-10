@@ -11,8 +11,10 @@ preço interco=EXW; `origin_country` atrás da fronteira de custos; `logistics` 
 canais sem âmbito; `ref_factor` ganhou UI e workflow de aprovação. Item 32 continua aberto
 (pergunta ao Pedro, não uma correcção). Dois bugs reais já em produção (não desta sessão,
 de 0009 no dia anterior) apanhados e corrigidos: o dashboard e a página de propostas ainda
-liam a coluna `price_overrides.branch_id`, renomeada pela 0009. Migração 0009/item 29/item
-33 continuam fechados (secção própria abaixo); item 28 e item 14 idem.
+liam a coluna `price_overrides.branch_id`, renomeada pela 0009. **Taxa de câmbio CNY/GBP —
+✅ corrigida pelo Pedro logo a seguir a este fecho** (CNY=7,78, GBP=0,88; ver "Achado
+lateral" na secção abaixo para a volta que a CNY deu, com uma correcção a meio). Migração
+0009/item 29/item 33 continuam fechados (secção própria abaixo); item 28 e item 14 idem.
 Item 28 e item 14 continuam fechados (secções próprias abaixo); E0, E1, E2, E3 (i1–i10), E4,
 E5-VPS e as migrações 0003/0004/0005/0006/0007/0008 estão fechadas.
 
@@ -342,9 +344,15 @@ depois: OK, confirmado também por HTTP real (as duas tabelas, antes `403`, depo
 7. Fluxo do `ref_factor` completo, com o bug real do caminho documentado acima.
 8. Smoke completo, 51/51, três vezes.
 
-**Achado lateral, não corrigido:** a taxa de câmbio CNY implausível (8554 em vigor)
-continua por corrigir — o Pedro tinha pedido isto como passo manual antes desta sessão,
-ainda não feito à data deste fecho; continua a distorcer preços de filial e de canal.
+**Achado lateral — ✅ corrigido pelo Pedro, depois deste fecho (2026-09-10).** A taxa CNY
+foi corrigida em duas tentativas: a primeira (`0,121`) trocou o sentido do campo
+(`rate_per_eur` é "quantas unidades desta moeda valem 1 EUR" — um número grande para CNY,
+não pequeno; confirmado ao vivo com um caso real, T-0004×TBM a converter para só 151,42
+CNY, óbvio a mais baixo) — apanhado e explicado, corrigido de imediato para `7,78`
+(fonte: Google, taxa do dia). Confirmado ao vivo depois da correcção: `fx_rate('CNY')`
+= 7,780000; T-0004×TBM agora converte para ~9.736 CNY (bate com a conta à mão, 1450 USD →
+~1251 EUR → ×7,78); `smoke.py` 51/51 sem regressão. GBP já tinha sido corrigido
+correctamente à primeira (`0,88`, mesmo sentido do campo).
 
 **F5 — protocolo:** `docs/VERIFICATION-PROTOCOL.md` — matriz (secção 3, notas ⁹/¹⁰, uma
 linha renomeada, footnote ⁸ actualizada para o estado actual do `logistics`) e secção 4.11
