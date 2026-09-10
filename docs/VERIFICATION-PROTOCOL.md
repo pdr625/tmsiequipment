@@ -54,13 +54,13 @@ partir do desenho original. 16 correcções feitas à proposta inicial; detalhe 
 |---|---|---|---|---|---|---|---|---|
 | Preços de venda | ✅ | ✅ | ✅ | ◐ | ✅ ⁸ | ◐ | ◐ ⁸ | ✅ |
 | Custos (EXW, custo total, margens, fees) | ✅ | ✅ | ✅ | ◐ ¹ | ❌ | ❌ | ❌ | ✅ |
-| Códigos SAP / fornecedor | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| Códigos SAP / fornecedor / país de origem ⁹ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
 | HS / peso / dimensões (operacional) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
 | Breakdown do motor de preços | ✅ | ✅ | ✅ | ◐ filial pedida | ❌ | ❌ | ❌ | ✅ |
 | Criar/editar produtos | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Propor configuração (câmbios, fees, transporte, direitos, margens) ⁶ | ✅ | ❌ | ✅ | ❌ | ◐ transporte/direitos | ❌ | ❌ | ❌ |
+| Propor configuração (câmbios, fees, transporte, direitos, margens, arredondamento, factor de referência) ⁶ ¹⁰ | ✅ | ❌ | ✅ | ❌ | ◐ transporte/direitos | ❌ | ❌ | ❌ |
 | Propor overrides ⁶ | ✅ | ❌ | ✅ | ◐ transp./margem/coef, filial própria | ◐ só duty, qualquer filial | ❌ | ❌ | ❌ |
-| **Aprovar modificações propostas (workflow, 0007)** ⁶ | ✅ **(incl. as suas próprias — nota)** | ❌ | ❌ | ◐ só filial própria, só tipos com filial (transporte/margem/coef de overrides, `transport_tiers`, `margin_grids`) | ❌ | ❌ | ❌ | ❌ |
+| **Aprovar modificações propostas (workflow, 0007)** ⁶ | ✅ **(incl. as suas próprias — nota)** | ❌ | ❌ | ◐ só filial própria, só tipos com filial (transporte/margem/coef de overrides, `transport_tiers`, `margin_grids`, `branch_pricing_params` ¹⁰) | ❌ | ❌ | ❌ | ❌ |
 | Ver valores de overrides de preço | ✅ | ✅ | ✅ | ◐ filial própria | ◐ só `kind=duty` ³ | ❌ | ❌ | ✅ |
 | Auditoria global | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
 | Dashboard (acesso à página) | ✅ | ✅ | ✅ | ✅ ² | ❌ | ❌ | ❌ | ✅ |
@@ -160,17 +160,54 @@ ter cálculo próprio.** `tmsi.compute_price()` ganha um âmbito explícito (`p_
 intercompany, **sem** direitos aduaneiros, sempre, nunca uma condição sobre o nome do
 canal), não "o preço da filial com um desconto" — `tmsi.channels.margin_delta`, nunca lido
 por ninguém antes desta migração, foi removido, não migrado (o seu valor não sobrevive ao
-novo modelo de margem por artigo × canal, via override — nunca uma grelha). `logistics` vê
-o preço de venda de **qualquer** canal sem restrição (célula acima) — herdado tal e qual da
-sua própria cláusula da 0007, nunca teve condição de âmbito; um `agent` vê apenas o(s)
-canal(is) do seu próprio `tmsi.user_roles.channel_id` (célula "◐"), a mesma fronteira que já
-tinha para a filial de origem do seu canal, agora também directamente pelo âmbito canal. As
+novo modelo de margem por artigo × canal, via override — nunca uma grelha). `logistics` viu,
+por um dia (0009→0010), o preço de venda de **qualquer** canal sem restrição — herdado tal e
+qual da sua própria cláusula da 0007, que nunca teve condição de âmbito porque só existia
+âmbito de filial até 0009. **Corrigido pela 0010 (item D, achado da própria verificação
+desta secção)**: `has_role('logistics')` só concede visibilidade de venda para âmbito filial
+agora — a intenção original (0001), nunca alcançando canal nenhum; a célula "✅" acima
+reflecte o estado actual (só filiais). Um `agent` vê apenas o(s) canal(is) do seu próprio
+`tmsi.user_roles.channel_id` (célula "◐"), a mesma fronteira que já tinha para a filial de
+origem do seu canal, agora também directamente pelo âmbito canal — não tocado pela 0010. As
 duas linhas novas da matriz (propor/aprovar overrides de canal) seguem exactamente o
 workflow da 0007 (nota ⁶) — só `kind` `margin`/`transport` fazem sentido para um canal
 (fee/direitos são sempre zero, propô-los seria um caminho morto) e a aprovação cai sempre em
 admin-only pela mesma mecânica que já cobre `exchange_rates`/`interco_fees`/`customs_rates`
 (nenhum `branch_manager` tem um canal em `my_branches()`). Testado na secção 4.10, passos
 MM–SS.
+
+⁹ **Migração 0010 (item 31, 2026-09-10) — `origin_country` move-se para a mesma fronteira do
+`supplier_id`.** Era classificado "operational" em `tmsi.v_products` (0003/0004), visível
+também a `logistics`; passou a `can_read_costs()`, exactamente a mesma condição do
+`supplier_id` ao lado — a decisão do Pedro já registada em `docs/MODEL-GAP-ANALYSIS.md`
+item 9 ("Supplier e Origin Country ficam atrás da fronteira de custos"), só agora aplicada
+ao código. Nunca aparecia em nenhum export (confirmado por leitura de código,
+`products/export/route.ts`/`prices/export/route.ts` nunca o seleccionam) — a prova de
+conteúdo de ficheiro que a AA/i10 exigiria é, neste caso, vazia por construção, não por
+verificação de um ficheiro real; a ausência do **payload** da API está sim provada ao vivo
+(secção 4.11, passo UU). Testado na secção 4.11, passo UU.
+
+¹⁰ **Migração 0010 (item 34, 2026-09-10) — `ref_factor`/`list_coef` deixam de ser colunas
+soltas em `tmsi.branches` (sem UI, sem workflow) e passam a `tmsi.branch_pricing_params`,
+com o mesmo desenho efectivo-datado de `margin_grids`/`transport_tiers` (0007) — inserida
+uma nova linha nunca uma edição em vigor. O arredondamento por moeda ganha o mesmo
+tratamento (`tmsi.currency_rounding_params`, substitui `tmsi.currencies.rounding`, coluna
+removida) — todo o parâmetro que o motor lê é agora append-only e passa pelo workflow, sem
+excepção. `branch_pricing_params` tem identidade de filial (o `branch_id` da própria linha)
+— aprovação cai no **mesmo mecanismo genérico** que já cobre `margin_grids`/
+`transport_tiers`: um `branch_manager` pode aprovar para a sua própria filial, sem código
+novo nenhum em `tmsi.decide_price_proposal()`, confirmado ao vivo (secção 4.11, passo XX).
+`currency_rounding_params` não tem identidade de filial (mesma razão que `exchange_rates`) —
+admin-only. Apenas `ref_factor` tem campo no formulário de `/config`; `list_coef` continua
+sem interface (era assim antes desta migração também), transportado sem alteração pela
+própria acção do servidor, nunca aceite de um campo do formulário. **Achado real, apanhado
+pela própria verificação desta secção, corrigido em 0011 antes de fechar**: as duas tabelas
+novas foram criadas com uma ligação que corria como `supabase_admin` (necessária só para
+`tmsi.v_products`, ver 0011), e por isso nunca herdaram a regra `alter default privileges`
+que dá a `authenticated`/`service_role` acesso a toda a tabela nova criada por `postgres` —
+nem a leitura (`/config` não conseguia sequer mostrar a secção nova) nem a escrita
+(`tmsi.decide_price_proposal()`, por ser dono `postgres`, não conseguia materializar uma
+proposta aprovada) funcionavam antes de 0011. Testado na secção 4.11, passos WW–XX.
 
 ## 4. Protocolo de teste por papel
 Para cada papel testado: um utilizador dedicado a testes (em produção: conta de teste real
@@ -417,6 +454,60 @@ teste) e QQ(3). **OO, PP, QQ(1)/(2) e a aprovação real de NN não têm cobertu
 temporário, um papel `admin` temporário — todas coisas que só fazem sentido dentro de
 `BEGIN`/`ROLLBACK`, nunca commitadas) — confirmadas directamente contra a BD, claims JWT
 reais, nesta sessão; ver secção 7.
+
+### 4.11 Arredondamento, margem plana, fronteiras (migração 0010, adicionado nesta revisão)
+TT. **Arredondamento, verificado de forma independente, não só API-vs-BD:** para um artigo
+    real em EUR (cêntimo) e um em CNY (dezena), o `total_cost`/`margin`/`list_coef` crus
+    (nunca arredondados) alimentam um cálculo feito **fora** do motor (Python, `decimal`) do
+    mínimo — `ceil` ao passo da moeda, nunca `round` nem para baixo — e comparado ao
+    `min_price` devolvido; bate exacto. O breakdown nunca arredonda antes do fim: `interco +
+    transport + duty = total_cost`, exacto, sem margem de erro (provado por igualdade, não
+    por proximidade).
+UU. **Referência, a partir do mínimo já arredondado:** `ref_price` recalculado em Python
+    como `round_nearest(min_price_JÁ_ARREDONDADO × ref_factor, passo)` — usar o `total_cost`
+    cru em vez do `min_price` arredondado dava um valor diferente, confirmado (não é a mesma
+    conta duas vezes, é uma dependência real, verificada).
+VV. **`origin_country` atrás de `can_read_costs()` (item 31):** papel com custos vê o país
+    de origem no payload de `tmsi.v_products`; papel sem custos recebe `null` — nunca um
+    erro, nunca ausente da resposta, exactamente o mesmo padrão de mascaramento que
+    `exw_price`/`supplier_id` já tinham. Nunca apareceu em nenhum export (`products/
+    export/route.ts`/`prices/export/route.ts` nunca o seleccionam, confirmado por leitura
+    de código — nota ⁹) — não há ficheiro real para verificar aqui, ao contrário de AA/i10.
+WW. **Linhas não-equipamento, margem plana (item 30):** uma opção com ajuste positivo e uma
+    com ajuste negativo (`T-0006`/`T-0007`, `±` EXW) e um serviço (`T-0008`, subscrição),
+    vendidos fora da filial de origem — `fee=0`, `margin=0`, `interco = exw_local` exacto,
+    nos três, conferido à mão. O caminho antigo (opção herda a margem do produto-pai) já não
+    existe — confirmado pela ausência total de diferença entre o `min_price` de uma opção
+    calculado com override de margem explícito vs sem — ambos batem com "margem zero",
+    nunca com a margem do pai. O `alert` sobe correctamente a `critical` (margem zero está
+    abaixo do limiar) — não é um efeito colateral escondido, é o sinal a funcionar.
+XX. **`logistics` deixa de ver canais (item D):** um `logistics` de teste, sem role `agent`
+    nenhuma, a pedir `compute_price(..., 'channel', <qualquer canal activo>)` → zero linhas
+    — antes desta migração via sempre a linha (achado da verificação da 0009, secção 4.10
+    nota ⁸). `agent`/filial continuam exactamente como estavam (restrição 3, nunca alargar).
+YY. **Fluxo completo do factor de referência, com um bug real apanhado a meio:** propor um
+    `ref_factor` novo para uma filial (finance) → o `branch_manager` **dessa mesma filial**
+    aprova, pelo mecanismo genérico já usado por `margin_grids` (nenhum código novo em
+    `tmsi.decide_price_proposal()`) → `compute_price()` reflecte de imediato (`ref_price`
+    recalculado, `min_price` inalterado). **Na primeira tentativa, falhou**: `permission
+    denied for table branch_pricing_params` — as tabelas novas desta migração tinham sido
+    criadas por uma ligação `supabase_admin` (necessária só para `tmsi.v_products`, ver
+    0011) e nunca herdaram os privilégios por omissão que `postgres` já tinha para tabelas
+    suas. Corrigido pela migração 0011 (mesma sessão, antes de fechar) — repetido depois,
+    OK. `list_coef` confirmado transportado sem alteração (não é um campo do formulário).
+ZZ. **Sweep de regressão pós-deploy:** `scripts/smoke.py` completo sem falhas — 45/45
+    anteriores (blocos A–T) inalterados, mais os quatro blocos novos desta migração (U/V/W,
+    51/51 no total) — corrido três vezes nesta sessão (antes do deploy de 0010, depois do
+    deploy de 0010, depois de aplicar 0011), sempre verde.
+
+📌 **Cobertura automatizada:** os blocos **U/V/W** de `scripts/smoke.py` cobrem TT (parte —
+o mínimo, não o breakdown-soma nem a UU independente em Python dentro do smoke em si, essa
+lógica vive no próprio bloco U), UU, VV e XX. **A soma exacta do breakdown, a ausência do
+`option`-herda-margem (WW) e o fluxo completo de aprovação do `ref_factor` (YY) não têm
+cobertura em `scripts/smoke.py`** (precisam de comparação por igualdade exacta fora de uma
+única asserção dinâmica, ou de um papel `branch_manager`/`admin` a aprovar de facto — a
+mesma limitação de GG/NN) — confirmadas directamente contra a BD, claims JWT reais, nesta
+sessão; ver secção 7.
 
 ## 5. Regras de execução em produção
 - Executor: o administrador + uma segunda pessoa como testemunha para os testes do ramo
@@ -814,3 +905,73 @@ agora também a distorcer canais, não só filiais.
 motor de preços — export/impressão de uma lista de canal (o ficheiro real, não só os dados
 que o alimentam) e o varrimento visual continuam **por confirmar pelo Pedro**, mesma
 limitação de cookie de sempre. Item 14 continua por fechar, não é coberto por este gate.
+
+**Adenda, 2026-09-10 — migrações 0010+0011, arredondamento/margem plana/fronteiras (secção
+4.11, passos TT–ZZ):** 0010 aplicada sobre 0001–0009; 0011 (correcção a 0010, mesma sessão,
+achado da própria verificação) aplicada a seguir. Digest
+`sha256:f6d446d32d35f6fb23dbe05efc905441cd6f44dae34df87a1fcd3dcb0978bf54`. Executor: agente
+(API/BD) — o browser fica para o Pedro (um produto em EUR e um em CNY, `/config`, uma lista
+de canal), mesma limitação de sempre.
+
+**Restrição 1 (não-regressão), reformulada para o que esta migração realmente muda**: uma
+baseline completa (filial + canal, todos os produtos, as 18 colunas de `compute_price()`)
+capturada antes de tocar em qualquer DDL; toda a diferença depois — linha a linha, conferida
+à mão — explicada por (A) o arredondamento ou (B) a margem plana das linhas não-equipamento,
+nenhuma outra. `scripts/smoke.py` corrido três vezes (antes do deploy, depois do deploy,
+depois de 0011) — 45 verificações antigas inalteradas, 6 novas (U/V/W), sempre 51/51.
+
+Confirmado ao vivo, por passo:
+- **TT/UU:** artigo EUR (`T-0003`×`SA`) e artigo CNY (`T-0001`×`TBM`) — mínimo confere com
+  `ceil` ao passo da moeda a partir do `total_cost`/`margin`/`list_coef` crus (cálculo
+  independente, Python, fora do motor); referência confere com `round_nearest` a partir do
+  **mínimo já arredondado**, não do total cru — trocar um pelo outro dava um número
+  diferente, confirmado. Breakdown: `interco+transport+duty=total_cost`, exacto.
+- **VV:** `origin_country` de `T-0001` — finance vê `"CN"`, logistics recebe `null` (não um
+  erro). Confirmado por leitura de código que nenhum export alguma vez o pediu — nada a
+  verificar num ficheiro real aqui.
+- **WW:** `T-0006` (opção, +120 EXW), `T-0007` (opção, −35 EXW), `T-0008` (serviço) vendidos
+  fora da filial de origem — `fee=0`, `margin=0`, `interco=exw_local` exacto nos três; o
+  caminho antigo (opção herda margem do pai) confirmado ausente — o `alert` sobe a
+  `critical` correctamente (margem zero, abaixo do limiar).
+- **XX:** `logistics.test`, sem role `agent`, a pedir um canal activo qualquer →
+  `compute_price()` devolve zero linhas — confirmado que via sempre a linha antes desta
+  migração (a mesma sessão anterior tinha registado isto como achado, não corrigido até
+  agora).
+- **YY:** proposta de `ref_factor` novo para `CORP` (finance) → `branch_manager` da CORP
+  aprova (mecanismo genérico, sem código novo) → `ref_price` recalculado
+  (`7672,56 × 1,200 = 9207,07`), `min_price` inalterado. **Falhou na primeira tentativa**:
+  `permission denied for table branch_pricing_params` — apanhado por esta mesma
+  verificação, corrigido pela migração 0011 antes de fechar (`tmsi.branch_pricing_params`/
+  `tmsi.currency_rounding_params` tinham sido criadas por uma ligação `supabase_admin`,
+  necessária só para `tmsi.v_products` nesta sessão — nunca herdaram os privilégios por
+  omissão que `postgres` já tinha; corrigido por reatribuição de dono + grant explícito).
+  Repetido depois de 0011: OK, confirmado também por HTTP real (leitura das duas tabelas
+  novas, antes `403`/`42501`, depois `200`).
+- **ZZ:** `scripts/smoke.py` — 51/51, três vezes (antes do deploy, depois do deploy de
+  0010, depois de aplicar 0011).
+
+**Achado lateral, fora do âmbito, não corrigido:** a mesma taxa de câmbio CNY implausível já
+registada (8554 em vigor) continua a distorcer preços de filial e de canal — não tocada
+nesta sessão, o Pedro tinha pedido a correcção como passo manual antes desta sessão, ainda
+por fazer à data deste fecho.
+
+**Achados reais, apanhados pela própria verificação e corrigidos antes de fechar, não só
+documentados:** (1) `tmsi.v_products` pertence a `supabase_admin`, não a `postgres` —
+`postgres` não é superuser real neste ambiente (`rolsuper=false`, só `rolbypassrls=true`) —
+obrigou a correr 0010 inteira como `supabase_admin`; (2) duas referências ambíguas dentro do
+novo corpo de `compute_price()` (`branch_id`/`currency` sem alias, colidindo com os
+parâmetros de saída da própria função) — apanhadas na primeira validação `BEGIN`/`ROLLBACK`,
+corrigidas antes do commit; (3) o `numeric(10,4)` inicial de `currency_rounding_params.
+rounding` (devia ser `numeric(10,2)`, a mesma escala da coluna antiga) fazia os preços
+publicados mostrarem casas decimais a mais — cosmético, não um erro de valor, corrigido
+antes do commit; (4) as duas tabelas novas sem privilégios para `authenticated`/`postgres`
+(YY acima) — corrigido pela 0011; (5) dois ficheiros da app (`dashboard/page.tsx`,
+`proposals/page.tsx`) ainda liam `price_overrides.branch_id`, renomeado pela 0009 do dia
+anterior — confirmado ao vivo que isto já estava a quebrar em produção (`42703`, coluna não
+existe) desde esse deploy; corrigido no mesmo commit do código desta sessão.
+
+**Gate de produção satisfeito para o estado actual** (migrações 0001–0011 + digest
+`sha256:f6d446d32d35f6fb23dbe05efc905441cd6f44dae34df87a1fcd3dcb0978bf54`) para arredondamento/
+margem plana/fronteiras — o browser do Pedro (um produto em cada moeda, `/config`, uma
+listagem de canal) continua por confirmar. Item 14 continua por fechar, não é coberto por
+este gate.
