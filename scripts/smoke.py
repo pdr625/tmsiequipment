@@ -31,6 +31,7 @@ import sys
 import urllib.error
 import urllib.request
 from datetime import date
+from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 
 # item 21 F6 (docs/DISASTER-DRILL.md achado 8): portable via env vars, with
 # today's production values as defaults — unset, this behaves byte-for-byte
@@ -664,6 +665,129 @@ def block_proposal_workflow_channel(finance_token, finance_uuid, bm_token, bm_uu
     )
 
 
+# ---------------------------------------------------------------------------
+# U — migration 0010 decision (A): the published minimum rounds UP to the
+# currency's own step (tmsi.currency_rounding_params), never to nearest and
+# never down; the reference price rounds to nearest from the ALREADY-rounded
+# minimum, using the branch's own ref_factor (tmsi.branch_pricing_params) —
+# never a hardcoded 1.10. Independent verification: the expected values are
+# computed here in Python from the engine's own raw (unrounded) total_cost/
+# margin/list_coef, not just compared API-vs-DB (which would trivially
+# agree, both being the same server-side computation).
+# ---------------------------------------------------------------------------
+def block_rounding(finance_token):
+    candidates = psql_rows(
+        "select p.id, b.id, b.currency from tmsi.products p cross join tmsi.branches b "
+        "where (b.id = any(p.sold_in) or b.id = p.primary_branch) and b.id <> p.primary_branch "
+        "and p.item_type in ('equipment','spare_part') and p.status = 'active' limit 1;"
+    )
+    if not candidates:
+        check("U: rounding (minimum up, reference from the rounded minimum)", True,
+              "SKIP — no cross-branch active equipment/spare_part product found")
+        return
+    product_id, branch_id, currency = candidates[0]
+
+    step_rows = psql_rows(
+        f"select rounding from tmsi.currency_rounding_params where currency = '{currency}' "
+        "and effective_date <= current_date order by effective_date desc, created_at desc limit 1;"
+    )
+    factor_rows = psql_rows(
+        f"select ref_factor from tmsi.branch_pricing_params where branch_id = '{branch_id}' "
+        "and effective_date <= current_date order by effective_date desc, created_at desc limit 1;"
+    )
+    if not step_rows or not factor_rows:
+        check("U: rounding config reachable", False, f"step={bool(step_rows)} factor={bool(factor_rows)}")
+        return
+    step, ref_factor = Decimal(step_rows[0][0]), Decimal(factor_rows[0][0])
+
+    status, api_result = http(
+        "POST", f"{REST}/rpc/compute_price", token=finance_token,
+        body={"p_product": product_id, "p_scope_type": "branch", "p_scope_id": branch_id},
+    )
+    api_row = api_result[0] if status == 200 and isinstance(api_result, list) and api_result else None
+    check("U: compute_price reachable", api_row is not None, f"http_{status}")
+    if api_row is None:
+        return
+
+    db_rows = psql_rows(f"select total_cost, margin, list_coef from tmsi.compute_price('{product_id}','branch','{branch_id}');")
+    total_cost, margin, coef = (Decimal(x) for x in db_rows[0])
+    raw_min = total_cost / (1 - margin) * coef
+    expected_min = (raw_min / step).to_integral_value(rounding=ROUND_CEILING) * step
+    got_min = Decimal(str(api_row["min_price"]))
+    check(
+        "U: minimum price rounds UP to the currency step (never nearest, never down)",
+        got_min == expected_min,
+        f"raw={raw_min} step={step} expected={expected_min} got={got_min}",
+    )
+
+    expected_ref = (expected_min * ref_factor / step).to_integral_value(rounding=ROUND_HALF_UP) * step
+    got_ref = Decimal(str(api_row["ref_price"]))
+    check(
+        "U: reference price = round_nearest(ROUNDED minimum x ref_factor), not the raw minimum",
+        got_ref == expected_ref,
+        f"rounded_min={expected_min} ref_factor={ref_factor} expected={expected_ref} got={got_ref}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# V — item 31: origin_country moved behind can_read_costs() (0010). Dynamic
+# check against the same product for a cost-visible and a no-cost role —
+# never a fixed expected country value, just presence vs absence.
+# ---------------------------------------------------------------------------
+def block_origin_country_boundary(cost_token, no_cost_token):
+    candidates = psql_rows("select id from tmsi.products where origin_country is not null limit 1;")
+    if not candidates:
+        check("V: origin_country boundary", True, "SKIP — no product with an origin_country set")
+        return
+    product_id = candidates[0][0]
+
+    status, body = http("GET", f"{REST}/v_products?id=eq.{product_id}&select=origin_country", token=cost_token)
+    cost_row = body[0] if status == 200 and isinstance(body, list) and body else None
+    check(
+        "V: cost-visible role sees origin_country",
+        cost_row is not None and cost_row.get("origin_country") is not None,
+        f"http_{status} row={cost_row}",
+    )
+
+    status, body = http("GET", f"{REST}/v_products?id=eq.{product_id}&select=origin_country", token=no_cost_token)
+    no_cost_row = body[0] if status == 200 and isinstance(body, list) and body else None
+    check(
+        "V: no-cost role does NOT see origin_country (null, not an error — 0010 moved this behind can_read_costs())",
+        no_cost_row is not None and no_cost_row.get("origin_country") is None,
+        f"http_{status} row={no_cost_row}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# W — the 0009 verification's logistics finding, fixed by 0010 (D):
+# has_role('logistics') no longer grants channel sell-price visibility —
+# branch scope only, its original intent. Dynamic channel discovery, never
+# a hardcoded id; skips cleanly if no channel with an eligible product
+# exists yet.
+# ---------------------------------------------------------------------------
+def block_logistics_channel_scope(logistics_token):
+    candidates = psql_rows(
+        "select ch.id, p.id from tmsi.channels ch "
+        "join tmsi.products p on ch.branch_id = any(p.sold_in) or ch.branch_id = p.primary_branch "
+        "where ch.active limit 1;"
+    )
+    if not candidates:
+        check("W: logistics channel scope", True, "SKIP — no active channel with an eligible product found")
+        return
+    channel_id, product_id = candidates[0]
+
+    status, result = http(
+        "POST", f"{REST}/rpc/compute_price", token=logistics_token,
+        body={"p_product": product_id, "p_scope_type": "channel", "p_scope_id": channel_id},
+    )
+    rows = result if status == 200 and isinstance(result, list) else None
+    check(
+        "W: logistics no longer sees ANY channel's sell price (0010 D — branch scope only)",
+        rows is not None and len(rows) == 0,
+        f"http_{status} rows={len(rows) if rows is not None else '?'}",
+    )
+
+
 def main():
     print(f"=== TMSI smoke — {BASE} — {date.today().isoformat()} ===")
     block_health()
@@ -693,6 +817,9 @@ def main():
     block_proposal_workflow_exchange_rates(tokens["finance"], claims["finance"])
     block_proposal_workflow_overrides(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
     block_proposal_workflow_channel(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
+    block_rounding(tokens["finance"])
+    block_origin_country_boundary(tokens["finance"], tokens["logistics"])
+    block_logistics_channel_scope(tokens["logistics"])
 
     total = len(RESULTS)
     print(f"\n=== {total - FAILURES}/{total} passed ===")

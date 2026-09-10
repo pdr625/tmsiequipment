@@ -15,6 +15,7 @@ import {
   TransportTierRow,
   CustomsRateRow,
   MarginGridRow,
+  BranchPricingParamsRow,
   SettingRow,
 } from './forms';
 
@@ -47,6 +48,18 @@ type MarginGrid = {
   tier: number;
   max_cost_eur: number | null;
   margin: number;
+  effective_date: string;
+  created_at: string;
+};
+// 0010 (item 34): same effective-dating shape as the four above — ref_factor
+// used to be a bare tmsi.branches column with no UI at all (docs/MODEL-
+// GAP-ANALYSIS.md item 4); list_coef moved here alongside it for the same
+// reason (they were the same kind of gap, just not both asked for a UI).
+type BranchPricingParams = {
+  id: number;
+  branch_id: string;
+  ref_factor: number;
+  list_coef: number;
   effective_date: string;
   created_at: string;
 };
@@ -119,6 +132,7 @@ export default async function ConfigPage() {
     { data: transportTiersAll },
     { data: customsRatesAll },
     { data: marginGridsAll },
+    { data: branchPricingParamsAll },
     { data: settings },
     { data: currencies },
     { data: hsCodes },
@@ -160,6 +174,12 @@ export default async function ConfigPage() {
       .order('branch_id')
       .order('tier')
       .overrideTypes<MarginGrid[], { merge: false }>(),
+    supabase
+      .schema('tmsi')
+      .from('branch_pricing_params')
+      .select('id, branch_id, ref_factor, list_coef, effective_date, created_at')
+      .order('branch_id')
+      .overrideTypes<BranchPricingParams[], { merge: false }>(),
     supabase.schema('tmsi').from('settings').select('key, value, note').order('key').overrideTypes<Setting[], { merge: false }>(),
     supabase.schema('tmsi').from('currencies').select('code').eq('active', true).order('code').overrideTypes<Currency[], { merge: false }>(),
     supabase.schema('tmsi').from('hs_codes').select('code, description').order('code').overrideTypes<HsCode[], { merge: false }>(),
@@ -180,6 +200,7 @@ export default async function ConfigPage() {
   const transportTiers = pickActive(transportTiersAll, (t) => `${t.branch_id}|${t.tier}`);
   const customsRates = pickActive(customsRatesAll, (c) => `${c.hs_code}|${c.zone}`);
   const marginGrids = pickActive(marginGridsAll, (g) => `${g.branch_id}|${g.tier}`);
+  const branchPricingParams = pickActive(branchPricingParamsAll, (bp) => bp.branch_id);
 
   // tmsi.fx_rate() (0001 §7, tie-break added by 0005) picks, per currency,
   // the ONE row with the latest effective_date <= today and, among
@@ -356,6 +377,35 @@ export default async function ConfigPage() {
             <tbody>
               {marginGrids.map((g) => (
                 <MarginGridRow key={g.id} grid={g} canWrite={canWriteFinance} />
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {readCosts && (
+        <section className="mb-10">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold text-gray-700">Reference price factor</h2>
+            <PendingBadge count={pendingCount('branch_pricing_params')} />
+          </div>
+          <p className="mb-2 text-xs text-gray-500">
+            Reference price = minimum price × this factor. List coefficient has no editor here
+            yet — shown for context, carried forward unchanged by any proposal made below.
+          </p>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 text-left text-gray-500">
+                <th className="py-2 pr-4">Branch</th>
+                <th className="py-2 pr-4">Ref. factor</th>
+                <th className="py-2 pr-4">List coef.</th>
+                {canWriteFinance && <th className="py-2 pr-4">Reason</th>}
+                {canWriteFinance && <th className="py-2 pr-4"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {branchPricingParams.map((bp) => (
+                <BranchPricingParamsRow key={bp.id} params={bp} canWrite={canWriteFinance} />
               ))}
             </tbody>
           </table>

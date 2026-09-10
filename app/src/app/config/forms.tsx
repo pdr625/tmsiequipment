@@ -15,6 +15,7 @@ import {
   updateTransportTier,
   updateCustomsRate,
   updateMarginGrid,
+  updateBranchPricingParams,
   updateSetting,
   type ConfigActionState,
 } from './actions';
@@ -374,6 +375,73 @@ export function MarginGridRow({
         )}
         <ErrorText state={state} />
       </td>
+      {canWrite && (
+        <td className="py-2 pr-4">
+          <input
+            form={formId}
+            name="reason"
+            required
+            placeholder="Why this change?"
+            className="w-36 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          />
+        </td>
+      )}
+      {canWrite && (
+        <td className="py-2 pr-4">
+          <button
+            form={formId}
+            type="submit"
+            disabled={pending}
+            className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+          >
+            {pending ? '…' : 'Propose'}
+          </button>
+          {state && 'success' in state && <p className="mt-1 text-xs text-green-700">Submitted.</p>}
+        </td>
+      )}
+    </tr>
+  );
+}
+
+// 0010 (item 34): only ref_factor is editable — list_coef has no UI yet
+// (same as before this migration; carried forward unchanged by the
+// action, see actions.ts) and is shown here read-only for context.
+export function BranchPricingParamsRow({
+  params,
+  canWrite,
+}: {
+  params: { branch_id: string; ref_factor: number; list_coef: number };
+  canWrite: boolean;
+}) {
+  const [state, formAction, pending] = useActionState<ConfigActionState, FormData>(updateBranchPricingParams, undefined);
+  const formId = `bpp-${params.branch_id}`;
+
+  return (
+    <tr className="border-b border-gray-100">
+      <td className="py-2 pr-4">
+        {params.branch_id}
+        {canWrite && (
+          <form id={formId} action={formAction}>
+            <input type="hidden" name="branch_id" value={params.branch_id} />
+          </form>
+        )}
+      </td>
+      <td className="py-2 pr-4">
+        {canWrite ? (
+          <input
+            form={formId}
+            name="ref_factor"
+            type="number"
+            step="0.001"
+            defaultValue={params.ref_factor}
+            className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          />
+        ) : (
+          params.ref_factor
+        )}
+        <ErrorText state={state} />
+      </td>
+      <td className="py-2 pr-4">{params.list_coef}</td>
       {canWrite && (
         <td className="py-2 pr-4">
           <input

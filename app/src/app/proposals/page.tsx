@@ -49,7 +49,15 @@ function formatPayload(p: Proposal): string {
     case 'margin_grids':
       return `${f('branch_id')} tier ${f('tier')}: max cost ${f('max_cost_eur', 'open-ended')} EUR, margin ${f('margin')}`;
     case 'price_overrides':
-      return `product ${f('product_id')}, ${f('branch_id')}, ${f('kind')} = ${f('value')} (${f('valid_from')} → ${f('valid_to', 'open')})`;
+      // 0009: payload carries scope_type/scope_id, not a bare branch_id
+      // (a channel-scoped override has no branch at all) — this case was
+      // missed when that migration's own app code was updated; caught and
+      // fixed here, not left stale.
+      return `product ${f('product_id')}, ${f('scope_type', 'branch')}:${f('scope_id')}, ${f('kind')} = ${f('value')} (${f('valid_from')} → ${f('valid_to', 'open')})`;
+    case 'branch_pricing_params':
+      return `${f('branch_id')}: ref_factor ${f('ref_factor')}, list_coef ${f('list_coef')}`;
+    case 'currency_rounding_params':
+      return `${f('currency')}: round to ${f('rounding')}, effective ${f('effective_date')}`;
     default:
       return JSON.stringify(v);
   }

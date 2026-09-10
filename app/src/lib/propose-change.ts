@@ -14,7 +14,9 @@ export type ProposalTargetTable =
   | 'transport_tiers'
   | 'customs_rates'
   | 'margin_grids'
-  | 'price_overrides';
+  | 'price_overrides'
+  | 'branch_pricing_params'
+  | 'currency_rounding_params';
 
 // Shared by every write path 0007 turned into a proposal (config/actions.ts,
 // overrides/actions.ts) — tmsi.proposals_insert (RLS) is the real boundary,

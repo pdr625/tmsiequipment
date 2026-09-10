@@ -16,10 +16,13 @@ type BranchPriceRow = { product_id: string; branch_id: string; margin: number | 
 type Branch = { id: string; name: string };
 type ExchangeRateRow = { currency: string; effective_date: string; created_at: string };
 type Currency = { code: string };
+// 0009: branch_id dropped from the select — this page never rendered it
+// (only product_id/kind/created_by/valid_from/valid_to below), and the
+// column was renamed to scope_type/scope_id, silently breaking this
+// query (an unknown column) since that migration until caught here.
 type PriceOverride = {
   id: number;
   product_id: string;
-  branch_id: string;
   kind: string;
   value: number;
   reason: string;
@@ -117,7 +120,7 @@ export default async function DashboardPage() {
     supabase
       .schema('tmsi')
       .from('price_overrides')
-      .select('id, product_id, branch_id, kind, value, reason, valid_from, valid_to, created_by')
+      .select('id, product_id, kind, value, reason, valid_from, valid_to, created_by')
       .overrideTypes<PriceOverride[], { merge: false }>(),
     supabase.schema('tmsi').from('profiles').select('user_id, email').overrideTypes<Profile[], { merge: false }>(),
     supabase

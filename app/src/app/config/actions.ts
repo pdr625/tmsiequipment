@@ -123,6 +123,51 @@ export async function updateMarginGrid(_prevState: ConfigActionState, formData: 
   return { success: true };
 }
 
+// 0010 (item 34): only ref_factor is user-editable here — list_coef has
+// no UI yet (same as before this migration, it just lives in a different
+// table now) and is carried forward from the current value, read
+// server-side, never trusted from the form (there is no list_coef field
+// in this form at all — nothing for a caller to tamper with).
+// tmsi.proposals_insert (RLS, 0010 §6) re-derives eligibility from
+// payload.branch_id, admin/finance to propose — same shape as
+// margin_grids above; approval falls to admin or the branch's own
+// branch_manager via decide_price_proposal()'s existing generic check.
+export async function updateBranchPricingParams(
+  _prevState: ConfigActionState,
+  formData: FormData,
+): Promise<ConfigActionState> {
+  if (!(await canManageFinanceConfig())) return { error: 'Forbidden' };
+
+  const branch_id = String(formData.get('branch_id') ?? '');
+  const ref_factor = Number(formData.get('ref_factor') ?? 0);
+  const reason = String(formData.get('reason') ?? '');
+
+  const supabase = await createSupabaseServerClient();
+  const { data: current, error: readError } = await supabase
+    .schema('tmsi')
+    .from('branch_pricing_params')
+    .select('list_coef')
+    .eq('branch_id', branch_id)
+    .order('effective_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle<{ list_coef: number }>();
+  if (readError) return { error: readError.message };
+  if (!current) return { error: `No current pricing params for branch ${branch_id}` };
+
+  const result = await proposeChange(
+    'branch_pricing_params',
+    branch_id,
+    { branch_id, ref_factor, list_coef: current.list_coef },
+    reason,
+  );
+  if (result && 'error' in result) return result;
+
+  revalidatePath('/config');
+  revalidatePath('/proposals');
+  return { success: true };
+}
+
 // settings.value is jsonb — the form field is the raw JSON literal
 // (e.g. 0.15 or "SAP"), not a plain string, matching exactly what's
 // stored (confirmed against the real seed data, 0001 §9 — some values
