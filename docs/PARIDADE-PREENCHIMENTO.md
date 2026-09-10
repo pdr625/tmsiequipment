@@ -99,6 +99,17 @@ duas colunas que não se aplicam a canais (ver a seguir).
 bater certo com o motor, veres os passos intermédios diz logo ONDE a diferença nasce (câmbio?
 transporte? direitos?) — sem os passos, só sabes que "está diferente", não porquê.
 
+**⚠️ Tolerância de arredondamento (migração 0010, 2026-09-10) — para não confundires com um
+erro.** O motor agora arredonda os dois preços publicados (`excel_min_price`/
+`excel_reference_price`, na comparação): EUR/USD/GBP ao cêntimo, CNY à dezena — e o mínimo
+arredonda sempre **para cima** (nunca à mais próxima, nunca para baixo — um mínimo mais
+baixo deixaria de ser mínimo). **O Excel não arredonda nada** (`47183,754714285715` é um
+valor real que já vimos lá). Isto significa que, depois desta migração, **é normal e
+esperado** o motor e o Excel diferirem por um valor até ao passo da moeda (1 cêntimo em
+EUR/USD/GBP, até 10 em CNY) em praticamente todas as linhas — não é um erro do motor nem
+teu, é "motor certo, Excel a alinhar". Se vires uma diferença maior do que isso, aí sim
+vale a pena investigar coluna a coluna (a razão de ser dos 8 passos, acima).
+
 ## Linhas de canal (`APAC`, e futuros)
 
 Um canal **não é uma filial** — vende através de uma filial (ex. `APAC` vende através da

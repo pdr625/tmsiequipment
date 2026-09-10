@@ -3,14 +3,16 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: canais no motor de preços — ✅ FECHADO 2026-09-09, migração 0009** (ver
-secção "Canais no motor de preços" abaixo). Item 29 do `docs/BACKLOG.md` (a maior lacuna da
-reconciliação com o Excel real, secção anterior) fechado: `tmsi.compute_price()` ganhou um
-âmbito explícito (`p_scope_type`/`p_scope_id`), um preço de canal calcula-se do EXW sem fee
-nem direitos, sempre; margem de canal só por override explícito, mesmo workflow de aprovação
-da 0007, admin-only. Item 33 (zona "CH") também fechado — falso alarme, o Pedro confirmou que
-`CH`=China no Excel, o schema já estava certo. Items 30/31/32/34 continuam por fazer. Preços
-de filial confirmados byte-idênticos a uma baseline pré-migração, duas vezes; smoke 45/45.
+**Etapa actual: arredondamento, margem plana, fronteiras — ✅ FECHADO 2026-09-10, migrações
+0010+0011** (ver secção "Arredondamento, margem plana e fronteiras" abaixo). Items 30, 31 e
+34 do `docs/BACKLOG.md` fechados: arredondamento por moeda em configuração (EUR/USD/GBP ao
+cêntimo, CNY à dezena, mínimo sempre para cima); linhas não-equipamento com margem zero e
+preço interco=EXW; `origin_country` atrás da fronteira de custos; `logistics` deixa de ver
+canais sem âmbito; `ref_factor` ganhou UI e workflow de aprovação. Item 32 continua aberto
+(pergunta ao Pedro, não uma correcção). Dois bugs reais já em produção (não desta sessão,
+de 0009 no dia anterior) apanhados e corrigidos: o dashboard e a página de propostas ainda
+liam a coluna `price_overrides.branch_id`, renomeada pela 0009. Migração 0009/item 29/item
+33 continuam fechados (secção própria abaixo); item 28 e item 14 idem.
 Item 28 e item 14 continuam fechados (secções próprias abaixo); E0, E1, E2, E3 (i1–i10), E4,
 E5-VPS e as migrações 0003/0004/0005/0006/0007/0008 estão fechadas.
 
@@ -250,6 +252,110 @@ parte do próprio protocolo de uma futura medição destacada, não é um estado
 larga); este ficheiro; dossier (`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`), incluindo a
 decisão sobre o linger. `scripts/smoke.py` não corrido nesta sessão (nenhuma alteração de
 código/schema).
+
+## Arredondamento, margem plana e fronteiras — ✅ FECHADO 2026-09-10 (migrações 0010+0011)
+
+**Contexto:** cinco frentes pequenas, nenhuma reabrindo o desenho dos canais (0009):
+(A) regra de arredondamento por moeda, decisão do Pedro 2026-09-10; (B) item 30 — linhas
+não-equipamento com margem zero; (C) item 31 — `origin_country` mal classificado; (D) o
+achado da 0009 — `logistics` a ver qualquer canal sem âmbito; (E) item 34 — UI do factor de
+referência.
+
+**F0/F1 — desenho:** arredondamento passa a configuração de verdade
+(`tmsi.currency_rounding_params`, efectivo-datado) — a coluna antiga
+`tmsi.currencies.rounding=1` para EUR/USD/GBP **não** arredondava a cêntimos, arredondava à
+unidade inteira (confirmado ao vivo antes de tocar em nada); passa a `0,01`. O mínimo
+publicado arredonda **sempre para cima** (`tmsi.round_up_to()`, nova função) — um mínimo
+arredondado para baixo deixaria de ser mínimo. A referência calcula-se do mínimo **já
+arredondado**, depois arredonda ela própria à mais próxima — confirmado que o código já
+fazia isto antes desta migração, não foi preciso mudar a ordem. `ref_factor`/`list_coef`
+saem de `tmsi.branches` para `tmsi.branch_pricing_params`, efectivo-datado como
+`margin_grids`, novo `target_table` do workflow da 0007. `option`/`service` passam a
+`fee=0`/`margin=0` sempre (antes: opção herdava a margem do pai, taxa intercompany só
+zerava em venda "em casa") — o caminho antigo removido por completo, não só contornado.
+`origin_country` move-se para `can_read_costs()` em `tmsi.v_products`, mesma condição do
+`supplier_id`. `logistics` só vê venda de âmbito filial agora (a cláusula nunca teve
+condição de âmbito, apanhava canais por acidente desde a 0009).
+
+**F1 — migração 0010**, processo consagrado, com dois achados reais na própria validação:
+- **`tmsi.v_products` pertence a `supabase_admin`, não a `postgres`** — descoberta ao vivo
+  (`must be owner of view v_products`) ao tentar `CREATE OR REPLACE VIEW`. `postgres` **não
+  é superuser real** neste ambiente (`rolsuper=false`, só `rolbypassrls=true`) — só
+  `supabase_admin` (`rolsuper=true`) o é. A migração inteira teve de correr como
+  `supabase_admin`. Origem: `v_products` foi criada pela 0003, nalguma sessão anterior
+  ligada de forma diferente — não é um problema desta sessão, só nunca tinha aparecido
+  porque nenhuma migração desde então precisou de voltar a mexer em `v_products`.
+- **`branch_id`/`currency` ambíguos** dentro do novo corpo de `compute_price()` — colidem
+  com os próprios parâmetros de saída da função (`RETURNS TABLE(..., branch_id, currency,
+  ...)`, implicitamente variáveis PL/pgSQL) — apanhado na primeira validação
+  `BEGIN`/`ROLLBACK`, corrigido com alias explícito antes do commit (o resto da função já
+  fazia isto, só as duas lookups novas não).
+- Commitada e pushed **antes** de aplicar (commit `11a1904`); backup fresco verificado (688
+  entradas TOC); aplicada.
+- **Não-regressão, reformulada** (restrição 1): baseline completa (filial+canal, 18 colunas,
+  todos os produtos) capturada antes de tocar em qualquer DDL; toda a diferença depois —
+  linha a linha, conferida à mão, 33 linhas de filial + 5 de canal — explicada por (A) o
+  arredondamento ou (B) a margem plana, nenhuma outra.
+
+**F2 — código:** `/config` ganha secção "Reference price factor" (só `ref_factor`
+editável, `list_coef` sem campo — transportado pelo próprio servidor, nunca de um campo do
+formulário). Rounding/margem-plana não precisaram de código nenhum na app — os preços já
+vinham prontos da BD, só passaram a vir correctos. **Dois bugs reais, já em produção desde
+a 0009 do dia anterior, apanhados e corrigidos aqui**: `dashboard/page.tsx` e
+`proposals/page.tsx` ainda liam `price_overrides.branch_id` (renomeado para
+`scope_type`/`scope_id` pela 0009) — confirmado ao vivo que isto já dava `42703` (coluna não
+existe) numa chamada directa à API, quebrando silenciosamente a secção "Active price
+overrides" do dashboard e a linha-resumo de qualquer proposta de `price_overrides` desde
+esse deploy. `scripts/smoke.py`: 3 blocos novos (U/V/W) — 51/51, corrido três vezes (antes
+do deploy, depois do deploy, depois de 0011), sempre verde.
+
+**F3 — deploy:** CI verde (confirmado pelo Pedro) → digest
+`sha256:f6d446d32d35f6fb23dbe05efc905441cd6f44dae34df87a1fcd3dcb0978bf54` → `up -d --no-deps
+tmsi-app` → `healthy` → smoke 51/51.
+
+**Migração 0011, correcção a 0010, apanhada pela própria F4:** o fluxo completo do
+`ref_factor` (propor → aprovar → efeito) falhou na primeira tentativa —
+`permission denied for table branch_pricing_params`. Causa: as duas tabelas novas da 0010
+(`branch_pricing_params`, `currency_rounding_params`) foram criadas pela ligação
+`supabase_admin` (necessária só para `v_products`) e por isso nunca herdaram a regra
+`alter default privileges` que dá a `authenticated`/`service_role` acesso automático — essa
+regra só dispara para objectos criados por `postgres`. `tmsi.decide_price_proposal()`
+(dono `postgres`, `CREATE OR REPLACE` nunca muda o dono) também não conseguia escrever nas
+tabelas novas pela mesma razão. Corrigido: as duas tabelas (e `v_products`, pela mesma
+classe de problema, já agora) reatribuídas a `postgres`; grant de leitura explícito para
+`authenticated`/`service_role`. Validado, commitado (`6bd3ccb`), backup fresco (709
+entradas TOC), aplicado — sem novo deploy da app (é só BD). Repetido o fluxo completo
+depois: OK, confirmado também por HTTP real (as duas tabelas, antes `403`, depois `200`).
+
+**F4 — as 8 provas, todas confirmadas** (detalhe completo, incluindo os números conferidos
+à mão: `docs/VERIFICATION-PROTOCOL.md`, secção 4.11, passos TT–ZZ):
+1. Arredondamento EUR/CNY conferido à mão, fora do motor (Python), a partir dos valores
+   crus — bate exacto.
+2. Referência a partir do mínimo já arredondado — trocar pelo total cru dava outro número,
+   confirmado.
+3. Baseline — toda a diferença explicada, nenhuma por explicar.
+4. Linhas não-equipamento (`T-0006`/`T-0007`/`T-0008`) — margem zero, interco=EXW,
+   conferido à mão nos três.
+5. `origin_country` ausente do payload para quem não tem custos — nunca esteve em nenhum
+   export (confirmado por leitura de código), nada a verificar num ficheiro real.
+6. `logistics` sem canal — zero linhas, provado pela BD.
+7. Fluxo do `ref_factor` completo, com o bug real do caminho documentado acima.
+8. Smoke completo, 51/51, três vezes.
+
+**Achado lateral, não corrigido:** a taxa de câmbio CNY implausível (8554 em vigor)
+continua por corrigir — o Pedro tinha pedido isto como passo manual antes desta sessão,
+ainda não feito à data deste fecho; continua a distorcer preços de filial e de canal.
+
+**F5 — protocolo:** `docs/VERIFICATION-PROTOCOL.md` — matriz (secção 3, notas ⁹/¹⁰, uma
+linha renomeada, footnote ⁸ actualizada para o estado actual do `logistics`) e secção 4.11
+(passos TT–ZZ) no mesmo commit; adenda na secção 7 com âmbito, resultado, os dois digests e
+a lista honesta dos 5 bugs reais apanhados.
+
+**F6 (este fecho):** `docs/BACKLOG.md` (items 30/31/34 fechados; item 32 mantém-se aberto);
+`docs/PARIDADE-PREENCHIMENTO.md` e a cópia de trabalho em `~/tmp/tmsi-paridade/` ganham a
+nota de tolerância de arredondamento (o Excel não arredonda nada; diferenças até ao passo
+da moeda são "motor certo, Excel a alinhar", não falsos positivos); este ficheiro; dossier
+(`VPS.md`/`CHANGELOG.md` via `dossier-push.sh`).
 
 ## Canais no motor de preços — ✅ FECHADO 2026-09-09 (migração 0009)
 
