@@ -844,6 +844,39 @@ rollback;
     )
 
 
+# ---------------------------------------------------------------------------
+# Y — /branches admin screen (Fase 2): tmsi.branches/tmsi.channels have
+# their own ref_write RLS (0001: admin-only), not the propose->approve
+# workflow the pricing config tables use — creating one is a direct
+# INSERT, same shape products/new/actions.ts already uses. No admin test
+# account exists by design (TEST_USERS' own NOTE, "a tua conta pessoal
+# nunca entra no smoke"), so only the negative side is provable here — a
+# non-admin caller refused — same shape blocks R/T already use for their
+# own admin-only paths. The positive admin-create path needs Pedro's own
+# account, in the browser.
+# ---------------------------------------------------------------------------
+def block_branches_admin_only(token):
+    status, _body = http(
+        "POST", f"{REST}/branches", token=token,
+        body={"id": "SMOKETST", "name": "smoke test branch", "country": "PT", "currency": "EUR", "zone": "EU"},
+    )
+    check(
+        "Y: direct branches INSERT refused for a non-admin role (ref_write is admin-only)",
+        status in (401, 403),
+        f"http_{status}",
+    )
+
+    status, _body = http(
+        "POST", f"{REST}/channels", token=token,
+        body={"id": "SMOKETST", "name": "smoke test channel", "branch_id": "SA", "margin_delta": 0},
+    )
+    check(
+        "Y: direct channels INSERT refused for a non-admin role (ref_write is admin-only)",
+        status in (401, 403),
+        f"http_{status}",
+    )
+
+
 def main():
     print(f"=== TMSI smoke — {BASE} — {date.today().isoformat()} ===")
     block_health()
@@ -877,6 +910,7 @@ def main():
     block_origin_country_boundary(tokens["finance"], tokens["logistics"])
     block_logistics_channel_scope(tokens["logistics"])
     block_interco_margin(claims["product_manager"])
+    block_branches_admin_only(tokens["finance"])
 
     total = len(RESULTS)
     print(f"\n=== {total - FAILURES}/{total} passed ===")

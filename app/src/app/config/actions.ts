@@ -140,12 +140,17 @@ export async function updateBranchPricingParams(
     .limit(1)
     .maybeSingle<{ list_coef: number }>();
   if (readError) return { error: readError.message };
-  if (!current) return { error: `No current pricing params for branch ${branch_id}` };
+  // A brand new branch (the /branches admin screen) has no row yet —
+  // 1.000 was tmsi.branches.list_coef's own default before 0010 moved it
+  // here, so a first-ever proposal seeds the same neutral starting point
+  // that column always had, rather than refusing until some other flow
+  // creates one first.
+  const list_coef = current?.list_coef ?? 1;
 
   const result = await proposeChange(
     'branch_pricing_params',
     branch_id,
-    { branch_id, ref_factor, list_coef: current.list_coef },
+    { branch_id, ref_factor, list_coef },
     reason,
   );
   if (result && 'error' in result) return result;

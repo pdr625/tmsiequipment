@@ -102,6 +102,84 @@ export function ExchangeRateForm({ currencies }: { currencies: { code: string }[
 // not a per (supplier_branch, seller_branch) pair any more. tmsi.interco_fees
 // keeps its history in the DB, just isn't a live config the engine reads.
 
+// Blank create-form, same shape as ExchangeRateForm above — for a branch
+// with NO transport tier yet (a brand new one, from /branches) there is
+// no existing row for TransportTierRow below to render from. Reuses
+// updateTransportTier unchanged: it already accepts any (branch_id, tier)
+// pair, existing or not (proposeChange -> decide_price_proposal always
+// INSERTs a new row, never UPDATEs one in place).
+export function TransportTierForm({ branches }: { branches: { id: string }[] }) {
+  const [state, formAction, pending] = useActionState<ConfigActionState, FormData>(updateTransportTier, undefined);
+
+  return (
+    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 p-3">
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Branch</label>
+        <select name="branch_id" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.id}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Tier (1-3)</label>
+        <input
+          name="tier"
+          type="number"
+          min="1"
+          max="3"
+          required
+          className="w-16 rounded-md border border-gray-300 px-2 py-1 text-sm"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Max weight (kg)</label>
+        <input
+          name="max_weight_kg"
+          type="number"
+          step="0.01"
+          placeholder="open-ended"
+          className="w-28 rounded-md border border-gray-300 px-2 py-1 text-sm"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Cost</label>
+        <input
+          name="cost"
+          type="number"
+          step="0.01"
+          required
+          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Currency</label>
+        <input name="currency" required maxLength={3} className="w-16 rounded-md border border-gray-300 px-2 py-1 text-sm" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Reason</label>
+        <input
+          name="reason"
+          required
+          placeholder="Why this change?"
+          className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+      >
+        {pending ? 'Submitting…' : 'Propose tier'}
+      </button>
+      <ErrorText state={state} />
+      {state && 'success' in state && <p className="text-xs text-green-700">Submitted — pending approval.</p>}
+    </form>
+  );
+}
+
 export function TransportTierRow({
   tier,
   canWrite,
@@ -259,6 +337,78 @@ export function CustomsRateRow({
         </td>
       )}
     </tr>
+  );
+}
+
+// Same reasoning as TransportTierForm above — a brand new branch has no
+// margin_grids row yet; reuses updateMarginGrid unchanged.
+export function MarginGridForm({ branches }: { branches: { id: string }[] }) {
+  const [state, formAction, pending] = useActionState<ConfigActionState, FormData>(updateMarginGrid, undefined);
+
+  return (
+    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 p-3">
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Branch</label>
+        <select name="branch_id" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.id}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Tier (1-4)</label>
+        <input
+          name="tier"
+          type="number"
+          min="1"
+          max="4"
+          required
+          className="w-16 rounded-md border border-gray-300 px-2 py-1 text-sm"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Max cost (EUR)</label>
+        <input
+          name="max_cost_eur"
+          type="number"
+          step="0.01"
+          placeholder="open-ended"
+          className="w-28 rounded-md border border-gray-300 px-2 py-1 text-sm"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Margin (0-1)</label>
+        <input
+          name="margin"
+          type="number"
+          step="0.0001"
+          min="0"
+          max="0.9999"
+          required
+          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs text-gray-500">Reason</label>
+        <input
+          name="reason"
+          required
+          placeholder="Why this change?"
+          className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+      >
+        {pending ? 'Submitting…' : 'Propose tier'}
+      </button>
+      <ErrorText state={state} />
+      {state && 'success' in state && <p className="text-xs text-green-700">Submitted — pending approval.</p>}
+    </form>
   );
 }
 

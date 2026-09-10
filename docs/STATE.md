@@ -3,12 +3,14 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: margem interco como propriedade do artigo — Fase 1 ✅ FECHADA 2026-09-10,
-migração 0012; Fase 2 (ecrã de filiais/canais, migração 0013) por fazer** (ver secção
-"Margem interco no artigo (migração 0012)" abaixo). Motivação: ao rever a amostra real de
+**Etapa actual: margem interco como propriedade do artigo + ecrã de filiais/canais — ambas
+as fases ✅ FECHADAS do lado da engenharia em 2026-09-10, só migração 0012 (Fase 1); Fase 2
+não precisou de migração nenhuma** (ver secções "Margem interco no artigo (migração 0012)"
+e "Ecrã de filiais e canais (Fase 2)" abaixo). Motivação: ao rever a amostra real de
 paridade motor-vs-Excel, o Pedro esclareceu que a comissão/fee interco não é uma
 configuração por par de filiais — é uma propriedade do próprio artigo, variável artigo a
-artigo, nunca cobrada quando a filial vendedora é a de origem.
+artigo, nunca cobrada quando a filial vendedora é a de origem. A implantação do código React
+de ambas as fases aguarda confirmação de CI verde do Pedro.
 
 **Etapa anterior: arredondamento, margem plana, fronteiras — ✅ FECHADO 2026-09-10, migrações
 0010+0011** (ver secção "Arredondamento, margem plana e fronteiras" abaixo). Items 30, 31 e
@@ -90,10 +92,62 @@ inofensivo, não vale a pena mexer.
   do Pedro via CI verde antes de aplicar o código React em produção (a migração da BD já
   está aplicada; o código da app ainda não foi implantado).
 
-**Fase 2 (por fazer):** ecrã `/branches` novo para criar/configurar filiais e canais
-("tudo num ecrã", `proposeChange()` + `decide_price_proposal()` estendidos para
-`'branches'`/`'channels'`), e limpeza das colunas vestigiais `tmsi.branches.list_coef`/
-`ref_factor` (mortas desde a 0010, nunca lidas por `compute_price()`).
+**Fase 2 → ver secção "Ecrã de filiais e canais (Fase 2)" abaixo — não precisou de migração
+nenhuma** (achado desta sessão, revisto o desenho inicial: `tmsi.branches`/`tmsi.channels`
+já tinham a sua própria RLS `ref_write` desde a 0001, admin-only, escrita directa — nunca
+precisaram do workflow de propor→aprovar; e as colunas vestigiais `list_coef`/`ref_factor`
+já tinham sido removidas de `tmsi.branches` pela própria 0010, confirmado ao vivo por `\d
+tmsi.branches` antes de escrever qualquer coisa — nada para limpar).
+
+## Ecrã de filiais e canais (Fase 2) — ✅ FECHADA (engenharia) 2026-09-10
+
+**Desenho revisto ao verificar o schema real** (antes de escrever código, não depois): o
+plano inicial assumia que criar uma filial precisaria de estender `proposeChange()` +
+`tmsi.decide_price_proposal()` para `'branches'`/`'channels'`, como as tabelas de
+configuração de preços. Falso — `tmsi.branches` e `tmsi.channels` já tinham a sua própria
+política `ref_write` (`USING (has_role('admin'))`, da 0001), **escrita directa**, igual ao
+padrão que `products/new/actions.ts` já usa (RLS é a fronteira real, não um workflow de
+aprovação). **Zero migração nova para a Fase 2** — só código de app.
+
+**Ficheiros novos:** `app/src/app/branches/{page.tsx,forms.tsx,actions.ts}`
+(`createBranch`/`createChannel`, escrita directa, gate `isAdmin()`); `app/src/lib/
+pick-active.ts` (a função `pickActive()` de `config/page.tsx` extraída para partilhar com o
+ecrã novo, sem duplicar). Link novo na página inicial (`admin`-only, ao lado de "User
+administration").
+
+**O problema real de uma filial nova, descoberto ao testar** (`BEGIN`/`ROLLBACK`, filial
+`NL` a mais, superuser, sem RLS envolvida — só a confirmar a forma do insert):
+`compute_price('T-0001','branch','NL')` devolve de imediato dois erros —
+`"missing transport tier / weight"` e `"missing margin grid"` — porque uma filial acabada de
+criar não tem nenhuma linha em `transport_tiers`/`margin_grids` a torná-la utilizável. As
+secções existentes do `/config` para essas duas tabelas só editam linhas **já existentes**
+(`TransportTierRow`/`MarginGridRow` vêm de `pickActive()`, que não inventa linhas) — não
+havia, antes desta sessão, NENHUMA forma na UI de criar a primeira linha de uma filial nova.
+Resolvido com dois formulários novos em branco, `TransportTierForm`/`MarginGridForm`
+(`config/forms.tsx`, ao lado de `ExchangeRateForm`, mesmo desenho), que reutilizam
+`updateTransportTier`/`updateMarginGrid` **sem alteração nenhuma** — essas acções já aceitam
+qualquer par (`branch_id`,`tier`), novo ou existente, porque `decide_price_proposal()` faz
+sempre um INSERT novo, nunca um UPDATE (append-only, como o resto do 0007). Mesmo problema e
+mesma solução para `branch_pricing_params`: `updateBranchPricingParams` lia o `list_coef`
+actual e recusava (`"No current pricing params for branch ..."`) se não existisse nenhum —
+corrigido para usar `1.000` (o antigo valor por omissão de `tmsi.branches.list_coef`, antes
+da 0010) quando não há linha ainda, em vez de bloquear a primeira proposta de uma filial
+nova.
+
+**Verificação:**
+- Schema/RLS confirmados ao vivo (`\d tmsi.branches`, `\d tmsi.channels`) antes de desenhar
+  — `ref_write` admin-only já existia nas duas, colunas vestigiais já não existiam.
+- `BEGIN`/`ROLLBACK` directo (superuser, sem RLS) confirmou a forma exacta do insert que o
+  código envia — filial + canal criados, lidos de volta, e o erro real de uma filial sem
+  regras reproduzido (acima).
+- `scripts/smoke.py`: bloco novo `Y` — sem conta de admin de teste por desenho (regra
+  escrita, "a conta pessoal nunca entra no smoke"), só o lado provável sem uma: uma filial/
+  canal `SMOKETST` recusada para um chamador não-admin (403), e confirmado sem resíduo
+  (`select ... where id='SMOKETST'` → 0 linhas nas duas tabelas). O caminho positivo
+  (admin a criar mesmo) fica para o Pedro validar no browser.
+- **56/56 a passar** ao vivo (54 da Fase 1 + 2 novos do bloco Y).
+- `next build` **não** corrido neste VPS (mesma razão da Fase 1) — falta CI verde do Pedro
+  antes de implantar.
 
 ## Item 14 — Diagnóstico do desempenho (medição inválida de 06/09) — ✅ DIAGNOSTICADO 2026-09-06
 
