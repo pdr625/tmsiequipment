@@ -3,14 +3,15 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: margem interco como propriedade do artigo + ecrã de filiais/canais — ambas
-as fases ✅ FECHADAS do lado da engenharia em 2026-09-10, só migração 0012 (Fase 1); Fase 2
-não precisou de migração nenhuma** (ver secções "Margem interco no artigo (migração 0012)"
+**Etapa actual: margem interco como propriedade do artigo + ecrã de filiais/canais — ✅
+FECHADO por completo (BD + app implantada) em 2026-09-14**, só migração 0012 (Fase 1); Fase
+2 não precisou de migração nenhuma (ver secções "Margem interco no artigo (migração 0012)"
 e "Ecrã de filiais e canais (Fase 2)" abaixo). Motivação: ao rever a amostra real de
 paridade motor-vs-Excel, o Pedro esclareceu que a comissão/fee interco não é uma
 configuração por par de filiais — é uma propriedade do próprio artigo, variável artigo a
-artigo, nunca cobrada quando a filial vendedora é a de origem. A implantação do código React
-de ambas as fases aguarda confirmação de CI verde do Pedro.
+artigo, nunca cobrada quando a filial vendedora é a de origem. **Implantado** 2026-09-14
+(CI verde confirmado pelo Pedro, `36a9f61`, digest `sha256:c3054ac3...`) —
+`scripts/smoke.py` 56/56 contra produção depois do deploy.
 
 **Etapa anterior: arredondamento, margem plana, fronteiras — ✅ FECHADO 2026-09-10, migrações
 0010+0011** (ver secção "Arredondamento, margem plana e fronteiras" abaixo). Items 30, 31 e
@@ -88,9 +89,8 @@ inofensivo, não vale a pena mexer.
   do artigo numa filial não-origem, fee = 0 na filial de origem, e ausência de resíduo depois
   do `ROLLBACK`. **54/54 a passar** ao vivo contra `https://tmsiequipment.duckdns.org`.
 - Formulário do artigo (criar/editar) ganhou o campo; `next build` **não** corrido neste VPS
-  (961 MB RAM, regra em `~/atelier-vps/CLAUDE.md` — builds fora do VPS) — falta confirmação
-  do Pedro via CI verde antes de aplicar o código React em produção (a migração da BD já
-  está aplicada; o código da app ainda não foi implantado).
+  (961 MB RAM, regra em `~/atelier-vps/CLAUDE.md` — builds fora do VPS). **Implantado
+  2026-09-14** — ver "Deploy conjunto (Fases 1+2)" no fim desta secção.
 
 **Fase 2 → ver secção "Ecrã de filiais e canais (Fase 2)" abaixo — não precisou de migração
 nenhuma** (achado desta sessão, revisto o desenho inicial: `tmsi.branches`/`tmsi.channels`
@@ -146,8 +146,33 @@ nova.
   (`select ... where id='SMOKETST'` → 0 linhas nas duas tabelas). O caminho positivo
   (admin a criar mesmo) fica para o Pedro validar no browser.
 - **56/56 a passar** ao vivo (54 da Fase 1 + 2 novos do bloco Y).
-- `next build` **não** corrido neste VPS (mesma razão da Fase 1) — falta CI verde do Pedro
-  antes de implantar.
+- `next build` **não** corrido neste VPS (mesma razão da Fase 1). **Implantado 2026-09-14**
+  — ver "Deploy conjunto (Fases 1+2)" abaixo.
+
+## Deploy conjunto (Fases 1+2) — ✅ FECHADO 2026-09-14
+
+**"CI verde, podes avançar"** — confirmado pelo Pedro 2026-09-14. Procedimento seguido
+tal como descrito em `deploy/DEPLOY.md` §1, sem desvios:
+
+1. CI reconfirmado verde via API pública do GitHub (`check-runs` para `53076c7`,
+   `build-and-push` → `success`) antes de qualquer alteração.
+2. Portões de recursos: disco 55% (`/`), RAM+swap disponível muito acima dos 60 MB mínimos.
+3. `docker pull ghcr.io/pdr625/tmsiequipment/tmsi-app:latest` → digest novo
+   `sha256:c3054ac3f6bd2f5187f21cb2000c4d852c8075698df11571dc9e22842f7a57cf` (anterior:
+   `sha256:f6d446d32d35...`).
+4. Backup timestamped de `deploy/supabase/docker-compose.yml` antes de editar (regra
+   `~/atelier-vps/CLAUDE.md` invariante 4), linha `tmsi-app.image` actualizada ao novo
+   digest, `docker compose config -q` validado antes de tocar em produção.
+5. `docker compose up -d --no-deps tmsi-app` — recriado, `healthy` ao segundo `docker
+   inspect` (≈3 s).
+6. `scripts/smoke.py` — **portão obrigatório, não opcional** (DEPLOY.md §1.8): **56/56** a
+   passar contra a produção já com o novo container.
+7. `curl` directo a `/branches` (307, redireccionamento para login — confirma que a rota
+   existe, não 404) e `/api/health` (200).
+8. Bump do digest commitado e empurrado (`36a9f61`).
+
+Nenhum desvio do procedimento documentado; nenhum drop-in `sudoers` necessário (todo o
+processo corre como `pedro`, sem privilégios elevados).
 
 ## Item 14 — Diagnóstico do desempenho (medição inválida de 06/09) — ✅ DIAGNOSTICADO 2026-09-06
 
