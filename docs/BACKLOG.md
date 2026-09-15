@@ -60,17 +60,29 @@ excepção nomeada (seed directo, só configuração, nunca artigo — ver `docs
 dependiam apagados; os 12 códigos HS e as 48 linhas de direitos ficaram, são referência real
 reutilizável pelo item 39. Detalhe completo, achado a achado: `docs/ENGINE-PARITY.md`.
 
-**39. Importação em massa de produtos** 🔴 *(por implementar)* — desenho já decidido, não
-por decidir: ecrã admin-only; template descarregável; fluxo validar → pré-visualizar →
-gravar; chave natural = código do artigo, com upsert (não duplica se o código já existir);
-**âmbito só produtos** (não filiais/regras/câmbio); o carregamento inicial fica
-**explicitamente fora do workflow de aprovação da 0007** — decisão a registar formalmente
-aqui, não implícita. Bloqueia a entrada de qualquer catálogo real maior que os 13 produtos
-de teste actuais. **Dado novo, medido no item 38, não intuição:** 13 artigos de amostra
-precisaram de 163 entradas de configuração para ficarem completos (12,5 por artigo, em
-média) — extrapolado a um catálogo real de 50–70 artigos, **625–875 entradas de
-configuração**, a maioria caindo hoje inteiramente na conta admin de aprovar uma a uma (ver
-item 44). É este número que torna a importação em massa urgente, não só conveniente.
+~~**39. Importação em massa de produtos**~~ ✅ **fechado 2026-09-16 — migração 0013.**
+Âmbito alargado face ao desenho original, com justificação medida pelo próprio item 38: não
+só produtos — **produtos + configuração (transporte, margem, direitos aduaneiros) na mesma
+passagem**, porque o volume nunca esteve nos produtos (163 entradas para 13 artigos, 12,5
+por artigo — 625–875 para um catálogo real de 50–70). Ecrã `/import` (admin: os dois
+ficheiros; `product_manager`: só artigos); dois formatos — `hs_code;description;rate` (a
+taxa uniforme nas 4 zonas, confirmado sem excepção no item 38) e o mesmo formato da amostra
+de paridade para artigos, com duas colunas novas derivadas nesta sessão (`product_id`,
+`item_type` — a amostra nunca teve chave real nem este campo). Chave natural = `product_id`,
+com upsert. Carregamento inicial escreve directo, fora do workflow da 0007, exactamente como
+decidido a 06/09 (decisão datada em `docs/STATE.md`); um segundo modo por proposta agrupada
+fica explicitamente para o item 44. Sete provas todas passadas: payload real (12 HS + 48
+direitos, cruzado com o que o item 38 já tinha semeado à mão — bate 100%, e um teste à parte
+comprovou o elo causal, `compute_price()` a falhar antes e a resolver depois, dentro de
+`BEGIN`/`ROLLBACK`); dry-run sem escrita nenhuma; ficheiro com uma margem 1,2 rejeitado por
+inteiro; segunda passagem do mesmo ficheiro sem escrever nada (idempotência por contagem);
+lote desfeito de volta à baseline exacta, um segundo desfazer recusado; papel sem
+`admin`/`product_manager` recusado pela própria função (`SECURITY DEFINER`, não é RLS).
+`scripts/smoke.py` ganhou o bloco Z, **61/61**. Três bugs reais apanhados e corrigidos só
+durante a validação `BEGIN`/`ROLLBACK` (duas colisões de nome de coluna, mesma classe de
+erro que a 0010 já tinha apanhado uma vez; um `array_agg` sobre zero linhas a dar `NULL` em
+vez de lista vazia, a violar o `not null` de `sold_in`). Detalhe completo:
+`docs/IMPORT.md`.
 
 **44. `decide_price_proposal()` sem caminho de aprovação em lote para configuração
 global** — **REGISTADO 2026-09-15/16**, achado de desenho do item 38, não resolvido aqui.

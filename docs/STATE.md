@@ -3,7 +3,22 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: paridade do motor contra o Excel de referência (item 38) — ✅ FECHADA
+**Etapa actual: importação em massa (item 39) — ✅ FECHADA 2026-09-16 — migração 0013.**
+**Decisão datada (restrição 1 do prompt, desenho de 06/09, registada pela primeira vez
+aqui):** o carregamento inicial escreve directo, fora do workflow de propor/aprovar da 0007
+— mesma excepção já usada uma vez no seed de configuração do item 38, e antes disso, no
+próprio seed fictício original, anterior à 0007 sequer existir. Um segundo modo — importações
+seguintes a entrar como proposta agrupada — fica explicitamente adiado (item 44, não
+desenhado, não implementado). Âmbito alargado ao desenho original: não só produtos, produtos
+**+ configuração** (transporte/margem/direitos) na mesma passagem — o volume nunca esteve
+nos produtos (163 entradas de configuração para os 13 artigos do item 38, 625-875 para um
+catálogo real). Sete provas, todas passadas — payload real (12 HS + 48 direitos, idêntico ao
+que o item 38 semeou à mão), dry-run sem escrita, ficheiro inválido rejeitado por inteiro,
+idempotência por contagem, reversão completa de um lote, fronteira RLS/`SECURITY DEFINER`.
+`scripts/smoke.py` 56→**61/61**. Detalhe completo: `docs/IMPORT.md`, secção "Importação em
+massa (item 39)" abaixo.
+
+**Etapa anterior: paridade do motor contra o Excel de referência (item 38) — ✅ FECHADA
 2026-09-15/16 — a fórmula do motor bate 100% com o Excel.** 65 linhas medidas (13 artigos ×
 5 âmbitos), 62 comparáveis, **zero linhas por explicar**: 22 exactas, 28 pelo desvio de
 câmbio já sinalizado (quantificado: −0,05%/−0,20%/+0,43% CNY→EUR/USD/GBP), 12 pela taxa
@@ -54,6 +69,66 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Importação em massa (item 39) — ✅ FECHADA 2026-09-16 — migração 0013
+
+**Contrato de colunas, derivado do formato da amostra de paridade (item 38), com três
+pontos adaptados e reportados, não assumidos** — detalhe completo, coluna a coluna:
+`docs/IMPORT.md`. Resumo: `product_id` (novo — a amostra nunca teve chave real, só um
+índice de comparação) e `item_type` (novo — a amostra inferia-o à mão pela categoria,
+frágil demais para automatizar) tiveram de ser acrescentados; `in_interco_fee` passa a
+ser lido ao nível do artigo (pós-0012), não por linha; direitos aduaneiros entram por um
+ficheiro separado, mais simples (`hs_code;description;rate`), porque a taxa é sempre
+uniforme nas 4 zonas — confirmado sem excepção no item 38.
+
+**Migração 0013:** `tmsi.import_batches`/`tmsi.import_batch_items` (rastreio ao nível da
+linha — `old_row` nulo = esta linha foi inserida por este lote, não-nulo = uma linha
+existente foi actualizada; é isto que torna "desfazer" provável contra um upsert, não só
+contra uma inserção pura) + três funções `SECURITY DEFINER`:
+`tmsi.run_import_hs_duty()`, `tmsi.run_import_products()`, `tmsi.undo_import_batch()`.
+Nenhuma passa por `tmsi.price_proposals` — escrita directa, admin/`product_manager`,
+exactamente a decisão da restrição 1.
+
+**Três bugs reais, apanhados só durante a validação `BEGIN`/`ROLLBACK`, corrigidos antes do
+commit:** duas colisões de nome de coluna (`rate` contra `customs_rates.rate`, `batch_id`
+contra a própria coluna da tabela de lotes) — mesma classe de erro que a 0010 já tinha
+apanhado uma vez com `branch_id`/`currency`, resolvida da mesma forma (alias em todo o
+lado); e um `array_agg()` sobre zero linhas a devolver `NULL` em vez de lista vazia, o que
+violava o `not null` de `products.sold_in` sempre que um artigo não tinha nenhuma filial
+extra (`coalesce(..., '{}')` em três sítios).
+
+**Sete provas, todas em `BEGIN`/`ROLLBACK` antes de aplicar, e a primeira também ao vivo:**
+1. **Payload real** — os 12 códigos HS + 48 taxas que o item 38 deixara semeados à mão:
+   corridos pelo importador agora, resultado **12/12 inalterados, zero escritas** — os dois
+   caminhos (seed manual do item 38, importador genérico desta sessão) concordam por
+   completo. Prova do elo causal à parte, com dados sintéticos, dentro de `BEGIN`/`ROLLBACK`
+   (nunca tocou nos dados reais): a taxa de um código real apagada → `compute_price()` de um
+   artigo de teste mostra `duty_rate=0`, erro `"missing customs rate for HS/zone"` →
+   reimportada pelo mecanismo → `duty_rate=0,0170`, sem erros.
+2. **Dry-run** — o mesmo ficheiro em `p_dry_run=true` não escreve nada, confirmado por
+   contagem antes/depois.
+3. **Ramo de falha** — uma margem de 1,2 (fora de `[0,1)`) rejeita o ficheiro inteiro, erro
+   `{row:1, column:"in_margin", reason:"fora do intervalo [0,1)"}`, zero produtos escritos.
+4. **Idempotência** — o mesmo ficheiro bom corrido duas vezes: a segunda mostra
+   `products_unchanged` e `overrides_unchanged` iguais ao número de entrada,
+   `items_written=0`, contagens na BD inalteradas.
+5. **Reversão** — um lote de 2 produtos + overrides desfeito: contagens de volta a zero,
+   `items_undone` bate com o número exacto de linhas escritas; um segundo desfazer do mesmo
+   lote é recusado (`"already reverted, not committed"`).
+6. **Fronteira** — um papel sem `admin` nem `product_manager` (`logistics.test`) é recusado
+   pelas próprias funções (`Forbidden`) — não é uma política RLS, é `SECURITY DEFINER` a
+   verificar `has_role()` no corpo, confirmado nos dois RPCs.
+7. **Sem regressões** — `scripts/smoke.py` ganhou o bloco `Z` (RLS dos dois RPCs, dry-run
+   sem escrita, ramo de falha) — **56 → 61/61**.
+
+**Ecrã:** `/import` (link na página inicial, admin ou `product_manager`) — carregar CSV →
+pré-visualizar (nunca escreve) → confirmar com motivo obrigatório → resultado; lista de
+lotes recentes com "Desfazer", só visível a `admin`.
+
+**Nota de verificação, não resolvida à pressa:** nem a 0012 nem esta 0013 ganharam uma
+adenda formal completa em `docs/VERIFICATION-PROTOCOL.md` §7 (os 8 papéis da matriz) — fica
+explicitamente para o item 41, não duplicado aqui; uma nota interina foi deixada nessa
+secção a dizê-lo.
 
 ## Paridade motor-Excel (item 38) — ✅ FECHADA 2026-09-15/16
 

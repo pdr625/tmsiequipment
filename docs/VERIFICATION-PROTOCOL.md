@@ -975,3 +975,15 @@ existe) desde esse deploy; corrigido no mesmo commit do código desta sessão.
 margem plana/fronteiras — o browser do Pedro (um produto em cada moeda, `/config`, uma
 listagem de canal) continua por confirmar. Item 14 continua por fechar, não é coberto por
 este gate.
+
+**Nota interina, 2026-09-16 — migrações 0012 e 0013, sem adenda formal aqui, registado e não
+escondido:** confirmado na reconciliação de 2026-09-15 que a 0012 não tinha adenda nesta
+secção (achado de processo, `docs/BACKLOG.md` item 41). A 0013 (item 39, importação em
+massa) abre um caminho de escrita novo e sensível — `SECURITY DEFINER`, admin/
+`product_manager`, a contornar o workflow de propor/aprovar por desenho — verificado ao vivo
+por `BEGIN`/`ROLLBACK` (dry-run sem escrita, tudo-ou-nada num ficheiro inválido, idempotência
+por contagem, reversão completa, papel sem `admin`/`product_manager` recusado) e por
+`scripts/smoke.py` bloco Z, mas **nenhuma das duas ganhou uma adenda formal com os 8 papéis
+da matriz**, a mesma lacuna que a 0009-0011 não tinham. Ambas ficam explicitamente por conta
+do item 41 (re-execução formal completa), não resolvidas aqui à pressa para não duplicar
+esse trabalho.

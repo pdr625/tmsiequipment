@@ -877,6 +877,76 @@ def block_branches_admin_only(token):
     )
 
 
+# ---------------------------------------------------------------------------
+# Z — bulk import (item 39): tmsi.run_import_hs_duty()/run_import_products()
+# are SECURITY DEFINER RPCs, not RLS policies — a non-admin/non-product_manager
+# role has to be refused by the function's own has_role() check, the same
+# thing block Y already proves for the two ref_write tables. No admin test
+# account exists by design, so only the negative side of run_import_hs_duty
+# is provable here; run_import_products accepts product_manager too, so its
+# positive path is provable — in DRY-RUN only (never writes, confirmed by a
+# fresh count before/after, same discipline as block P/X's BEGIN/ROLLBACK
+# checks, just at the HTTP layer since a dry-run genuinely writes nothing to
+# roll back). The broken-file branch (restriction 3 of item 39: reject the
+# whole file, never a partial write) is exercised the same way — an invalid
+# margin, real product count unchanged after.
+# ---------------------------------------------------------------------------
+def block_bulk_import(logistics_token, pm_token):
+    status, _body = http(
+        "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
+        body={"p_rows": [{"hs_code": "1234567890", "description": "x", "rate": 0.01}],
+              "p_dry_run": True, "p_filename": "x.csv", "p_reason": "smoke"},
+    )
+    check(
+        "Z: run_import_hs_duty refused for a non-admin role",
+        status in (400, 403),
+        f"http_{status}",
+    )
+
+    status, body = http(
+        "POST", f"{REST}/rpc/run_import_products", token=logistics_token,
+        body={"p_rows": [{"product_id": "T-9699", "article": "x", "item_type": "equipment",
+                          "purchase_currency": "EUR", "exw_price": "1", "primary_subsidiary": "Condat SA",
+                          "scope_type": "branch", "scope_code": "SA"}],
+              "p_dry_run": True, "p_filename": "x.csv", "p_reason": "smoke"},
+    )
+    check(
+        "Z: run_import_products refused for a role with neither admin nor product_manager",
+        status in (400, 403),
+        f"http_{status}",
+    )
+
+    before = psql_rows("select count(*) from tmsi.products where id = 'T-9699';")[0][0]
+    status, body = http(
+        "POST", f"{REST}/rpc/run_import_products", token=pm_token,
+        body={"p_rows": [{"product_id": "T-9699", "article": "smoke test article", "item_type": "equipment",
+                          "purchase_currency": "EUR", "exw_price": "1", "primary_subsidiary": "Condat SA",
+                          "scope_type": "branch", "scope_code": "SA"}],
+              "p_dry_run": True, "p_filename": "smoke.csv", "p_reason": "smoke"},
+    )
+    ok = status == 200 and isinstance(body, dict) and body.get("ok") is True and body.get("dry_run") is True
+    check("Z: product_manager can preview a products import (dry-run)", ok, f"http_{status} body={body}")
+    after = psql_rows("select count(*) from tmsi.products where id = 'T-9699';")[0][0]
+    check("Z: dry-run wrote nothing — product count unchanged", before == after == "0", f"before={before} after={after}")
+
+    status, body = http(
+        "POST", f"{REST}/rpc/run_import_products", token=pm_token,
+        body={"p_rows": [{"product_id": "T-9699", "article": "smoke test article", "item_type": "equipment",
+                          "purchase_currency": "EUR", "exw_price": "1", "primary_subsidiary": "Condat SA",
+                          "scope_type": "branch", "scope_code": "SA", "in_margin": "1.5"}],
+              "p_dry_run": True, "p_filename": "smoke-broken.csv", "p_reason": "smoke"},
+    )
+    ok = (
+        status == 200
+        and isinstance(body, dict)
+        and body.get("ok") is False
+        and isinstance(body.get("errors"), list)
+        and len(body["errors"]) == 1
+        and body["errors"][0].get("column") == "in_margin"
+    )
+    check("Z: an out-of-range value is rejected with row/column/reason, whole file", ok, f"http_{status} body={body}")
+
+
 def main():
     print(f"=== TMSI smoke — {BASE} — {date.today().isoformat()} ===")
     block_health()
@@ -911,6 +981,7 @@ def main():
     block_logistics_channel_scope(tokens["logistics"])
     block_interco_margin(claims["product_manager"])
     block_branches_admin_only(tokens["finance"])
+    block_bulk_import(tokens["logistics"], tokens["product_manager"])
 
     total = len(RESULTS)
     print(f"\n=== {total - FAILURES}/{total} passed ===")
