@@ -3,7 +3,17 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: reconciliação do `docs/BACKLOG.md` + esclarecimento da migração 0012 —
+**Etapa actual: paridade do motor contra o Excel de referência (item 38) — ✅ FECHADA
+2026-09-15/16 — a fórmula do motor bate 100% com o Excel.** 65 linhas medidas (13 artigos ×
+5 âmbitos), 62 comparáveis, **zero linhas por explicar**: 22 exactas, 28 pelo desvio de
+câmbio já sinalizado (quantificado: −0,05%/−0,20%/+0,43% CNY→EUR/USD/GBP), 12 pela taxa
+antiga do Excel do Pedro (achado já conhecido, reconfirmado, não novo). Detalhe completo:
+`docs/ENGINE-PARITY.md`. Rendeu um número medido para o item 39 (163 entradas de
+configuração/13 artigos = 12,5 por artigo) e um item novo de backlog, **44** (aprovação em
+lote para configuração global — hoje 100% na conta admin, sem alternativa). Ver secção
+"Paridade motor-Excel (item 38)" abaixo.
+
+**Etapa anterior: reconciliação do `docs/BACKLOG.md` + esclarecimento da migração 0012 —
 ✅ FECHADA (documentação) 2026-09-15** (ver secção "Reconciliação do backlog + migração 0012"
 abaixo). Sessão só de documentação e medição, sem alteração nenhuma a schema/migrações/
 `app/src`. Achado principal: a migração 0012 é a única, de 0001 a 0012, sem adenda em
@@ -44,6 +54,55 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Paridade motor-Excel (item 38) — ✅ FECHADA 2026-09-15/16
+
+**Restrição 1 respeitada:** zero alterações a schema, migrações ou `app/src`. Amostra real
+(`~/tmp/tmsi-paridade/tmsi-paridade-amostra.csv`, 600, nunca em git) — 13 artigos × 5
+âmbitos, validada por completo antes de tocar na app (aritmética interna do Excel confere
+nas 62 linhas de paridade).
+
+**Configuração:** os 12 códigos HS reais não existiam em `tmsi.hs_codes` (os 5 fixture já lá
+eram, um com a descrição *"fictitious use"*) — inseridos directo (tabela de referência, sem
+workflow, mesmo padrão de `branches`/`channels`). O Excel nunca teve regra de transporte por
+escalão de peso (decisão do Pedro, 2026-09-09) — o valor entrou verbatim, por artigo, via
+override. 163 entradas de configuração no total para os 13 artigos (12 HS + 48 direitos + 62
+transporte + 41 margem). **Amostra provada pelo mecanismo real de propor→aprovar** — 9
+aprovações escolhidas para cobrir os dois ramos de elegibilidade de
+`decide_price_proposal()` (4 `customs_rates`, só admin; 5 overrides de transporte de 1
+artigo, incluindo a linha CORP aprovada por `branch_manager.test`) — motor confirmado
+insensível enquanto pendente, a reflectir assim que aprovado. As restantes ~142 entraram
+como **excepção nomeada** (seed directo, só configuração, nunca artigo — os 13 artigos
+entraram todos por `POST /rest/v1/products` com o token real de `product_manager.test`, o
+mesmo mecanismo RLS-gated do formulário).
+
+**Resultado:** 65 linhas, 62 comparáveis, 3 de diagnóstico (refs 22/23/43, canal APAC, sem
+margem dedutível — margem implícita não bate com nenhum número reconhecível, achado sobre o
+Excel, não resolvido). Das 62: 22 exactas, 28 explicadas pelo desvio de câmbio (CNY→EUR
+−0,05% · CNY→USD −0,20% · CNY→GBP +0,43%, já sinalizado 2026-09-10, agora quantificado), 12
+explicadas pela taxa antiga do Excel do Pedro (mesma divergência já confirmada e a corrigir
+do lado dele — reconfirmada aqui, não é achado novo). **Zero linhas por explicar.**
+
+**Correcção de método encontrada a meio da F3:** a regra do prompt ("publicado ≥ bruto, e
+diferença < 1 passo") está certa para o mínimo (arredonda sempre para cima) mas dava falsos
+positivos na referência (arredonda ao mais próximo, a partir do mínimo já arredondado — pode
+legitimamente ficar abaixo do bruto). Substituída pela tolerância composta já validada nesta
+sessão de reconciliação (`passo × ref_factor + passo/2`) — três casos concretos confirmados
+correctos com a tolerância nova (`T-9504`/ref 8 TBM, `T-9505`/ref 13 APAC, `T-9510`/ref 26
+TBM).
+
+**Limpeza, contado contra a baseline:** 13 artigos de amostra + 103 overrides que deles
+dependiam apagados (`ON DELETE CASCADE`) — `tmsi.products`/`tmsi.price_overrides` de volta a
+13/6, a baseline exacta. Os 12 HS + 48 direitos **ficaram** — referência real, reutilizável
+pelo item 39. As 9 propostas aprovadas ficaram no histórico de `tmsi.price_proposals`, mesmo
+padrão de qualquer proposta aprovada.
+
+**Rendeu:** número medido para o item 39 (163/13 = 12,5 entradas de configuração por artigo
+→ 625-875 num catálogo real de 50-70) e um item novo, **44**
+(`decide_price_proposal()` sem caminho de aprovação em lote para configuração global —
+`branch_id IS NULL`, sempre admin, sem alternativa nenhuma para partilhar a carga).
+
+Detalhe completo, achado a achado, com as tabelas de classificação: `docs/ENGINE-PARITY.md`.
 
 ## Reconciliação do backlog + migração 0012 — ✅ FECHADA 2026-09-15
 

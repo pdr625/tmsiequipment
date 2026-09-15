@@ -22,6 +22,12 @@ no registo formal de verificação que todas as outras migrações têm (agora i
 conjunto de 06/09 ganhou números novos (**35, 36, 37**), nota de correspondência no fim do
 ficheiro.
 
+**Item 38, 2026-09-15/16:** paridade motor vs Excel corrida por completo — **fechado, a
+fórmula do motor bate 100%**, zero linhas por explicar. Detalhe: `docs/ENGINE-PARITY.md`.
+Rendeu um número medido para o item 39 (163 entradas de configuração para 13 artigos,
+12,5/artigo) e um item novo, **44** (aprovação em lote para configuração global, achado de
+desenho, não resolvido).
+
 ## Decisões do Pedro incorporadas
 - Admin pode forçar reset de password: manual OU temporária gerada única (nunca uma
   "default" fixa igual para todos), mostrada uma vez, com troca obrigatória no próximo login.
@@ -38,14 +44,21 @@ Seis itens acordados com o Pedro a 06/09 e 09–10/09 que nunca tinham entrado n
 achado da reconciliação pedida pelo Pedro ("os passos acordados a 06/09 nunca lá entraram").
 Numerados a seguir ao último existente (34) e aos três renumerados abaixo (35–37).
 
-**38. Paridade motor vs Excel** 🔴 *(pronto a correr)* — CSV de amostra real já preenchido
-(13 artigos × 5 listas, 65 linhas) em `~/tmp/tmsi-paridade/tmsi-paridade-amostra.csv`
-(dados comerciais reais — nunca entra em git nem na BD de teste, regra escrita em
-`docs/PARIDADE-PREENCHIMENTO.md`); prompt de sessão já escrito. Diagnóstico preliminar já
-feito nesta sessão (2026-09-10/15): a fórmula do motor bate 100% com o Excel uma vez usadas
-taxas de câmbio directas e correctas — a única divergência encontrada era uma taxa antiga
-num bloco do Excel do Pedro, já confirmada e a corrigir do lado dele. A corrida formal,
-completa, ainda não foi feita.
+~~**38. Paridade motor vs Excel**~~ ✅ **fechado 2026-09-15/16 — a fórmula do motor bate
+100% com o Excel.** Corrida formal completa: 65 linhas (13 artigos × 5 âmbitos), 62
+comparáveis, **zero linhas por explicar** — 22 exactas, 28 explicadas pelo desvio de câmbio
+já sinalizado (agora quantificado: −0,05% CNY→EUR, −0,20% CNY→USD, +0,43% CNY→GBP), 12
+explicadas pela taxa antiga do Excel do Pedro (achado já conhecido, reconfirmado aqui, não
+novo). As 3 restantes (refs 22/23/43, canal APAC) ficam de diagnóstico — margem implícita
+não é um número reconhecível em nenhuma leitura, achado sobre o Excel, não sobre o motor.
+Artigos entraram pelo formulário real (restrição 4); 163 entradas de configuração medidas
+para os completar (12 HS + 48 direitos + 62 transporte + 41 margem — 12,5 por artigo, número
+que informa o item 39 abaixo). Amostra provada pelo mecanismo real de propor→aprovar (9
+aprovações, cobrindo os dois ramos de elegibilidade); as restantes ~142 entraram como
+excepção nomeada (seed directo, só configuração, nunca artigo — ver `docs/ENGINE-PARITY.md`
+§5). Limpeza confirmada contra a baseline: 13 artigos de amostra e os overrides que deles
+dependiam apagados; os 12 códigos HS e as 48 linhas de direitos ficaram, são referência real
+reutilizável pelo item 39. Detalhe completo, achado a achado: `docs/ENGINE-PARITY.md`.
 
 **39. Importação em massa de produtos** 🔴 *(por implementar)* — desenho já decidido, não
 por decidir: ecrã admin-only; template descarregável; fluxo validar → pré-visualizar →
@@ -53,7 +66,23 @@ gravar; chave natural = código do artigo, com upsert (não duplica se o código
 **âmbito só produtos** (não filiais/regras/câmbio); o carregamento inicial fica
 **explicitamente fora do workflow de aprovação da 0007** — decisão a registar formalmente
 aqui, não implícita. Bloqueia a entrada de qualquer catálogo real maior que os 13 produtos
-de teste actuais.
+de teste actuais. **Dado novo, medido no item 38, não intuição:** 13 artigos de amostra
+precisaram de 163 entradas de configuração para ficarem completos (12,5 por artigo, em
+média) — extrapolado a um catálogo real de 50–70 artigos, **625–875 entradas de
+configuração**, a maioria caindo hoje inteiramente na conta admin de aprovar uma a uma (ver
+item 44). É este número que torna a importação em massa urgente, não só conveniente.
+
+**44. `decide_price_proposal()` sem caminho de aprovação em lote para configuração
+global** — **REGISTADO 2026-09-15/16**, achado de desenho do item 38, não resolvido aqui.
+Uma proposta de âmbito global (`branch_id IS NULL` — hoje só `customs_rates`,
+`exchange_rates`, `currency_rounding_params`) só pode ser aprovada por `admin`; não há
+caminho nenhum para um `branch_manager` ou outro papel partilhar essa carga, mesmo sendo a
+sua própria filial afectada. Medido no item 38: uma revisão de 12 códigos HS × 4 zonas já
+são 48 aprovações, uma a uma, só na conta do Pedro. Com o catálogo real (item 39), este
+número sobe para a ordem das centenas por revisão de tarifa. Duas direcções possíveis, por
+decidir: aprovação em lote (seleccionar várias propostas do mesmo `target_table` e decidir
+de uma vez) ou um papel novo "gestor de configuração" mais estreito que `admin`. Nenhuma
+desenhada aqui — registo, não correcção.
 
 **40. Higiene do seed fictício e das contas `.test`** 🟠 *(por desenhar)* — decisão do Pedro,
 2026-09-06: as contas `.test` (`finance.test`, `pm.test`, `logistics.test`,
