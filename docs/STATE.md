@@ -144,7 +144,8 @@ nova.
   escrita, "a conta pessoal nunca entra no smoke"), só o lado provável sem uma: uma filial/
   canal `SMOKETST` recusada para um chamador não-admin (403), e confirmado sem resíduo
   (`select ... where id='SMOKETST'` → 0 linhas nas duas tabelas). O caminho positivo
-  (admin a criar mesmo) fica para o Pedro validar no browser.
+  (admin a criar mesmo) ficou para o Pedro validar no browser — **confirmado funcional
+  pelo Pedro, 2026-09-15.**
 - **56/56 a passar** ao vivo (54 da Fase 1 + 2 novos do bloco Y).
 - `next build` **não** corrido neste VPS (mesma razão da Fase 1). **Implantado 2026-09-14**
   — ver "Deploy conjunto (Fases 1+2)" abaixo.
