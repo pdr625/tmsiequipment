@@ -47,6 +47,16 @@ configuração por par de filiais (`tmsi.interco_fees`, `supplier_branch`→`sel
 filiais", variável artigo a artigo, nunca cobrada quando a filial vendedora é a própria
 filial de origem (essa última regra já estava certa desde 0001 — só a fonte do valor muda).
 
+**A divergência de câmbio ficou resolvida à parte, 2026-09-15** (sem tocar em dados
+comerciais reais na documentação — só as taxas, já públicas no `/config` desde sessões
+anteriores): as taxas ao vivo (CNY=8,26 · USD=1,1587 · GBP=0,88) confirmaram-se correctas,
+dentro de 0,05%–0,5% de duas fontes independentes da amostra real do Pedro (as linhas de
+compra em CNY e a linha do canal APAC). O único bloco fora dessa família — compra em EUR
+vendida às filiais TBM/CORP/LTD, ~17% abaixo de forma consistente nas três moedas — era uma
+**taxa antiga no Excel do Pedro**, confirmado por ele; corrige-o do lado dele, sem
+necessidade de nenhuma alteração no `/config` nem no motor (que só suporta hoje uma taxa
+por moeda, não uma por âmbito — e não precisa de suportar mais que isso).
+
 **Desenho, confirmado com o Pedro antes de mexer em código** (`AskUserQuestion`, 3
 perguntas): grelha de margem por escalão mantém-se como está (sem alteração); ecrã novo de
 filiais fica "tudo num ecrã" (Fase 2, por fazer); a fee interco passa a **campo no próprio
