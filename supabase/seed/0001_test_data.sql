@@ -12,12 +12,16 @@ insert into tmsi.suppliers (id, name, country) values
   ('SUP-CN', 'Shenzhen Example Co.', 'CN'),
   ('SUP-US', 'Sample Industries Inc.', 'US');
 
+-- item 40: description suffix is the same marker a human reads live in
+-- tmsi.hs_codes — added there directly (existing installs), kept here so a
+-- fresh install starts already marked, never relying on memory to tell
+-- these apart from real HS codes loaded later (item 39's importer).
 insert into tmsi.hs_codes (code, description) values
-  ('842430', 'Steam or sand blasting machines and similar jet projecting machines (fictitious use)'),
-  ('841370', 'Centrifugal pumps'),
-  ('848180', 'Taps, valves and similar appliances'),
-  ('960390', 'Brushes n.e.s.'),
-  ('392690', 'Articles of plastics n.e.s.');
+  ('842430', 'Steam or sand blasting machines and similar jet projecting machines (fixture item 40 — não usar em preços reais)'),
+  ('841370', 'Centrifugal pumps (fixture item 40 — não usar em preços reais)'),
+  ('848180', 'Taps, valves and similar appliances (fixture item 40 — não usar em preços reais)'),
+  ('960390', 'Brushes n.e.s. (fixture item 40 — não usar em preços reais)'),
+  ('392690', 'Articles of plastics n.e.s. (fixture item 40 — não usar em preços reais)');
 
 insert into tmsi.customs_rates (hs_code, zone, rate)
   select h.code, z.zone, r.rate

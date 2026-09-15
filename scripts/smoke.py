@@ -24,10 +24,14 @@
 # never logged, never passed through a shell command that could echo it.
 # Real personal accounts (the admin) never appear here — see NOTE below.
 
+import base64
+import hashlib
+import hmac
 import json
 import os
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import date
@@ -42,6 +46,25 @@ BASE = os.environ.get("TMSI_BASE_URL", "https://tmsiequipment.duckdns.org")
 CREDENTIALS_DIR = os.environ.get("TMSI_CREDENTIALS_DIR", "/home/pedro/tmp/tmsi-sudo")
 GOTRUE = f"{BASE}/auth/v1"
 REST = f"{BASE}/rest/v1"
+
+# item 40 F1: decoupling the suite from the `.test` accounts having to be
+# live/enabled in GoTrue. Default ("login") is byte-for-byte today's
+# behaviour — a real password grant against GOTRUE for each TEST_USERS
+# entry. "jwt" skips GoTrue's token endpoint entirely: it mints a
+# locally-signed HS256 JWT for the same account's own uuid (already looked
+# up from tmsi.profiles, see main()) using the project's real JWT_SECRET —
+# the exact claims (sub/role/aud/exp) PostgREST already accepts from a
+# GoTrue-issued token, just not obtained by asking GoTrue for one. Not a
+# new identity and not an elevated one: the role grants tested are the
+# same tmsi.user_roles rows the login path already relies on: only the
+# mechanism to reach a bearer token changes. The secret is read straight
+# out of the deploy .env already used to run the stack (chmod 600, never
+# duplicated to a second file, never printed) — same portable-by-env
+# pattern as CREDENTIALS_DIR (item 21).
+VERIFY_MODE = os.environ.get("TMSI_VERIFY_MODE", "login")
+JWT_SECRET_ENV_FILE = os.environ.get(
+    "TMSI_JWT_SECRET_ENV_FILE", "/home/pedro/atelier-vps/tmsiequipment/deploy/supabase/.env"
+)
 
 # NOTE (prompt restriction: "a tua conta pessoal nunca entra no smoke"):
 # no dedicated test admin account exists (tmsi.user_roles has exactly one
@@ -102,6 +125,35 @@ def login(email, password_path):
     if status != 200:
         raise RuntimeError(f"login failed for {email}: http_{status}")
     return body["access_token"]
+
+
+def _load_jwt_secret(path):
+    with open(path) as f:
+        for line in f:
+            if line.startswith("JWT_SECRET="):
+                return line.strip().split("=", 1)[1]
+    raise RuntimeError(f"JWT_SECRET= not found in {path}")
+
+
+def _b64url(raw_bytes):
+    return base64.urlsafe_b64encode(raw_bytes).rstrip(b"=").decode()
+
+
+def mint_jwt(sub, secret, role="authenticated", ttl_seconds=3600):
+    """A hand-rolled HS256 JWT — stdlib only (smoke.py's own rule, see the
+    header comment), same three claims PostgREST/auth.uid() actually read
+    (sub/role/aud + exp): see item 40 F1 comment above CREDENTIALS_DIR."""
+    now = int(time.time())
+    header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    payload = _b64url(
+        json.dumps(
+            {"sub": sub, "role": role, "aud": "authenticated", "iat": now, "exp": now + ttl_seconds},
+            separators=(",", ":"),
+        ).encode()
+    )
+    signing_input = f"{header}.{payload}".encode()
+    signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+    return f"{header}.{payload}.{_b64url(signature)}"
 
 
 def psql(sql, claims_uuid=None, tuples_only=True):
@@ -947,24 +999,76 @@ def block_bulk_import(logistics_token, pm_token):
     check("Z: an out-of-range value is rejected with row/column/reason, whole file", ok, f"http_{status} body={body}")
 
 
+# item 40 F1 (coverage half): blocks P/S/U/X each dynamically discover *an
+# active product* to exercise a business rule that only fires on one (EXW->
+# review, the propose->approve effect, rounding, interco margin) — by
+# design, restriction 2 of the original smoke prompt: never a hardcoded
+# literal. Item 40 F3 retired every real product row to inactive/
+# discontinued (the whole catalog today is fictitious seed/test residue,
+# see docs/STATE.md), so that discovery came up empty and those 4 blocks
+# started silently SKIPping instead of actually testing anything — the
+# same class of hidden-coupling problem F1 fixed for the `.test` accounts'
+# login, just on catalog state instead. Fixed the same way: give them
+# something real to discover instead of hoping the catalog happens to have
+# one. Superuser insert/delete (bypasses RLS — same pattern block S/T's own
+# proposal cleanup already uses), one row, cross-branch (SA + CORP) so
+# blocks U/X's own "not the primary branch" requirement is met too, never
+# left behind — confirmed by count at the end of main().
+SMOKE_FIXTURE_ID = "T-9698"
+
+
+def create_smoke_fixture_product():
+    psql_rows(
+        f"""
+        insert into tmsi.products
+          (id, name, item_type, currency, exw_price, primary_branch, hs_code,
+           gross_weight_kg, unit, sap_code_sa, status, sold_in)
+        values
+          ('{SMOKE_FIXTURE_ID}', 'smoke fixture -- active equipment (test, item 40)', 'equipment',
+           'EUR', 1000, 'SA', '842430', 10, 'PCS', 'SMOKE-{SMOKE_FIXTURE_ID}', 'active', '{{SA,CORP}}');
+        """
+    )
+
+
+def delete_smoke_fixture_product():
+    psql_rows(f"delete from tmsi.products where id = '{SMOKE_FIXTURE_ID}';")
+    remaining = psql_rows(f"select count(*) from tmsi.products where id = '{SMOKE_FIXTURE_ID}';")
+    check(
+        "smoke fixture product cleaned up — no residue",
+        remaining and remaining[0][0] == "0",
+        f"remaining={remaining[0][0] if remaining else '?'}",
+    )
+
+
 def main():
     print(f"=== TMSI smoke — {BASE} — {date.today().isoformat()} ===")
     block_health()
 
-    tokens = {}
-    for role, (email, path) in TEST_USERS.items():
-        tokens[role] = login(email, path)
-
     # UUIDs looked up from TEST_USERS' own emails, not hardcoded alongside
     # them — a test account recreated with a new id would otherwise go
     # silently stale here while TEST_USERS still "worked" (it logs in via
-    # email, the claims dict wouldn't notice a mismatch on its own).
+    # email, the claims dict wouldn't notice a mismatch on its own). Needed
+    # before tokens now (item 40 F1): jwt mode mints from this uuid instead
+    # of asking GoTrue for one.
     claims = {}
     for role, (email, _path) in TEST_USERS.items():
         rows = psql_rows(f"select user_id from tmsi.profiles where email = '{email}';")
         if not rows:
             raise RuntimeError(f"no tmsi.profiles row for {email} — smoke fixture missing")
         claims[role] = rows[0][0]
+
+    tokens = {}
+    if VERIFY_MODE == "jwt":
+        secret = _load_jwt_secret(JWT_SECRET_ENV_FILE)
+        for role in TEST_USERS:
+            tokens[role] = mint_jwt(claims[role], secret)
+    elif VERIFY_MODE == "login":
+        for role, (email, path) in TEST_USERS.items():
+            tokens[role] = login(email, path)
+    else:
+        raise RuntimeError(f"unknown TMSI_VERIFY_MODE: {VERIFY_MODE!r} (expected login|jwt)")
+
+    create_smoke_fixture_product()
 
     block_no_cost_role(tokens["logistics"])
     block_branch_scope(tokens["branch_manager"], claims["branch_manager"])
@@ -982,6 +1086,8 @@ def main():
     block_interco_margin(claims["product_manager"])
     block_branches_admin_only(tokens["finance"])
     block_bulk_import(tokens["logistics"], tokens["product_manager"])
+
+    delete_smoke_fixture_product()
 
     total = len(RESULTS)
     print(f"\n=== {total - FAILURES}/{total} passed ===")

@@ -3,7 +3,21 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: importação em massa (item 39) — ✅ FECHADA 2026-09-16 — migração 0013.**
+**Etapa actual: higiene do seed fictício e das contas `.test` (item 40) — ✅ FECHADA
+2026-09-16.** Zero migração — só dados e `scripts/smoke.py`. Achado de F0 que corrige o
+próprio `docs/BACKLOG.md`: os IDs de fixture nunca foram `T-92xx`/`T-93xx` (essas gamas eram
+fixtures efémeras de medição de desempenho, item 14/28, já confirmadas limpas); o que estava
+por marcar era o seed real (`T-0001`–`T-0010`) mais três produtos residuais de uma sessão de
+verificação anterior (`T-8515`, `T-9002`, `T-9004`), e 3 `price_overrides` residuais de testes
+manuais antigos. **Contas `.test` intocadas** (decisão do Pedro de 06/09, não revogada aqui) —
+o trabalho foi desacoplar `scripts/smoke.py` de precisarem de estar vivas, não desactivá-las.
+Achado lateral durante a prova: retirar de circulação os 12 produtos fictícios deixou a BD
+sem nenhum produto `active`, e 4 blocos do smoke dependiam de encontrar um assim — SKIP
+silencioso em vez de falha ruidosa, corrigido com um fixture próprio. `scripts/smoke.py`
+62/62 (56→61 do item 39, +1 do novo modo, os 4 blocos anteriormente SKIP voltam a testar a
+sério). Detalhe completo: secção "Higiene do seed e das contas `.test` (item 40)" abaixo.
+
+**Etapa anterior: importação em massa (item 39) — ✅ FECHADA 2026-09-16 — migração 0013.**
 **Decisão datada (restrição 1 do prompt, desenho de 06/09, registada pela primeira vez
 aqui):** o carregamento inicial escreve directo, fora do workflow de propor/aprovar da 0007
 — mesma excepção já usada uma vez no seed de configuração do item 38, e antes disso, no
@@ -69,6 +83,162 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Higiene do seed e das contas `.test` (item 40) — ✅ FECHADA 2026-09-16
+
+### F0 — inventário, sem tocar em nada
+
+Classificação, pelo critério da restrição 4 (derivado dos dados: `tmsi.import_batches` marca
+o que entrou por importação real — hoje só um lote, `hs_duty`, que na prática não escreveu
+nenhum item, porque o item 38 já tinha semeado os mesmos 12 HS/48 taxas à mão; **tudo o resto
+é anterior e não-real**):
+
+| Camada | Onde | Contagem | Marcação encontrada |
+|---|---|---|---|
+| Seed fictício (`supabase/seed/0001_test_data.sql`) | `tmsi.products` `T-0001`–`T-0010` | 10 | nome com `(test)`; `842430` já tinha `(fictitious use)` |
+| Resíduo de verificação (não é seed, não é `import_batches`) | `tmsi.products` `T-8515`/`T-9002`/`T-9004` | 3 | nome com `(test)`/`i4 proof...` |
+| HS fixture (referenciado pelo seed, nunca apagável por FK) | `tmsi.hs_codes` | 5 | 1 de 5 tinha marca, 4 não |
+| HS real (item 38/39) | `tmsi.hs_codes` | 12 | já marcado `(amostra paridade, ref N)` |
+| `customs_rates` real | 48 (12×4 zonas) | — | ligado 1:1 ao HS real |
+| `customs_rates` fixture | 20 (5×4 zonas) | — | ligado 1:1 ao HS fixture |
+| `price_overrides` do seed | id 1/2/3 | 3 | `reason` com `(test)` |
+| `price_overrides` residual (sessões manuais antigas, não o seed) | id 8/96/97 | 3 | `reason` "tst"/"41"/"25" — sem relação nenhuma com o seed |
+| `price_proposals` decididas | 20 | — | **história, não tocada** (restrição 1) |
+| `branches`/`channels`/`suppliers` reais | 4/1 | — | organização real, não residuo (Condat SA/CORP/LTD/TBM, APAC Agents) |
+| `suppliers` fixture | 3 | — | nome `Example`/`Sample`/`Fictif` |
+
+**Caso que o critério de F0 não cobria, dito e não escondido:** os três produtos
+`T-8515`/`T-9002`/`T-9004` não são do seed (não estão em `0001_test_data.sql`) nem entraram
+por `import_batches` (a 0013 só regista um lote de configuração, zero produtos) — são
+resíduo de uma sessão de verificação manual anterior, mantido deliberadamente nessa altura
+("Produtos de teste ficam no seed, documentados aqui", nota já existente nesta secção, 06/09)
+como exemplos vivos do ciclo EXW→review e da isenção HS/peso de opções. Ainda são citados por
+id directo em `docs/VERIFICATION-PROTOCOL.md`, passos J e O, `Execução n.º 1`. Tratados aqui
+como a mesma camada fictícia que o seed (mesmo padrão de nome `(test)`, mesma ausência de
+qualquer sinal de dado real) — decisão desta sessão, não do prompt original, registada para o
+Pedro poder reverter se discordar. Da mesma forma, os 3 `price_overrides` residuais (id
+8/96/97) não estavam previstos no âmbito literal (F2/F3 falavam de HS/produtos, não de
+overrides) — tratados como a mesma classe de higiene, expirados via `valid_to`, não apagados.
+
+**Medição exacta do acoplamento do smoke às contas `.test`:** as quatro entradas de
+`TEST_USERS` (`finance`/`pm`/`logistics`/`branch_manager`) eram, antes desta sessão, **100%**
+das 61 asserções — o `login()` corria incondicionalmente para as quatro no topo de `main()`,
+antes de qualquer `check()`; uma conta banida fazia o script abortar por excepção, zero
+resultados impressos. Nenhuma asserção usava só `claims_uuid` sem nunca passar por essa
+inicialização.
+
+### F1 — desacoplar o smoke (o essencial deste item)
+
+**Mecanismo:** `TMSI_VERIFY_MODE` (novo, `login`|`jwt`, omissão `login`). Em `jwt`, o script
+nunca chama `/auth/v1/token` — assina localmente um JWT HS256 (`mint_jwt()`, stdlib puro:
+`hmac`+`hashlib`+`base64`, sem nova dependência, mesma regra que o cabeçalho do próprio
+`smoke.py` já impunha) para o `user_id` de cada conta (já resolvido de `tmsi.profiles`, nunca
+via login), com claims `sub`/`role`/`aud`/`exp` — exactamente as que `auth.uid()`
+(`current_setting('request.jwt.claims',true)::jsonb->>'sub'`) e o `PGRST_JWT_SECRET`
+partilhado já aceitam de um token emitido pelo GoTrue, confirmado por leitura directa de
+`auth.uid()`/`has_role()`/`my_branches()` (nenhuma depende de outra claim) e da config real do
+compose (`GOTRUE_JWT_AUD: authenticated`, `PGRST_JWT_SECRET`/`GOTRUE_JWT_SECRET` = o mesmo
+`${JWT_SECRET}`). O segredo é lido directamente de `deploy/supabase/.env` (chmod 600, já
+existente) — nunca copiado para um ficheiro novo, nunca impresso, só entra num HMAC. Não é
+identidade nova nem elevada (nota de segurança já registada nesta sessão sobre não fabricar
+uma identidade de aprovação — este mecanismo não aprova nada, só troca a forma de obter um
+bearer token para papéis que já tinham os `user_roles` de sempre).
+
+**As três provas exigidas, todas contra a app viva:**
+
+1. **Omissão (sem variáveis de ambiente) = exactamente como era** — `python3 scripts/smoke.py`
+   → login real, **62/62**.
+2. **`TMSI_VERIFY_MODE=login` explícito = idêntico à omissão** — 62/62, mesmo caminho de
+   código.
+3. **A prova que interessa — contas `.test` simuladas indisponíveis:**
+   `TMSI_VERIFY_MODE=jwt TMSI_CREDENTIALS_DIR=/nonexistent-simulated-unavailable python3
+   scripts/smoke.py` → o script nunca chega a abrir um ficheiro de password nem a contactar o
+   GoTrue (o directório nem existe) — **62/62**, prova que a app funciona sem as contas
+   conseguirem fazer login.
+
+**Achado lateral, apanhado pela prova 3, não pela 1/2 (só apareceu depois da F3 retirar todos
+os produtos de circulação):** quatro blocos (`P`, `S`, `U`, `X`) descobriam dinamicamente "um
+produto `active`" por `select ... where status='active' ... limit 1` — desenho correcto (nunca
+um id fixo, restrição 2 do prompt original do smoke), mas dependente de sempre existir um.
+Depois da F3, zero produtos `active` na BD → os quatro blocos passaram a **SKIP** silencioso
+em vez de testar (61/46 com skips, não uma falha — o script não mentia, mas deixava de provar
+nada nesses quatro pontos). Corrigido com `create_smoke_fixture_product()`/
+`delete_smoke_fixture_product()` — um produto `T-9698`, `equipment`, `active`, filiais
+`{SA,CORP}` (satisfaz o requisito "outra filial além da de origem" dos blocos `U`/`X`),
+inserido por superuser (mesmo padrão que a limpeza dos blocos `S`/`T` já usa) no arranque de
+`main()`, apagado no fim, com um `check()` próprio a confirmar zero resíduo. Resultado final:
+**62/62 reais**, sem SKIP nenhum, nos três modos acima.
+
+### F2 — resíduos de teste (5 HS fixture)
+
+Todos os 5 são referenciados por produtos do seed (`842430`→T-0001/T-0003, `841370`→T-0004,
+`848180`→T-0002, `960390`→T-0005/T-0006/T-9002, `392690`→T-0010) — **nenhum sai** por
+`DELETE` (restrição 2: só sairia se provadamente sem referência, provado aqui pelo contrário).
+Marcados via `description` (não há coluna de estado em `tmsi.hs_codes`): sufixo uniforme
+`(fixture item 40 — não usar em preços reais)`, substituindo a marca inconsistente que só um
+dos 5 tinha. `supabase/seed/0001_test_data.sql` actualizado a condizer, para uma instalação
+nova já nascer marcada. Contagem antes/depois, dentro de uma transacção: **17→17** HS,
+**68→68** `customs_rates` — os 12 HS reais e as 48 taxas do item 39, citados um a um,
+confirmados sem alteração nenhuma de texto ou valor.
+
+### F3 — seed fictício (produtos + 3 overrides residuais)
+
+Backup fresco tirado (`pg_dump -Fc`, comando exacto do `tmsi-backup.service`) e **verificado
+por restauro real** numa BD descartável (`tmsi_restore_verify`) — não só confirmado que o
+ficheiro existe: contagens pós-restauro conferidas 1:1 contra o vivo (`products`=13,
+`hs_codes`=17, `customs_rates`=68, `price_overrides`=6, `import_batches`=1, `branches`=4),
+BD descartável apagada a seguir. `~/backups/tmsi/tmsi-pre-item40-2026-09-15-230702.dump`.
+
+12 produtos fictícios (os 9 do seed que não estavam já `discontinued`, mais os 3 residuais)
+passados a `status='inactive'`; `T-0010` já estava `discontinued`, deixado como estava (já era
+o valor certo). Nenhum `DELETE` — `tmsi.product_status` já tinha o estado certo para isto.
+
+**Prova pedida — `compute_price()` antes/depois, por filial, para o par NÃO afectado por
+nenhuma outra mudança desta sessão** (`T-0004/SA`, `T-0002/CORP` — nenhum tem override
+tocado): **byte-idêntico** nos dois, confirmando que retirar de circulação (mudar `status`)
+não altera a fórmula de preço para um chamador com custos visíveis — só a visibilidade de
+linha muda, nunca o cálculo.
+
+**Os 3 `price_overrides` residuais (id 8/96/97) foram expirados** (`valid_to = current_date -
+1`, mecanismo nativo do schema — o mesmo que uma expiração normal já usa, não `DELETE`) — para
+estes três, `compute_price()` **muda de propósito**, e o antes/depois está registado, não
+escondido:
+
+| Produto/filial | Antes (override residual) | Depois (grelha real) | Nota |
+|---|---|---|---|
+| `T-0005`/SA | margem 0,55 | margem 0,50 | **o valor que `docs/VERIFICATION-PROTOCOL.md` sempre documentou como baseline** — o resíduo estava a mascarar isto |
+| `T-0001`/CORP | transporte 25,00 | transporte 500,00 | grelha por peso (180 kg) — o residual era um valor de teste plano, irrealista para equipamento pesado |
+| `T-0004`/CORP | transporte 25,00 | transporte 0 | sem escalão configurado para este peso/filial — resposta real da grelha, não um erro |
+
+Nenhuma destas três mudanças dispara a condição de paragem da restrição 5 ("preço publicado a
+mudar" → reverter) — todas são explicadas por remoção de um valor de teste sem relação com o
+seed, nunca por uma dependência escondida do próprio seed.
+
+**Confirmação de visibilidade (não pedida literalmente, mas directamente relevante para o
+passo manual §6.2 do Pedro):** `sales.sa` via `tmsi.v_products` — **0 produtos** depois (13
+antes de qualquer produto existir como fictício; branch_manager/admin/product_manager/
+finance/logistics/viewer continuam a ver os 13, por desenho — `tmsi.products_visible()` só
+filtra por `status='active'` para `sales`/`agent`, as restantes vêem qualquer estado,
+intencional — precisam de visibilidade operacional independente do estado de publicação).
+
+### F4 — procedimento escrito
+
+`docs/TEST-ACCOUNTS.md` (novo): as seis contas fictícias (as quatro do smoke +
+`sales.sa`/`agent.apac`, usadas manualmente no `VERIFICATION-PROTOCOL.md`), o que já não se
+perde ao desactivar (nada, desde o modo `jwt`), o que **continua** a perder-se (passos S/T do
+protocolo — login real por browser, natureza do que testam) e os passos exactos: `/admin/users`
+→ botão **Disable**/**Reactivate** (já existente, `banUser`/`unbanUser`,
+`app/src/app/admin/users/client-forms.tsx`, via Admin API do GoTrue) — nenhum mecanismo novo
+construído. Nota registada: `tmsi.profiles.active` existe mas não é lido em lado nenhum
+(confirmado por grep ao schema e ao `app/src` inteiro) — não é o botão de desactivar, para não
+ser confundido com um no futuro.
+
+### F5 — fecho
+
+`docs/BACKLOG.md` (item 40 riscado; item 41 com nota de que corre sobre este estado limpo e
+com o aviso sobre os passos S/T se as contas forem entretanto desactivadas); este ficheiro;
+`docs/IMPORT.md` revisto — nada a mudar lá (não enumera IDs de fixture nem contas). Grep de
+coerência corrido depois de todas as edições, não antes.
 
 ## Importação em massa (item 39) — ✅ FECHADA 2026-09-16 — migração 0013
 

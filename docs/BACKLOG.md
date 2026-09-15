@@ -96,22 +96,62 @@ decidir: aprovação em lote (seleccionar várias propostas do mesmo `target_tab
 de uma vez) ou um papel novo "gestor de configuração" mais estreito que `admin`. Nenhuma
 desenhada aqui — registo, não correcção.
 
-**40. Higiene do seed fictício e das contas `.test`** 🟠 *(por desenhar)* — decisão do Pedro,
-2026-09-06: as contas `.test` (`finance.test`, `pm.test`, `logistics.test`,
-`branch_manager.test`) **mantêm-se** depois do carregamento real, para a apresentação à
-equipa — desactivação é um passo **manual**, feito depois, não automático. O seed fictício
-(`supabase/seed/0001_test_data.sql`, os produtos `T-92xx`/`T-93xx` de fixture) tem de **sair
-da BD de produção ou ficar inequivocamente marcado** como não-real antes de qualquer
-apresentação com dados reais ao lado — por desenhar qual das duas.
+~~**40. Higiene do seed fictício e das contas `.test`**~~ ✅ **fechado 2026-09-16.** Achado de
+F0 que corrige o próprio texto acima: os IDs de fixture nunca foram `T-92xx`/`T-93xx` — essas
+gamas eram fixtures **efémeras** de medição de desempenho (item 14/28), já confirmadas em
+`docs/STATE.md` como limpas a 0/0. O que estava mesmo por marcar era outra coisa: os 10
+produtos do seed real (`T-0001`–`T-0010`) **e** três produtos residuais de uma sessão de
+verificação anterior (`T-8515`, `T-9002`, `T-9004` — mantidos deliberadamente nessa altura
+como exemplos vivos, nunca fechados depois), nenhum destes derivável de `import_batches` (a
+0013 só tem um lote, e esse lote não escreveu produto nenhum — todo o `tmsi.products` de hoje
+é fictício, zero linhas reais). Achado extra: 3 `price_overrides` residuais de sessões
+manuais antigas (`reason`: "tst"/"41"/"25", nada a ver com o seed) — expirados como as
+demais, não escondidos.
+**Feito:** (a) as contas `.test` **mantêm-se intocadas**, exactamente como o Pedro decidiu —
+zero desactivação, zero rotação, zero criação de conta nova. (b) `scripts/smoke.py` ganhou um
+modo `TMSI_VERIFY_MODE=jwt` que nunca chama `/auth/v1/token` (assina um JWT local com o
+`JWT_SECRET` real, para o mesmo `user_id` que o login já usava) — provado com as contas
+**simuladas indisponíveis** (`TMSI_CREDENTIALS_DIR` inexistente): 62/62, idêntico ao modo por
+omissão (que fica byte-a-byte como estava). No mesmo achado, **4 blocos do smoke (P/S/U/X)
+dependiam de existir algum produto `active` na BD para se auto-descobrirem** — deixaram de
+encontrar um assim que (c) abaixo correu, e passaram a SKIP silencioso (61→46 com skips, não
+uma falha ruidosa). Corrigido com um fixture próprio, criado/apagado a cada corrida — 62/62
+real, sem SKIP nenhum. (c) os 5 códigos HS de fixture (referenciados pelo seed, não apagáveis
+sem quebrar FK) e os 12 produtos fictícios (10 do seed + os 3 residuais) marcados/retirados de
+circulação — `hs_codes.description` com sufixo `(fixture item 40 — não usar em preços reais)`;
+produtos a `status='inactive'` (um já estava `discontinued`, deixado como estava). `compute_price()`
+confirmado byte-idêntico antes/depois para o par não afectado (`T-0004/SA`, `T-0002/CORP`); os
+3 `price_overrides` residuais expirados via `valid_to` (não `DELETE` — mecanismo nativo do
+schema), com a alteração de preço resultante explicada, não escondida (`T-0005/SA`: margem
+volta de 0,55 fabricado para 0,50 de grelha — o valor que o `VERIFICATION-PROTOCOL.md` sempre
+documentou como baseline). `sales.sa` confirmado a ver **zero** produtos depois (antes via
+`branch_manager.test`/CORP: 8; o RLS de `sales`/`agent` filtra por `status='active'`, o de
+`branch_manager`/`admin`/`product_manager`/`finance`/`logistics`/`viewer` não — intencional,
+essas contas continuam a precisar de ver produtos em qualquer estado). (d) `docs/TEST-ACCOUNTS.md`
+novo: o que são as seis contas fictícias (as quatro do smoke + `sales.sa`/`agent.apac`), o que
+já não se perde ao desactivar (nada, desde o modo `jwt`), o que **continua** a perder-se
+(passos S/T do `VERIFICATION-PROTOCOL.md`, login real por browser — natureza do que testam,
+não um defeito), e os passos exactos (`/admin/users`, botão **Disable**/**Reactivate**, já
+existente, `ban_duration` via GoTrue). Backup fresco tirado e **verificado por restauro real**
+(não só por existir o ficheiro) antes das alterações de dados — contagens do restauro
+conferidas 1:1 contra o vivo. Detalhe completo, achado a achado: `docs/STATE.md`.
 
 **41. Re-execução formal completa do `docs/VERIFICATION-PROTOCOL.md`** 🔴 *(obrigatória antes
 dos dados reais)* — a última execução dos **8 papéis da matriz completa** cobriu só as
 migrações 0001–0005 (registo da secção 7, 2026-09-05). Toda execução desde aí — i9, i10,
-tarefa 6, migrações 0007, 0008, 0009, 0010+0011 — foi uma **adenda parcial**, re-testando só
-os passos novos de cada sessão, nunca os 8 papéis outra vez desde o início. É o gate que
-sustenta perante a equipa/direcção que os custos não vazam a quem não deve — não se pode
-assumir que continua válido depois de sete migrações de schema sem o re-confirmar por
-inteiro.
+tarefa 6, migrações 0007, 0008, 0009, 0010+0011, **0012, 0013** — foi uma **adenda parcial**,
+re-testando só os passos novos de cada sessão, nunca os 8 papéis outra vez desde o início. É
+o gate que sustenta perante a equipa/direcção que os custos não vazam a quem não deve — não se
+pode assumir que continua válido depois de treze migrações de schema sem o re-confirmar por
+inteiro. **Corre agora sobre o estado limpo do item 40** (zero produto activo real ou
+fictício na BD, os 12 fictícios retirados de circulação, os 5 HS de fixture marcados) — os
+passos O/J da `Execução n.º 1` (2026-09-05) usavam `T-8515`/`T-9004` por id directo; uma
+`Execução n.º 2` vai precisar de fixtures próprios (o smoke ganhou um padrão pronto a copiar,
+`create_smoke_fixture_product()`/`delete_smoke_fixture_product()` em `scripts/smoke.py`, item
+40). **Inclui obrigatoriamente as adendas em falta da 0012 e da 0013** (nota interina em
+`docs/VERIFICATION-PROTOCOL.md`, item 39). Se as contas `.test` entretanto tiverem sido
+desactivadas, os passos S/T (login real por browser) precisam de uma conta reactivada
+temporariamente ou nova — ver `docs/TEST-ACCOUNTS.md`.
 
 **42. Nota de tratamento de dados aos utilizadores** 🟠 *(por escrever)* — pedida pelo Pedro,
 2026-09-06: finalidade do tratamento, quem acede (por papel), prazo de retenção. Nenhum
