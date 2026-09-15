@@ -4,6 +4,14 @@
 Substitui a lista da análise de 05/09 como referência de trabalho; o ROADMAP do repo deve
 absorver isto na próxima sessão.
 
+**Varredura 2026-09-15** (pedido do Pedro, "faz a varredura ao ficheiro inteiro"): todo o
+ficheiro revisto item a item contra o schema/código real, não contra a memória de sessões
+anteriores. Achado principal: o item 1 estava 100% implementado desde a migração 0006 mas
+nunca tinha sido marcado `~~fechado~~` — corrigido. Item 10 revisto e clarificado (parcial,
+por um caminho diferente do que as duas perguntas originais previam). Todos os outros itens
+ainda sem `~~risco~~` foram confirmados como genuinamente em aberto (a maioria são decisões
+do Pedro ou itens de infra fora do âmbito desta app, não trabalho técnico por fazer).
+
 ## Decisões do Pedro incorporadas
 - Admin pode forçar reset de password: manual OU temporária gerada única (nunca uma
   "default" fixa igual para todos), mostrada uma vez, com troca obrigatória no próximo login.
@@ -16,20 +24,19 @@ absorver isto na próxima sessão.
 
 ## 🔴 Críticas — a fila de execução imediata
 
-**1. i9 — Gestão de passwords sem email** *(sessão VPS; desbloqueia o piloto)*
-(a) Em `/admin/users`: acção "Reset password" — admin escolhe manual ou gerada
-(única, forte, mostrada uma só vez, nunca guardada em claro fora do GoTrue); via Admin API
-(`updateUserById`), atrás do gate `has_role('admin')` como na i3.
-(b) Flag "must_change_password" em `tmsi.profiles` (migração pequena — toma a numeração
-seguinte livre); middleware bloqueia tudo excepto a página de troca até a troca acontecer.
-(c) Página "Change password" para o próprio utilizador autenticado — **com verificação da
-password actual no servidor** (re-login server-side antes do update; o updateUser sozinho
-não a exige).
-(d) Tudo vai ao audit_log (reset pelo admin regista admin como actor; troca própria regista
-o próprio). Ramos negados: não-admin a chamar o reset → recusado; utilizador com flag activa
-a tentar navegar → bloqueado.
-(e) **O VERIFICATION-PROTOCOL ganha os testes destes fluxos no mesmo passe** (a matriz e a
-secção 4 mudam) + re-execução parcial dos blocos afectados.
+~~**1. i9 — Gestão de passwords sem email**~~ ✅ **fechada — achada já feita nesta varredura
+2026-09-15, nunca marcada.** Todas as cinco alíneas confirmadas contra o código real:
+(a) `resetPassword()` em `app/src/app/admin/users/actions.ts:159`, manual ou gerada
+(`crypto.randomInt`), atrás de `has_role('admin')`. (b) `must_change_password` em
+`tmsi.profiles` (migração 0006) — `app/src/lib/supabase-middleware.ts` lê-o em todo o
+pedido e bloqueia a navegação até à troca. (c) `/account/password`
+(`change-password-form.tsx`/`actions.ts`) — verificação da password actual passou a ser
+imposta pelo próprio GoTrue (`GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD`),
+não só pela app, um upgrade sobre o pedido original. (d) `mark_password_changed()` RPC limpa
+a flag; audit trigger já cobre `tmsi.profiles`. (e) `docs/VERIFICATION-PROTOCOL.md` secção
+4.7, passos W/X/Y, cobre os três fluxos (reset manual, reset gerado, troca própria) —
+password errada recusada no servidor, sem sessão nova. `scripts/smoke.py` já assume as
+quatro contas `.test` geridas por este mecanismo (`TEST_USERS`).
 
 ~~**2. i10 — Export Excel + PDF das listagens** *(sessão VPS)*~~ ✅ **fechada 2026-09-05**
 (dados/RLS confirmados pelo agente na BD; provas de ecrã confirmadas pelo Pedro, incluindo o
@@ -99,7 +106,23 @@ conhecida a revisitar com mais utilizadores reais). Implementação: **E4** (mig
 fechada nesta sessão — `tmsi.price_proposals`/`tmsi.decide_price_proposal()`, ecrã
 `/proposals`, `docs/ROADMAP.md`/`docs/VERIFICATION-PROTOCOL.md` (passos EE-JJ) actualizados.
 Detalhe completo: `docs/STATE.md`.
-**10. Âmbitos de override canal/agente** — 2 perguntas de desenho registadas.
+**10. Âmbitos de override canal/agente** — **PARCIALMENTE fechado, achado nesta varredura
+2026-09-15, por um caminho diferente do previsto.** As duas perguntas originais
+(`docs/ROADMAP.md`, "Questões abertas": (a) precedência entre âmbito de filial e de
+canal/agente coexistentes; (b) como o contexto de canal/agente chega a `compute_price()`)
+eram sobre `tmsi.product_hs_overrides` especificamente, não sobre `price_overrides` em
+geral. Estado real confirmado contra o código: **(b) resolvido para `price_overrides`** —
+`compute_price()` ganhou `p_scope_type`/`p_scope_id` na migração 0009, e um override de
+margem/transporte por canal já tem efeito real (workflow de aprovação, admin-only).
+**(b) continua por resolver para `product_hs_overrides`** — o motor (migração 0012, linha
+do `select h.hs_code from tmsi.product_hs_overrides h where ... h.scope_type = 'branch'`)
+só lê `scope_type='branch'`, exactamente como o ROADMAP registava; linhas `channel`/`agent`
+continuam a aparecer marcadas "no effect" na UI (`app/src/app/products/[id]/page.tsx`).
+**(a) tornou-se irrelevante, não resolvida** — a migração 0010 fez o âmbito canal zerar
+**sempre** a taxa de direitos (`v_duty_rate := 0` quando `p_scope_type = 'channel'`), por
+isso o HS code (e qualquer override dele) deixou de influenciar o preço de canal de todo;
+não há precedência nenhuma para decidir enquanto essa regra se mantiver. Se um dia os
+direitos voltarem a aplicar-se a canais, a pergunta (a) reabre.
 **11. CPI L113-9 por escrito** — pré-condição E6; condiciona a via TI (7).
 **12. Questões do handover §7**: moeda escalões TBM (T2) · taxas SAP (C2, manual no piloto).
 **13. Terceira perna do backup** — **SUSPENSO, decisão do Pedro 2026-09-06** (hoje 2
@@ -280,8 +303,13 @@ do Pedro, por tomar numa sessão própria.
 
 ---
 
-## Ordem de sessões proposta
+## Ordem de sessões proposta — histórica, já toda percorrida (nota 2026-09-15)
 i9 (passwords) → i10 (export) → técnica (smoke+lockfile) → auth/headers → code review →
 piloto (8) → L2/E4 informada pelo uso → restantes por procura.
-Cada sessão fecha com STATE/ROADMAP/dossier como habitual; a i9 arrasta a actualização do
-protocolo e a re-execução parcial.
+Todos os passos até "L2/E4" estão fechados (ver itens 1-6, 9, 21-25 acima); o piloto (8)
+continua deliberadamente adiado pelo Pedro, não pendente de trabalho técnico. "Restantes por
+procura" já rendeu, fora desta ordem original: canais no motor (0009, item 29), arredondamento/
+margem plana/fronteiras (0010/0011, itens 30/31/34), margem interco como propriedade do
+artigo + ecrã `/branches` (0012, sem número de item — ver `docs/STATE.md`). Esta secção fica
+como registo histórico, não como fila activa — a fila real, a partir de 2026-09-15, são os
+itens ainda sem `~~risco~~` acima (7, 10 parcial, 11, 12, 13, 32) mais os "Baixas".
