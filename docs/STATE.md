@@ -3,7 +3,16 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: margem interco como propriedade do artigo + ecrã de filiais/canais — ✅
+**Etapa actual: reconciliação do `docs/BACKLOG.md` + esclarecimento da migração 0012 —
+✅ FECHADA (documentação) 2026-09-15** (ver secção "Reconciliação do backlog + migração 0012"
+abaixo). Sessão só de documentação e medição, sem alteração nenhuma a schema/migrações/
+`app/src`. Achado principal: a migração 0012 é a única, de 0001 a 0012, sem adenda em
+`docs/VERIFICATION-PROTOCOL.md` §7 — um furo de processo real, não um detalhe, agora
+registado como `docs/BACKLOG.md` item 41. Seis itens acordados com o Pedro em sessões
+anteriores (06/09, 09–10/09) nunca tinham entrado no `BACKLOG.md` — acrescentados como
+itens 38-43.
+
+**Etapa anterior: margem interco como propriedade do artigo + ecrã de filiais/canais — ✅
 FECHADO por completo (BD + app implantada) em 2026-09-14**, só migração 0012 (Fase 1); Fase
 2 não precisou de migração nenhuma (ver secções "Margem interco no artigo (migração 0012)"
 e "Ecrã de filiais e canais (Fase 2)" abaixo). Motivação: ao rever a amostra real de
@@ -35,6 +44,81 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Reconciliação do backlog + migração 0012 — ✅ FECHADA 2026-09-15
+
+**Contexto:** a varredura de 15/09 (secção abaixo, "sem título" — a entrada anterior deste
+mesmo dia) tinha auditado bem os 37 itens que o `BACKLOG.md` continha, mas o Pedro apontou
+que o problema era o que o documento **não** continha: seis itens acordados a 06/09 e
+09–10/09 nunca lá tinham entrado. Sessão só de documentação e medição — restrição 1 do
+prompt: zero alterações a schema, migrações ou `app/src`.
+
+**F0 — o que é a migração 0012, confirmado contra o ficheiro e a BD real, não por
+inferência:**
+- Ficheiro: `supabase/migrations/0012_article_interco_margin.sql`, commit `c35bdca`,
+  2026-09-10. Muda `compute_price()` para ler a fee interco de `tmsi.products.interco_margin`
+  (novo, `numeric(6,4)`, `not null default 0`) em vez de procurar em `tmsi.interco_fees` por
+  par de filiais — a pedido do Pedro, que esclareceu que essa comissão é uma propriedade do
+  artigo, não da relação entre duas filiais.
+- **Aplicada e viva**, reconfirmado agora: coluna existe (`\d tmsi.products`), corpo de
+  `compute_price()` já não contém nenhuma leitura de `tmsi.interco_fees` (só um comentário
+  explicativo), `tmsi.v_products` expõe `interco_margin`, `tmsi-app` a correr o digest do
+  deploy (`sha256:c3054ac3...`, `running healthy`).
+- **Ficou documentada — em `docs/STATE.md`** (secções "Margem interco no artigo (migração
+  0012)", "Ecrã de filiais e canais (Fase 2)", "Deploy conjunto (Fases 1+2)", abaixo) **e no
+  dossier** (`CHANGELOG.md`, três entradas: commit 2026-09-10, deploy 2026-09-14, confirmação
+  do ecrã 2026-09-15). **Não ficou documentada no registo formal de verificação** —
+  `docs/VERIFICATION-PROTOCOL.md` §7 não tem nenhuma adenda para a 0012.
+
+**Isto é um furo de processo real, dito claramente, não escondido atrás da boa cobertura em
+STATE.md:** confirmado por leitura completa da secção 7 (977 linhas) que **todas** as outras
+onze migrações — 0001–0005 (execução completa dos 8 papéis) e 0006 a 0011, cada uma
+individualmente (0007, 0008, 0009, 0010+0011) — têm a sua própria adenda, com digest,
+passo-a-passo e uma linha "Gate de produção satisfeito para o estado actual". A cadeia pára
+em 0011. A 0012 é a única sem nenhuma. Nenhuma outra migração tem o mesmo problema — a
+varredura não encontrou mais nenhuma sem registo.
+
+**Achado relacionado, `docs/ROADMAP.md`:** a linha "✅ Gate satisfeito" da E6 só descrevia a
+execução de 2026-09-05 (migrações 0001–0005) e nunca tinha sido actualizada a dizer que as
+adendas seguintes (0007 a 0011) foram todas **parciais** (só os passos novos de cada sessão,
+nunca os 8 papéis outra vez) — corrigido com uma nota explícita. A pergunta de desenho sobre
+`compute_price()` só ter `p_product, p_branch, p_date` também estava desactualizada desde a
+0009 (ganhou `p_scope_type`/`p_scope_id`) — corrigida, ligada ao `docs/BACKLOG.md` item 10.
+
+**F1 — seis itens acrescentados ao `docs/BACKLOG.md`, secção nova "🆕 Caminho para os dados
+reais":**
+| Nº | Título | Estado |
+|---|---|---|
+| 38 | Paridade motor vs Excel | pronto a correr |
+| 39 | Importação em massa de produtos | por implementar (desenho já decidido) |
+| 40 | Higiene do seed fictício e das contas `.test` | por desenhar |
+| 41 | Re-execução formal completa do `VERIFICATION-PROTOCOL.md` | obrigatória antes dos dados reais |
+| 42 | Nota de tratamento de dados aos utilizadores | por escrever |
+| 43 | Backup diário → semanal | por executar |
+
+**F2 — dois riscos registados** (não tarefas): item 30 (regra plana de margem para
+opções/serviços) ganhou uma nota explícita a ligá-lo ao item 39 — a verificar quando o
+catálogo real entrar, não antes; item 10 já tinha a nota sobre a pergunta de precedência
+reabrir se os direitos voltarem a aplicar-se a canais (da varredura anterior, confirmada
+sem alteração).
+
+**F3 — renumeração:** os números 21, 22 e 23 estavam cada um usado duas vezes (achado da
+varredura anterior, não corrigido nessa altura). O conjunto de 06/09 (Kit de desastre,
+Desprender a imagem do hostname, Tornar o pacote GHCR privado) ganhou números novos — 35, 36,
+37 — mantendo os títulos; os de 05/09 mantêm-se. Quatro referências cruzadas internas
+actualizadas; nota de correspondência no fim do `BACKLOG.md` para quem procurar pelo número
+antigo.
+
+**F4 — grep de coerência:** nenhuma linha nova encontrada em `docs/STATE.md`, no dossier
+(`CHANGELOG.md`, `VPS.md`) ou nas restantes secções do `docs/BACKLOG.md` a afirmar que a
+fila está vazia ou sem itens críticos. Duas linhas desactualizadas encontradas e corrigidas
+em `docs/ROADMAP.md` (a lista da "Ordem de sessões" do próprio `BACKLOG.md` também estava
+desactualizada — já corrigida na F1/F3 acima): a nota "Gate satisfeito" da E6 e a descrição
+da assinatura de `compute_price()` na secção "Questões abertas".
+
+**F5 — fecho:** `docs/BACKLOG.md` (itens 38-43, riscos, renumeração, notas de topo),
+`docs/ROADMAP.md` (duas correcções de coerência), `docs/STATE.md` (esta secção), dossier
+`CHANGELOG.md` + `dossier-push.sh`.
 
 ## Margem interco no artigo (migração 0012) — Fase 1 ✅ FECHADA 2026-09-10
 

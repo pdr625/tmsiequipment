@@ -273,6 +273,15 @@ email (S/T) só cobriram Gmail e Hotmail pessoais — a variante com gateway cor
 M365/EOP, a mesma quarentena identificada na i3, continua por cobrir. Detalhe completo:
 `STATE.md` e `docs/VERIFICATION-PROTOCOL.md` (secções 6/7).
 
+⚠️ **Esta é a única execução dos 8 papéis completa até hoje — nota da reconciliação
+2026-09-15 (`docs/BACKLOG.md` item 41).** Cada migração desde a 0005 (0007, 0008, 0009,
+0010+0011) ganhou a sua própria adenda em `docs/VERIFICATION-PROTOCOL.md` §7, cada uma
+explicitamente **parcial** (só os passos novos dessa sessão, nunca os 8 papéis outra vez do
+zero) — a migração 0012 nem isso, não tem nenhuma adenda. "Gate satisfeito" acima descreve o
+estado de 2026-09-05 (0001–0005); o estado actual é 0001–0012, sete migrações depois, sem
+uma re-execução completa desde então. O critério de entrada da E6 abaixo continua por
+cumprir.
+
 ## Migração 0003/0004 — protecção de custos ao nível da BD — ✅ FECHADA 04/09/2026
 Fecha a pendência da i4: RLS só protegia linhas, nunca colunas — um pedido manual à API,
 contornando a app, ainda lia `exw_price`/`sap_code_*`/`supplier_id`. O candidato simples do
@@ -387,9 +396,13 @@ Moeda dos escalões de transporte TBM (T2) · periodicidade/mecanismo das taxas 
 manual no piloto) · ~~quem aprova (L2 — bloqueia E4)~~ ✅ **decidida e implementada
 06/09/2026** (`docs/BACKLOG.md` item 9, E4/migração 0007) · titularidade CPI (bloqueia E6).
 
-**Duas questões novas da i6 (mesma família que L2 — desenho do motor, não de infra), sem
-bloquear nada hoje porque `product_hs_overrides` de canal/agente ainda não é oferecido pela UI:**
-(a) ordem de precedência entre âmbitos coexistentes, se um produto tiver override de filial E de
-canal/agente ao mesmo tempo, qual vence; (b) como é que o contexto de canal/agente chega ao
-`compute_price()` — a assinatura actual só tem `p_product, p_branch, p_date`, sem identificador
-de canal/agente nenhum.
+**Duas questões novas da i6 — actualizadas na reconciliação de 2026-09-15
+(`docs/BACKLOG.md` item 10), esta nota ficou desactualizada desde a migração 0009:**
+**(b) está resolvida para `price_overrides`** — `compute_price()` ganhou
+`p_scope_type`/`p_scope_id` na 0009 (já não é só `p_product, p_branch, p_date`), e um
+override de margem/transporte por canal já tem efeito real. **(b) continua por resolver só
+para `product_hs_overrides`** — essa tabela ainda só lê `scope_type='branch'`, linhas de
+canal/agente continuam "no effect" na UI. **(a) a precedência tornou-se irrelevante, não foi
+decidida** — a migração 0010 fez o âmbito canal zerar sempre a taxa de direitos, por isso o
+HS code deixou de influenciar de todo um preço de canal; reabre só se os direitos voltarem a
+aplicar-se a canais.

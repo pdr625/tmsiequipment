@@ -12,6 +12,16 @@ por um caminho diferente do que as duas perguntas originais previam). Todos os o
 ainda sem `~~risco~~` foram confirmados como genuinamente em aberto (a maioria são decisões
 do Pedro ou itens de infra fora do âmbito desta app, não trabalho técnico por fazer).
 
+**Reconciliação 2026-09-15 (mesmo dia, segunda passagem):** seis itens acordados a 06/09 e
+09–10/09 que nunca tinham entrado neste ficheiro, acrescentados como **38-43** (secção "Caminho
+para os dados reais"). Achado de processo: a migração 0012 (margem interco no artigo + ecrã
+`/branches`, aplicada e implantada 2026-09-10/14) é a única, de 0001 a 0012, sem adenda em
+`docs/VERIFICATION-PROTOCOL.md` §7 — está documentada em `docs/STATE.md` e no dossier, mas não
+no registo formal de verificação que todas as outras migrações têm (agora item 41). Os números
+**21, 22 e 23**, cada um usado duas vezes no documento original, foram desambiguados — o
+conjunto de 06/09 ganhou números novos (**35, 36, 37**), nota de correspondência no fim do
+ficheiro.
+
 ## Decisões do Pedro incorporadas
 - Admin pode forçar reset de password: manual OU temporária gerada única (nunca uma
   "default" fixa igual para todos), mostrada uma vez, com troca obrigatória no próximo login.
@@ -19,6 +29,58 @@ do Pedro ou itens de infra fora do âmbito desta app, não trabalho técnico por
 - Consequência: **EOP despromovido de bloqueio a melhoria** — o onboarding do piloto passa a
   password temporária comunicada verbalmente; o email fica útil, não indispensável.
 - Export Excel/PDF: essencial, não opcional.
+
+---
+
+## 🆕 Caminho para os dados reais — itens novos, reconciliação 2026-09-15
+
+Seis itens acordados com o Pedro a 06/09 e 09–10/09 que nunca tinham entrado neste ficheiro —
+achado da reconciliação pedida pelo Pedro ("os passos acordados a 06/09 nunca lá entraram").
+Numerados a seguir ao último existente (34) e aos três renumerados abaixo (35–37).
+
+**38. Paridade motor vs Excel** 🔴 *(pronto a correr)* — CSV de amostra real já preenchido
+(13 artigos × 5 listas, 65 linhas) em `~/tmp/tmsi-paridade/tmsi-paridade-amostra.csv`
+(dados comerciais reais — nunca entra em git nem na BD de teste, regra escrita em
+`docs/PARIDADE-PREENCHIMENTO.md`); prompt de sessão já escrito. Diagnóstico preliminar já
+feito nesta sessão (2026-09-10/15): a fórmula do motor bate 100% com o Excel uma vez usadas
+taxas de câmbio directas e correctas — a única divergência encontrada era uma taxa antiga
+num bloco do Excel do Pedro, já confirmada e a corrigir do lado dele. A corrida formal,
+completa, ainda não foi feita.
+
+**39. Importação em massa de produtos** 🔴 *(por implementar)* — desenho já decidido, não
+por decidir: ecrã admin-only; template descarregável; fluxo validar → pré-visualizar →
+gravar; chave natural = código do artigo, com upsert (não duplica se o código já existir);
+**âmbito só produtos** (não filiais/regras/câmbio); o carregamento inicial fica
+**explicitamente fora do workflow de aprovação da 0007** — decisão a registar formalmente
+aqui, não implícita. Bloqueia a entrada de qualquer catálogo real maior que os 13 produtos
+de teste actuais.
+
+**40. Higiene do seed fictício e das contas `.test`** 🟠 *(por desenhar)* — decisão do Pedro,
+2026-09-06: as contas `.test` (`finance.test`, `pm.test`, `logistics.test`,
+`branch_manager.test`) **mantêm-se** depois do carregamento real, para a apresentação à
+equipa — desactivação é um passo **manual**, feito depois, não automático. O seed fictício
+(`supabase/seed/0001_test_data.sql`, os produtos `T-92xx`/`T-93xx` de fixture) tem de **sair
+da BD de produção ou ficar inequivocamente marcado** como não-real antes de qualquer
+apresentação com dados reais ao lado — por desenhar qual das duas.
+
+**41. Re-execução formal completa do `docs/VERIFICATION-PROTOCOL.md`** 🔴 *(obrigatória antes
+dos dados reais)* — a última execução dos **8 papéis da matriz completa** cobriu só as
+migrações 0001–0005 (registo da secção 7, 2026-09-05). Toda execução desde aí — i9, i10,
+tarefa 6, migrações 0007, 0008, 0009, 0010+0011 — foi uma **adenda parcial**, re-testando só
+os passos novos de cada sessão, nunca os 8 papéis outra vez desde o início. É o gate que
+sustenta perante a equipa/direcção que os custos não vazam a quem não deve — não se pode
+assumir que continua válido depois de sete migrações de schema sem o re-confirmar por
+inteiro.
+
+**42. Nota de tratamento de dados aos utilizadores** 🟠 *(por escrever)* — pedida pelo Pedro,
+2026-09-06: finalidade do tratamento, quem acede (por papel), prazo de retenção. Nenhum
+rascunho existe ainda em nenhum documento do repo.
+
+**43. Backup diário → semanal** 🟡 *(por executar)* — decisão do Pedro, 2026-09-06,
+justificada: o ficheiro de preços muda poucas vezes por ano, backup diário é frequência a
+mais para o que está a proteger. Envolve `tmsi-backup.timer` (`OnCalendar=03:30` hoje →
+semanal), a retenção (`~/backups/tmsi/`, hoje 30 dias — rever proporção), a métrica de
+backup no digest T8 (`vps-stats`) e a documentação (`docs/STATE.md`, `deploy/DEPLOY.md`).
 
 ---
 
@@ -159,14 +221,16 @@ desde a i10 (sessão por cookie, não replicável por `curl`). Detalhe completo:
 e voltam a servir com segredos novos — 38 POLICY, RLS e a fronteira de custos 0003/0004 todas
 intactas. O que **não** sobreviveu foi o procedimento: o restauro documentado produz uma BD
 meio-restaurada em silêncio, e a imagem não se consegue reapontar. Relatório completo, com o
-procedimento correcto provado: `docs/DISASTER-DRILL.md`. Sequelas → itens 21, 22 e 23.
+procedimento correcto provado: `docs/DISASTER-DRILL.md`. Sequelas → itens 35, 36 e 37
+(renumerados na reconciliação de 2026-09-15 — ver nota de correspondência no fim do
+ficheiro; eram 21, 22 e 23 até aí).
 
-~~**21. Kit de desastre**~~ ✅ **fechada 2026-09-06** — as 6 frentes (`docs/DISASTER-DRILL.md`
+~~**35. Kit de desastre**~~ ✅ **fechada 2026-09-06** — as 6 frentes (`docs/DISASTER-DRILL.md`
 achados 5–8 + GHCR + escrow), todas provadas: `DEPLOY.md` reescrito contra a produção real,
 incl. o procedimento de restauro provado no ensaio e o passo de rebuild do achado 3;
 `deploy/supabase/.env.example` completo (25 nomes reais, raiz `.env.example` corrigido para
 apontar lá); `deploy/nginx/tmsiequipment.conf` versionado, diff zero contra o real; GHCR
-autenticado com ordem rígida provada (→ item 23, já fechado); `smoke.py` portável
+autenticado com ordem rígida provada (→ item 37, já fechado); `smoke.py` portável
 (`TMSI_BASE_URL`/`TMSI_CREDENTIALS_DIR`), 27/27 provado nos dois modos; escrow cifrado
 (`gpg -c`, `age` não instalado) com prova de decifração do Pedro. Detalhe completo, todos os
 desvios/incidentes registados honestamente: `docs/STATE.md`.
@@ -178,7 +242,7 @@ autoridade única. Provado: mecanismo de dependência do fuso confirmado ao vivo
 `TZ=Etc/GMT+12` dão datas diferentes agora), `smoke.py` corrigido dá 27/27 sob os dois
 extremos. Detalhe: `docs/STATE.md`.
 
-~~**22. Desprender a imagem do hostname**~~ ✅ **fechada 2026-09-06** (achado 3 do ensaio).
+~~**36. Desprender a imagem do hostname**~~ ✅ **fechada 2026-09-06** (achado 3 do ensaio).
 `SUPABASE_URL`/`SUPABASE_ANON_KEY` passam a env de runtime, reaproveitando `SITE_URL`/
 `ANON_KEY` já existentes — zero chave nova no `.env`. Confirmado por grep contra a imagem
 nova: zero ocorrências do hostname e de qualquer JWT nos chunks. **Achado lateral real
@@ -189,7 +253,7 @@ sempre); substituído por um guard `sh -c` no `CMD` do `Dockerfile`, que funcion
 imediato, confirmado ao vivo). Fecha a classe toda: a mesma imagem serve qualquer hostname, e
 rodar `JWT_SECRET`/`ANON_KEY` (item 24) deixa de exigir rebuild. Detalhe: `docs/STATE.md`.
 
-~~**23. Tornar o pacote GHCR privado**~~ ✅ **fechada 2026-09-06** (achado 4; item 21 F1).
+~~**37. Tornar o pacote GHCR privado**~~ ✅ **fechada 2026-09-06** (achado 4; item 35 F1).
 Ordem rígida provada: login autenticado com o pacote ainda público (`tmsi-app` **e**
 `itinera`, mesma entrada partilhada `~/.docker/config.json`) → pacote tornado privado pelo
 Pedro → re-prova dos dois → ramo de falha (`unauthorized` sem credencial) → credencial
@@ -198,7 +262,7 @@ só por ficheiro 600 descartado logo a seguir ao login — avança a rotação p
 `CREDENTIALS-INVENTORY.md` (KI #9) do lado do pull. Detalhe: `docs/STATE.md`.
 
 ~~**24. 4 segredos de produção ecoados no output do agente — rotação**~~ ✅ **fechada
-2026-09-06** (incidente de 2026-09-06, item 21). `POSTGRES_PASSWORD`, `JWT_SECRET`,
+2026-09-06** (incidente de 2026-09-06, item 35). `POSTGRES_PASSWORD`, `JWT_SECRET`,
 `ANON_KEY`, `SERVICE_ROLE_KEY` rodados, todos os quatro. Ordem provada: `ALTER ROLE` (3
 roles: `postgres`, `supabase_auth_admin`, `authenticator`) → `.env` → restart
 `auth`→`rest`→`tmsi-app` (`supabase-db` nunca reiniciou). **Prova pelo ramo que interessa:**
@@ -242,7 +306,8 @@ Detalhe completo: `docs/STATE.md`, secção "Canais no motor de preços".
 `margin=0` sempre (não só em venda "em casa"), verificado antes do fallback de grelha/canal
 — substitui por completo o caminho antigo de "opção herda a margem do pai". Hand-verificado
 em três casos reais (`T-0006`/`T-0007`/`T-0008`, `docs/VERIFICATION-PROTOCOL.md` passo WW).
-**Por decidir separadamente, registado, não resolvido aqui**: se o catálogo real tiver
+**Risco do carregamento de dados reais, registado aqui em 2026-09-15, a verificar quando os
+artigos entrarem (item 39) — não uma tarefa a fazer agora**: se o catálogo real tiver
 opções que devam continuar a herdar a margem do pai (bundles) em vez desta regra plana,
 precisa de um sub-tipo que o schema não tem hoje — a regra actual aplica-se a **todas** as
 opções/serviços, sem distinção. "Artigo não devolvido" continua sem campo próprio no
@@ -303,6 +368,25 @@ do Pedro, por tomar numa sessão própria.
 
 ---
 
+## Nota de correspondência — renumeração de 2026-09-15
+
+O documento original reutilizou os números **21, 22 e 23** para tarefas diferentes (um
+conjunto fechado 2026-09-05, outro fechado 2026-09-06) — achado da reconciliação pedida pelo
+Pedro. Os títulos ficaram como estavam; só o **segundo** conjunto (o de 06/09) ganhou número
+novo, para cada identidade ficar única:
+
+| Número antigo | Título | Número novo |
+|---|---|---|
+| 21 (06/09) | Kit de desastre | **35** |
+| 22 (06/09) | Desprender a imagem do hostname | **36** |
+| 23 (06/09) | Tornar o pacote GHCR privado | **37** |
+
+Os itens **21** (Tarefa 6), **22** (`forgot-password/actions.ts`) e **23**
+(`compute_price()`'s `errors[]`), todos de 2026-09-05, mantêm o número original — nunca
+mudaram.
+
+---
+
 ## Ordem de sessões proposta — histórica, já toda percorrida (nota 2026-09-15)
 i9 (passwords) → i10 (export) → técnica (smoke+lockfile) → auth/headers → code review →
 piloto (8) → L2/E4 informada pelo uso → restantes por procura.
@@ -310,6 +394,9 @@ Todos os passos até "L2/E4" estão fechados (ver itens 1-6, 9, 21-25 acima); o 
 continua deliberadamente adiado pelo Pedro, não pendente de trabalho técnico. "Restantes por
 procura" já rendeu, fora desta ordem original: canais no motor (0009, item 29), arredondamento/
 margem plana/fronteiras (0010/0011, itens 30/31/34), margem interco como propriedade do
-artigo + ecrã `/branches` (0012, sem número de item — ver `docs/STATE.md`). Esta secção fica
-como registo histórico, não como fila activa — a fila real, a partir de 2026-09-15, são os
-itens ainda sem `~~risco~~` acima (7, 10 parcial, 11, 12, 13, 32) mais os "Baixas".
+artigo + ecrã `/branches` (migração 0012 — documentada em `docs/STATE.md` e no dossier, mas
+**sem adenda em `docs/VERIFICATION-PROTOCOL.md` §7**, ao contrário de todas as migrações
+0001–0011; achado da reconciliação de 2026-09-15, ver item 41). Esta secção fica como
+registo histórico, não como fila activa — **a fila real, a partir de 2026-09-15, é a secção
+"Caminho para os dados reais" (itens 38-43) primeiro, depois os itens ainda sem `~~risco~~`
+mais acima (7, 10 parcial, 11, 12, 13, 32), mais os "Baixas".**
