@@ -48,9 +48,40 @@ herdadas dela:
 
 **Só existe o modo inicial hoje** — escrita directa, fora do workflow de propor/aprovar
 (decisão de 06/09, registada e datada em `docs/STATE.md`). Um segundo modo — importações
-posteriores a entrar como proposta agrupada — depende de aprovação em lote existir
-(`docs/BACKLOG.md` item 44, não desenhado); até lá, toda a importação escreve directo,
-sempre, atrás de `admin`/`product_manager`.
+posteriores a entrar como proposta agrupada — dependia de aprovação em lote existir; a
+mecânica ficou pronta na migração 0015 (item 44), mas o SEGUNDO MODO em si continua **não
+implementado aqui** — só o contrato que ele terá de seguir, escrito agora para não ter de se
+inventar depois.
+
+### Contrato do segundo modo (importação → proposta agrupada), para quando for desenhado
+
+1. **Uma importação posterior nunca chama `run_import_hs_duty()`/`run_import_products()`
+   directamente para escrever** — em vez de materializar, cada linha classificada como
+   `to_create`/`to_update` vira uma linha em `tmsi.price_proposals` (`target_table` conforme
+   a tabela real de destino — `customs_rates` para direitos, `price_overrides` para
+   transporte/margem por artigo×âmbito — nunca `products`, que não passa pelo workflow de
+   propor/aprovar e continua a escrever directo, como hoje).
+2. **`payload` de cada proposta é exactamente o que `decide_price_proposal()` já espera**
+   para essa `target_table` (as mesmas chaves que a materialização de uma proposta manual usa
+   — ver a definição da função, migração 0007/0009/0010/0015) — nunca um formato novo
+   inventado para a importação.
+3. **Uma importação inteira gera um lote** (`tmsi.decide_price_proposal_batch()`, mesmo
+   mecanismo do item 44) — não uma proposta a decidir de cada vez. A pré-visualização do
+   `/import` já mostra `to_create`/`to_update`/`unchanged`; o segundo modo troca "gravar
+   directo" por "criar N propostas, devolver os ids, e apontar para `/proposals` para as
+   decidir em lote" — a legibilidade do lote (contagens + antes/depois, item 44 §1) é a MESMA
+   prova de leitura que a pré-visualização da importação já dá, não uma segunda a inventar.
+4. **Elegibilidade de quem decide o lote é a mesma de sempre** (0007, inalterada pelo item
+   44) — uma importação de direitos aduaneiros continua a só poder ser decidida por `admin`
+   (customs_rates não tem filial própria); uma importação de transporte/margem por artigo
+   pode ser decidida por um `branch_manager`, mas só para as linhas da sua própria filial —
+   uma importação que misture filiais produz um lote com exclusões visíveis, exactamente como
+   qualquer outro lote.
+5. **`import_batches`/`import_batch_items` (0013) e `decision_batches` (0015) continuam
+   entidades separadas** — a importação em massa regista o SEU lote (o que foi lido do
+   ficheiro), a decisão em massa regista o SEU lote (o que foi aprovado/rejeitado); uma
+   importação-como-proposta teria as duas referências, uma para cada preocupação, nunca
+   fundidas numa só tabela.
 
 ## Pré-visualização (por omissão) vs gravação
 

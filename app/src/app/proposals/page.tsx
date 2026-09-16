@@ -8,7 +8,7 @@
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { isAdmin } from '@/lib/auth-guard';
-import { DecideProposalForm } from './forms';
+import { PendingQueue, type PendingItem } from './forms';
 
 type Proposal = {
   id: number;
@@ -99,6 +99,22 @@ export default async function ProposalsPage() {
   const pending = proposals?.filter((p) => p.status === 'pending') ?? [];
   const decided = proposals?.filter((p) => p.status !== 'pending') ?? [];
 
+  // item 44: plain, pre-formatted data for the client-side batch panel —
+  // functions (formatPayload, userLabel) can't cross the server/client
+  // boundary as props, so the finished display strings are computed once,
+  // here, server-side, same source of truth the per-row rendering below
+  // already uses.
+  const pendingItems: PendingItem[] = pending.map((p) => ({
+    id: p.id,
+    targetTable: p.target_table,
+    branchId: p.branch_id,
+    displayText: formatPayload(p),
+    reason: p.reason,
+    proposedByLabel: userLabel(p.proposed_by),
+    proposedAt: p.proposed_at,
+    canDecide: canDecide(p.branch_id),
+  }));
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
@@ -116,28 +132,7 @@ export default async function ProposalsPage() {
       <section className="mb-10">
         <h2 className="mb-2 text-sm font-semibold text-gray-700">Pending ({pending.length})</h2>
         {pending.length === 0 && <p className="text-sm text-gray-500">Nothing pending.</p>}
-        <ul className="space-y-3">
-          {pending.map((p) => (
-            <li key={p.id} className="rounded-lg border border-gray-200 p-3">
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium">{p.target_table}</span>
-                {p.branch_id && <span className="text-xs text-gray-500">branch {p.branch_id}</span>}
-                <span className={`rounded px-2 py-0.5 text-xs ${STATUS_STYLE.pending}`}>pending approval</span>
-              </div>
-              <p className="mb-1 text-sm">{formatPayload(p)}</p>
-              <p className="mb-2 text-xs text-gray-500">
-                Reason: {p.reason} — proposed by {userLabel(p.proposed_by)} on {p.proposed_at.slice(0, 10)}
-              </p>
-              {canDecide(p.branch_id) ? (
-                <DecideProposalForm proposalId={p.id} />
-              ) : (
-                <p className="text-xs text-gray-400">
-                  Waiting for {p.branch_id ? `the ${p.branch_id} branch manager or an admin` : 'an admin'} to decide.
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
+        <PendingQueue items={pendingItems} />
       </section>
 
       <section>
