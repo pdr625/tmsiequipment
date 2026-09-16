@@ -70,6 +70,11 @@ partir do desenho original. 16 correcções feitas à proposta inicial; detalhe 
 | Artigos não-activos (draft/review/…) | ✅ | ✅ | ✅ | ◐ | ✅ | ❌ | ❌ | ✅ |
 | Propor overrides de canal (margem/transporte, 0009) ⁸ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Aprovar overrides de canal (0009) ⁸ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Margem interco do artigo (nível artigo, 0012) ¹¹ | ✅ | ✅ | ✅ | ◐ ¹ | ❌ | ❌ | ❌ | ✅ |
+| Editar filiais/canais (`/branches`, 0012 Fase 2) ¹¹ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Importar direitos aduaneiros (`/import`, 0013) ¹² | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Importar produtos + configuração (`/import`, 0013) ¹² | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Ver/desfazer lotes de importação (0013) ¹² | ✅ | ◐ escreve, não vê ¹² | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ¹ **Duas fontes distintas, com regras diferentes.** O EXW e os códigos SAP/fornecedor vêm de
 `tmsi.v_products` (gate: `can_read_costs()`, sem verificação de filial nenhuma — o
@@ -208,6 +213,34 @@ que dá a `authenticated`/`service_role` acesso a toda a tabela nova criada por 
 nem a leitura (`/config` não conseguia sequer mostrar a secção nova) nem a escrita
 (`tmsi.decide_price_proposal()`, por ser dono `postgres`, não conseguia materializar uma
 proposta aprovada) funcionavam antes de 0011. Testado na secção 4.11, passos WW–XX.
+
+¹¹ **Migração 0012 (2026-09-14) — margem interco deixa de ser configuração por par de
+filiais e passa a propriedade do próprio artigo.** `tmsi.interco_fees` (par filial-origem ×
+filial-destino) nunca teve escrita nenhuma além do seed original — substituída por
+`tmsi.products.interco_margin` (`numeric(6,4)`, `check >= 0 and < 1`, omissão `0`);
+`compute_price()` lê-a directamente do artigo, nunca faz lookup a `interco_fees` desde então
+— a tabela antiga fica **histórica, zero linhas activas, nunca apagada** (não é dado
+sensível, é config obsoleta sem custo em manter, decisão de 0012). Gate de leitura:
+exactamente o mesmo `can_read_costs()` do `exw_price` ao lado, na mesma vista
+`tmsi.v_products` — nenhuma política nova. Escrita: só através do próprio artigo
+(criar/editar), a mesma fronteira já existente em "Criar/editar produtos" — não é uma das 6
+tabelas da nota ⁶, não passa por proposta/aprovação, tal como `exw_price` também não passa.
+Fase 2 da mesma migração: o ecrã `/branches` usa `ref_read`/`ref_write`, políticas já
+existentes desde 0001 sem alteração — a novidade é o ecrã, não a fronteira (`ref_write`
+sempre foi admin-only). Testado na secção 4.12 (novo, passos AAA–BBB).
+
+¹² **Migração 0013 (2026-09-16, item 39) — carregamento inicial em massa, fora do workflow
+de propor/aprovar por desenho** (decisão datada em `docs/STATE.md`, a mesma excepção já
+usada no seed original e no seed de configuração do item 38). Dois `SECURITY DEFINER` com
+fronteira própria **no corpo da função**, não em RLS: `run_import_hs_duty()` admin-only;
+`run_import_products()` admin OU `product_manager` (a mesma fronteira que
+`products_write_pm` já dá a criar/editar um produto de cada vez). **Assimetria real, não um
+descuido, dita nas duas colunas da linha "Ver/desfazer lotes":** `product_manager` pode
+COMMITAR um lote (RPC de escrita concedida) mas não tem `SELECT` em
+`tmsi.import_batches`/`import_batch_items` (só `admin`, política `import_batches_read`) — não
+vê o histórico dos seus próprios lotes nem os pode desfazer; o ecrã `/import`, secção "Lotes
+recentes", já reflecte isto (só visível a `admin`, `docs/IMPORT.md`). Testado na secção 4.13
+(novo, passos CCC–EEE).
 
 ## 4. Protocolo de teste por papel
 Para cada papel testado: um utilizador dedicado a testes (em produção: conta de teste real
@@ -508,6 +541,43 @@ cobertura em `scripts/smoke.py`** (precisam de comparação por igualdade exacta
 única asserção dinâmica, ou de um papel `branch_manager`/`admin` a aprovar de facto — a
 mesma limitação de GG/NN) — confirmadas directamente contra a BD, claims JWT reais, nesta
 sessão; ver secção 7.
+
+### 4.12 Margem interco do artigo + filiais/canais (migração 0012, novo nesta revisão)
+AAA. **Margem interco como propriedade do artigo, não configuração por par:** papel com
+     custos vê `interco_margin` no payload de `tmsi.v_products` (numérico); papel sem custos
+     recebe `null` — mesmo padrão de mascaramento de `exw_price`/`origin_country`. Efeito no
+     motor: a fee de uma filial não-origem == o `interco_margin` do próprio artigo (não um
+     lookup por par de filiais); a filial de origem a vender a si própria continua sempre
+     fee `0`, independentemente do valor configurado.
+BBB. **`/branches`, ramo negado:** escrita directa (`INSERT`/`UPDATE`) em `tmsi.branches`/
+     `tmsi.channels` por um papel não-admin → recusada pela RLS (`ref_write`). Leitura
+     (`ref_read`) permanece aberta a qualquer `authenticated`, sem alteração — não é uma
+     fronteira nova, é a mesma desde 0001.
+
+### 4.13 Importação em massa (migração 0013, novo nesta revisão)
+CCC. **Fronteira `SECURITY DEFINER`, não RLS:** `run_import_hs_duty()` recusa um papel
+     sem `admin`; `run_import_products()` recusa um papel sem `admin` nem `product_manager`
+     — o erro vem da própria função (`raise exception`), confirmável mesmo que a RLS de
+     `import_batches` fosse permissiva por engano.
+DDD. **Assimetria escreve-mas-não-vê (nota ¹²):** `product_manager` consegue commitar um
+     lote real (`p_dry_run=false`) mas um `SELECT` directo a `tmsi.import_batches`/
+     `import_batch_items` pela mesma sessão devolve **zero linhas** (RLS, não a ausência do
+     dado) — inclusive para o lote que a própria sessão acabou de criar.
+EEE. **Tudo-ou-nada, idempotência e desfazer, sobre o estado pós-item-40 (não repetição do
+     item 39, confirmação de que continua válido depois da higiene):** um ficheiro com uma
+     linha inválida não escreve nada do ficheiro; a mesma importação corrida duas vezes não
+     escreve nada na segunda; um lote committed é revertido por completo
+     (`undo_import_batch()`) e um segundo desfazer do mesmo lote é recusado
+     (`status <> 'committed'`).
+
+📌 **Cobertura automatizada:** `scripts/smoke.py` bloco **X** cobre a metade RLS de AAA
+(mascaramento + efeito no motor); bloco **Y** cobre o ramo negado de BBB; bloco **Z** cobre
+CCC por inteiro e a metade dry-run/tudo-ou-nada de EEE. **O ramo positivo de BBB (admin cria
+uma filial/canal real pelo ecrã), DDD e a metade de EEE que desfaz um lote committed não têm
+cobertura em `scripts/smoke.py`** (precisam de um `COMMIT` real seguido de reversão, ou do
+próprio ecrã admin — mesma limitação de sempre para os passos que só um `admin` real ou um
+browser conseguem exercer) — confirmadas directamente contra a BD nesta execução; ver
+secção 7.
 
 ## 5. Regras de execução em produção
 - Executor: o administrador + uma segunda pessoa como testemunha para os testes do ramo
