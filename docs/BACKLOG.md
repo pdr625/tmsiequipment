@@ -248,11 +248,32 @@ redirecciona para `/login`, nunca serve a página — a prova mais funda (um pap
 ler o texto) fica para o Pedro, browser, mesma limitação de sempre para páginas Next.js.
 Detalhe completo: `docs/DATA-PROCESSING-NOTICE.md`.
 
-**43. Backup diário → semanal** 🟡 *(por executar)* — decisão do Pedro, 2026-09-06,
-justificada: o ficheiro de preços muda poucas vezes por ano, backup diário é frequência a
-mais para o que está a proteger. Envolve `tmsi-backup.timer` (`OnCalendar=03:30` hoje →
-semanal), a retenção (`~/backups/tmsi/`, hoje 30 dias — rever proporção), a métrica de
-backup no digest T8 (`vps-stats`) e a documentação (`docs/STATE.md`, `deploy/DEPLOY.md`).
+~~**43. Backup diário → semanal**~~ ✅ **fechado 2026-09-16, com a ressalva de calendário do
+próprio item — fica em modo janela (diário) até o catálogo real estar carregado e
+verificado.** `tmsi-backup.timer`/`.service` únicos substituídos por dois pares independentes
+— `tmsi-backup-weekly.timer`/`.service` (regime permanente, `Mon *-*-* 03:30:00`, mantém as
+últimas **8** cópias) e `tmsi-backup-window.timer`/`.service` (regime de janela, diário, sem
+rotação) — exactamente um activo de cada vez, trocado por `systemctl disable --now`/
+`enable --now`, nunca a editar a unit à mão. **Retenção contada em cópias, não em dias**:
+medido antes de mudar (14 dumps reais desde 03/09, ~373 KB/dump em média, disco a 56%/13 GB
+livres) — 8 semanais + janela sem limite cabe com folga enorme, confirmado por conta, não
+estimativa. Nomes `tmsi-<data>-<modo>.dump` (data primeiro, propositadamente — um `tmsi-
+weekly-<data>` teria ordenado alfabeticamente à frente de `tmsi-window-<data>` sem relação
+com a data real, um risco real para o script de pull off-site do homelab, apanhado e corrigido
+antes de fechar, não depois). Provas: dump novo a `600` (permissões do item 48 preservadas);
+**restauro real** com `-U supabase_admin` (o procedimento documentado, não o atalho `-U
+postgres` usado em sessões anteriores desta cadeia — zero erros, ownership de `auth.*`/
+`tmsi.*` confirmado, mais rigoroso que as verificações anteriores); agendamento trocado nos
+dois sentidos, `list-timers` a confirmar o próximo disparo a mudar de facto cada vez
+(calculado independentemente também via `systemd-analyze calendar`); rotação com o limiar
+forçado (10 cópias fictícias, as 2 mais antigas apagadas, as 8 mais recentes mantidas,
+ficheiros reais nunca tocados). Dumps do regime antigo (14 datados + os `tmsi-pre-<migração>-*`
+de sessões passadas) deixados como estão, já não geridos automaticamente — inofensivo à
+escala medida. **Achado, não corrigido aqui, fora do âmbito VPS:** o script de pull off-site
+do homelab pode assumir que a ordenação alfabética dos nomes de dump equivale à ordem
+cronológica — continua a valer com o esquema novo (dados primeiro), mas fica sinalizado no
+CHANGELOG do dossier para uma sessão homelab confirmar. Off-site (terceira perna, item 13)
+continua suspenso, não resolvido aqui. Detalhe completo: `docs/STATE.md`.
 
 ---
 

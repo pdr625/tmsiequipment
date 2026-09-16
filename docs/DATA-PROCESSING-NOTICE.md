@@ -8,7 +8,7 @@ ser usada pela empresa, este texto tem de passar por quem trata de protecção d
 Condat antes de valer como política formal.
 
 Servida na app, em inglês, em `/privacy` — este ficheiro é a fonte, em português. Cada
-afirmação abaixo tem origem medida (item 42, 2026-09-16; revista pelos itens 47+48,
+afirmação abaixo tem origem medida (item 42, 2026-09-16; revista pelos itens 47+48 e 43,
 2026-09-16); nada aqui descreve uma intenção, só o que foi confirmado directamente contra o
 schema, o código, os containers e o host.
 
@@ -43,7 +43,7 @@ sessão — não uma lista teórica.
 | Ficheiro gerado num export (Excel/PDF) | não guardado — gerado por pedido | quem o pede | o ficheiro inclui `generatedBy`, o email/id de **quem o gerou**, nunca de terceiros | não aplicável (não persiste no servidor) |
 | Registos de acesso ao servidor (IP real do visitante, URL, browser) | `/var/log/nginx/*.log`, no host | só contas do sistema operativo com privilégio (não a app) | — | **14 dias** (rotação diária, confirmada em `/etc/logrotate.d/nginx`) |
 | Registos dos containers (aplicação, autenticação) | `docker logs` | só quem tem acesso ao host | — | **por volume, não por tempo** — até 30 MB por container (`max-size 10m × max-file 3`); o registo de autenticação (GoTrue) inclui o email de quem entra em quase todas as linhas; o registo da aplicação não mostrou dados pessoais na amostra verificada |
-| Cópia diária completa da base de dados | `~/backups/tmsi/*.dump`, no host | só `pedro` (`600`/directório `700` desde a correcção do item 48, 2026-09-16, provada numa execução real do serviço — antes, `644`/`775`, mundialmente legível) | — | **30 dias** (apagamento automático confirmado no serviço de backup) |
+| Cópia completa da base de dados | `~/backups/tmsi/*.dump`, no host | só `pedro` (`600`/directório `700` desde a correcção do item 48, 2026-09-16, provada numa execução real do serviço — antes, `644`/`775`, mundialmente legível) | — | **item 43, 2026-09-16 — retenção em cópias, não em dias:** regime normal, semanal, últimas 8 cópias (~2 meses); durante a janela de carregamento do catálogo real, diário, sem limite de cópias até a janela fechar. **Hoje: em modo janela** (catálogo real ainda não carregado) — condição de saída escrita em `deploy/DEPLOY.md` §4. Dumps anteriores ao item 43 (regime antigo, 30 dias por data) deixaram de ser automaticamente geridos, mantidos como estão. |
 | Segredos de infraestrutura cifrados (chaves, não dados pessoais) | `~/backups/tmsi/*.gpg` | só quem tiver a frase-passe | — | não aplicável — não contém dados pessoais, confirmado por leitura da documentação de desastre |
 
 ## 3. Para que serve cada tratamento

@@ -115,13 +115,59 @@ variables unset, confirmed to exit rather than come up half-broken).
 
 ## 4. Backups
 
-- **On-VPS:** `tmsi-backup.timer` (systemd, `OnCalendar=03:30`) runs `tmsi-backup.service`:
-  `pg_dump -U postgres -Fc postgres` inside `supabase-db`, copied out to
-  `~/backups/tmsi/tmsi-<date>.dump`, 30-day retention (older dumps deleted by the same unit).
+**Cadence (item 43, 2026-09-16): two modes, one gesture to switch, never edit a unit by
+hand.** Retention is counted in **copies**, not days — a day-based cutoff quietly changes
+depth every time the cadence changes; a copy count doesn't.
+
+- **`tmsi-backup-weekly.timer`/`.service`** — the permanent regime. `OnCalendar=Mon *-*-*
+  03:30:00`. Writes `~/backups/tmsi/tmsi-<date>-weekly.dump`, then rotates to keep the **8**
+  most recent (`ls -t ... | tail -n +9 | xargs -r rm -f` on that exact glob — never touches
+  `-window.dump` files). ~2 months of weekly history.
+- **`tmsi-backup-window.timer`/`.service`** — the loading-window regime, daily
+  (`OnCalendar=*-*-* 03:30:00`). Writes `~/backups/tmsi/tmsi-<date>-window.dump`. **No
+  rotation at all** — every window dump is kept for the whole window; disk cost is trivial
+  (measured 2026-09-16: 29 GB total, 56% used, ~373 KB/dump average — even 100 window dumps
+  is under 40 MB).
+- **Exactly one of the two timers is enabled at any time.** To switch (either direction, no
+  unit editing):
+  ```bash
+  sudo systemctl disable --now tmsi-backup-<current-mode>.timer
+  sudo systemctl enable --now tmsi-backup-<new-mode>.timer
+  ```
+  Confirm with `systemctl list-timers tmsi-backup-*` — the `NEXT` column changes cadence
+  immediately (weekly → next Monday 03:30; window → tomorrow 03:30).
+- **Exit condition, written down so this doesn't stay in window mode by inertia:** switch
+  back to `tmsi-backup-weekly.timer` once the real catalog (item 39's importer) has been
+  loaded **and verified** — not merely loaded. Until then, stay in window mode. State as of
+  2026-09-16: **window mode, real catalog not yet loaded.**
+- **Filenames are date-first, tag-last on purpose** (`tmsi-<date>-weekly.dump` /
+  `tmsi-<date>-window.dump`, never `tmsi-weekly-<date>.dump`) — a plain alphabetical sort of
+  `~/backups/tmsi/*.dump` still sorts chronologically regardless of which mode produced which
+  file. This matters off-site (below): a prefix-first scheme (`weekly` sorts before `window`
+  alphabetically, unrelated to actual dates) would have made a "pick the most recent dump by
+  filename" step pick the wrong file across a mode switch.
+- **Pre-existing dumps not migrated:** the 14 dumps from the old single-timer scheme
+  (`tmsi-2026-09-03.dump` … `tmsi-2026-09-16.dump`) and the ad-hoc `tmsi-pre-<migration>-*`
+  dumps from past sessions are left exactly where they are — real, valid backups, just no
+  longer auto-rotated by anything (the unit that rotated them was retired). Harmless at this
+  scale (a few MB); a manual cleanup is optional, never automatic.
+- **⚠️ Off-site coordination needed, not done here (out of scope — VPS session, never the
+  homelab):** the homelab's `tmsi-offsite-pull.sh` origin glob is `vps:.../tmsi/*.dump` — it
+  still picks up every dump regardless of the new naming, nothing is silently skipped. But
+  its "verify the most recent dump" step may assume filename-sort-equals-date-sort (true for
+  the old naming, and still true for the new one — see above) — if that script instead
+  tracks a specific expected filename pattern rather than "latest by sort", it needs a
+  matching update on the homelab side. Flagged in the dossier CHANGELOG for a homelab
+  session to check; not fixed from here.
+- **On-VPS today:** `tmsi-backup-window.service`/`.timer`, `pg_dump -U postgres -Fc postgres`
+  inside `supabase-db`, copied out with `600` permissions (item 48), directory `~/backups/tmsi/`
+  at `700`.
 - **Off-site:** the homelab pulls these dumps nightly over the WireGuard tunnel, via a
   dedicated, restricted SSH key (`homelab_to_vps`, `restrict,from="10.13.13.1"`, no
   pty/forwarding) — see the dossier's `CREDENTIALS-INVENTORY.md` 1.15. This VPS never pushes
-  the backup anywhere itself; the homelab pulls.
+  the backup anywhere itself; the homelab pulls. **Third leg (a second off-site copy) stays
+  suspended** — `docs/BACKLOG.md` item 13, the Pedro's own 2026-09-06 decision, not resolved
+  by this item.
 - **RPO, measured, not assumed:** the disaster drill found the dump window matters — a user
   created after 03:30 was genuinely absent from that night's dump. Plan around hours, not
   minutes.

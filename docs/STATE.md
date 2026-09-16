@@ -3,7 +3,27 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: itens 47+48 — fugas laterais da fronteira de custos (audit_log + dumps) — ✅
+**Etapa actual: item 43 — cadência de backup, diário↔semanal com janela de carga — ✅
+FECHADA 2026-09-16.** `tmsi-backup.timer`/`.service` (único, `OnCalendar=03:30`, 30 dias)
+substituído por dois pares independentes e mutuamente exclusivos —
+`tmsi-backup-weekly.timer`/`.service` (regime permanente, `Mon *-*-* 03:30:00`, últimas 8
+cópias) e `tmsi-backup-window.timer`/`.service` (regime de janela, diário, sem rotação),
+trocados por `systemctl disable --now`/`enable --now`, nunca a editar unit à mão. **Sessão
+termina em modo janela, por desenho** — o catálogo real ainda não está carregado; a condição
+de saída (voltar a semanal só depois de carregado **e verificado**) fica escrita em
+`deploy/DEPLOY.md` §4. Retenção contada em cópias medidas contra o espaço real (disco a
+56%/13 GB livres, ~373 KB/dump), não em dias. **Achado corrigido antes de fechar, não depois:**
+o desenho inicial nomeava os dumps `tmsi-<modo>-<data>.dump` — alfabeticamente,
+"weekly" ordena antes de "window" sem relação com a data real, um risco genuíno para o
+script de pull off-site do homelab (que pode assumir ordenação alfabética = cronológica).
+Corrigido para `tmsi-<data>-<modo>.dump` (data primeiro) antes de considerar a sessão
+fechada — mesma propriedade do esquema antigo preservada. Restauro provado com o
+procedimento **documentado** (`-U supabase_admin`), não o atalho `-U postgres` usado nas
+verificações de restauro dos itens 40/41/47+48 desta mesma cadeia de sessões — zero erros
+(vs. os ~81 avisos ignorados do atalho), ownership de `auth.*`/`tmsi.*` confirmado
+explicitamente. Detalhe completo: secção "Item 43 — cadência de backup" abaixo.
+
+**Etapa anterior: itens 47+48 — fugas laterais da fronteira de custos (audit_log + dumps) — ✅
 FECHADA 2026-09-16 — migração 0014.** A hipótese mais grave que o item 42 tinha deixado em
 aberto — se `tmsi.audit_log` também alcança CUSTOS, contornando 0003/0004 — foi medida
 primeiro, com sessões reais: **não alcança.** `audit_log` tem uma única política RLS
@@ -138,6 +158,86 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Item 43 — cadência de backup (2026-09-16)
+
+### F0 — medição, antes de qualquer alteração
+
+Baseline: 14 dumps reais do regime antigo (`tmsi-2026-09-03.dump` … `tmsi-2026-09-16.dump`,
+um por dia desde o início do projecto), 8 dumps `tmsi-pre-<migração>-*` ad-hoc de sessões
+passadas. Tamanho total dos 14 reais: 5.343.209 bytes ≈ 373 KB/dump em média. Disco: `29 GB`
+total, `56%` usado, `13 GB` livres (`df -h /`). `systemctl show tmsi-backup.timer
+--property=TimersCalendar` (efectivo, não o ficheiro): `OnCalendar=*-*-* 03:30:00`, próximo
+disparo confirmado.
+
+**Conta de espaço para 8 semanais + janela sem limite:** 8 × 373 KB ≈ 3 MB. Mesmo com dumps a
+crescerem 10× depois do catálogo real carregado, e uma janela de 30 dias inteiros em modo
+diário, o total fica bem abaixo de 15 MB — contra 13 GB livres. **Cabe com folga imensa,
+confirmado por conta real, não estimativa.**
+
+### F1 — implementação
+
+Dois pares de unidades, mutuamente exclusivos:
+- `tmsi-backup-weekly.timer` (`OnCalendar=Mon *-*-* 03:30:00`, `Persistent=true`) →
+  `tmsi-backup-weekly.service`: `pg_dump` → `docker cp` para
+  `tmsi-<data>-weekly.dump` → `chmod 600` → rotação (`ls -t tmsi-*-weekly.dump | tail -n +9 |
+  xargs -r rm -f`, mantém as últimas 8).
+- `tmsi-backup-window.timer` (`OnCalendar=*-*-* 03:30:00`, `Persistent=true`) →
+  `tmsi-backup-window.service`: mesma cadeia, `tmsi-<data>-window.dump`, sem rotação nenhuma.
+
+`tmsi-backup.timer`/`.service` (únicos, antigos) removidos (`sudo rm`), não só desactivados —
+para não deixar três definições de backup no disco ao mesmo tempo.
+
+**Achado corrigido antes de fechar a sessão, não depois:** o primeiro desenho nomeava
+`tmsi-<modo>-<data>.dump` (`tmsi-weekly-2026-09-21.dump`, `tmsi-window-2026-09-17.dump`).
+Antes de dar isto como fechado, verificado o script de pull off-site do homelab
+(`~/scripts/tmsi-offsite-pull.sh`, dossier `OPERATIONS.md` "Off-site do backup TMSI"): a
+origem é um glob amplo (`vps:.../tmsi/*.dump`, continuaria a apanhar tudo, sem perda), mas o
+passo que verifica "o dump mais recente" pode depender de a ordenação alfabética do nome
+coincidir com a ordem cronológica — verdade para o esquema antigo (`tmsi-<data>.dump`), falsa
+para `tmsi-<modo>-<data>.dump` ("weekly" ordena antes de "window", sem relação com datas
+reais). Corrigido para `tmsi-<data>-<modo>.dump` (data primeiro) — a mesma propriedade do
+esquema antigo preservada, unidades reescritas e reaplicadas antes de qualquer prova ser
+considerada válida. **Não corrigido, fora do âmbito desta sessão (VPS, nunca o homelab):** se
+o script homelab tiver uma expectativa mais rígida do que "ordenar por nome", precisa de
+confirmação/ajuste do lado de lá — sinalizado no CHANGELOG do dossier, não escondido.
+Confirmado sem impacto: `vps-stats.sh`'s métrica `tmsi_backup_age_h` usa `ls -t` (por data de
+modificação, nunca por nome) — testada ao vivo, `0,2h` depois do primeiro dump novo.
+
+### F2 — as quatro provas
+
+1. **Dump novo, permissões do item 48 preservadas:** `tmsi-2026-09-16-window.dump`, `600`,
+   dono `pedro:pedro` — confirmado depois de cada disparo manual.
+2. **Restauro real**, desta vez pelo procedimento **documentado** (`deploy/DEPLOY.md` §5,
+   provado no ensaio de desastre) em vez do atalho usado nas verificações de restauro
+   anteriores desta cadeia de sessões (itens 40, 41, 47+48: `-U postgres`, que aqui
+   confirmadamente ainda funciona para uma BD descartável vazia, mas nunca foi o comando que
+   o ensaio provou correcto): `pg_restore -U supabase_admin -d tmsi_restore_verify <
+   tmsi-2026-09-16-window.dump` — **zero erros** (o atalho `-U postgres` produzia ~81 avisos
+   ignorados, benignos mas nunca verificados quanto à posse das tabelas). Contagens
+   (`products`/`audit_log`/`profiles`/`import_batches`/`user_roles`) idênticas ao vivo.
+   **Ownership confirmado explicitamente** (o que o atalho anterior nunca verificou): 23
+   tabelas `auth.*` de `supabase_auth_admin`, 27 tabelas `tmsi.*` de `postgres` — exactamente
+   o padrão que `deploy/DEPLOY.md` diz que uma restauração correcta produz.
+3. **Agendamento, trocado nos dois sentidos:** window→weekly→window, `systemctl list-timers`
+   a confirmar o `NEXT` a mudar de facto a cada troca (`Mon 2026-09-21 03:30:00` em modo
+   semanal, `Thu 2026-09-17 03:30:00` em modo janela) — calculado de forma independente
+   também via `systemd-analyze calendar`, batendo certo com o que o timer real mostrou.
+4. **Rotação, limiar forçado:** 10 ficheiros fictícios (`tmsi-2099-01-01-weekly.dump` …
+   `tmsi-2099-01-10-weekly.dump`, datas inequivocamente falsas, conteúdo trivial, `touch -d`
+   com timestamps distintos) — `ls -t tmsi-*-weekly.dump | tail -n +9 | xargs -r rm -f`
+   apagou exactamente os 2 mais antigos (01, 02) e manteve exactamente os 8 mais recentes
+   (03–10); o dump real de janela nunca tocado (glob `-weekly` não apanha `-window`). Todos
+   os ficheiros fictícios removidos a seguir, directório de volta ao estado real.
+
+### F3 — fecho
+
+`deploy/DEPLOY.md` §4 reescrito: as duas cadências, o gesto de troca (comandos exactos), a
+condição de saída datada, a nota sobre o risco de ordenação corrigido, os dumps antigos não
+migrados (deixados como estão). `docs/DATA-PROCESSING-NOTICE.md` secção 2 actualizada (a
+retenção mudou — agora em cópias, hoje em modo janela). `docs/BACKLOG.md` item 43 riscado,
+com o achado do off-site sinalizado, não escondido. Off-site (terceira perna, item 13)
+continua suspenso.
 
 ## Itens 47+48 — audit_log e dumps (2026-09-16)
 
