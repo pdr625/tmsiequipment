@@ -80,6 +80,14 @@ Repete os passos 1–4 para cada um dos 2–3 colegas.
   linha do utilizador — se a leitura do estado de ban ao GoTrue falhar, a página mostra um
   aviso "Ban status unavailable" em vez de assumir "activo" (achado #2, tarefa 6).
 
+## Nota de tratamento de dados (item 42, 2026-09-16)
+
+A app tem agora uma página `/privacy` (inglês, ligada da home) com a nota de tratamento de
+dados pessoais — o que é guardado, para quê, quem acede, quanto tempo, e o que um colega pode
+pedir. Vale a pena apontar para lá no passo 4 (comunicar), junto da password — "a app também
+tem uma página que explica que dados guarda sobre ti, em `/privacy`, depois de entrares".
+Fonte completa, em português: `docs/DATA-PROCESSING-NOTICE.md`.
+
 ## Depois do onboarding
 
 Recolhe feedback de cada colega (o que confundiu, o que faltou, o que não bateu certo com o

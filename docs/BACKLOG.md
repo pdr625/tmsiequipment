@@ -206,9 +206,25 @@ célula. **Veredicto: gate de produção satisfeito para 0001–0013** — prime
 8 papéis completos desde a execução n.º 1. Detalhe completo, passo a passo: `docs/
 VERIFICATION-PROTOCOL.md` secção 7, "Execução n.º 2".
 
-**42. Nota de tratamento de dados aos utilizadores** 🟠 *(por escrever)* — pedida pelo Pedro,
-2026-09-06: finalidade do tratamento, quem acede (por papel), prazo de retenção. Nenhum
-rascunho existe ainda em nenhum documento do repo.
+~~**42. Nota de tratamento de dados aos utilizadores**~~ ✅ **fechado 2026-09-16.**
+`docs/DATA-PROCESSING-NOTICE.md` (fonte, PT) + `/privacy` na app (inglês, qualquer
+utilizador autenticado, sem caixa de aceitação). Cada afirmação ancorada numa medição real
+desta sessão contra a BD/containers/host — não um modelo genérico: colunas de dados pessoais
+(`profiles`/`user_roles`/`auth.sessions`), o que `tmsi.audit_log` guarda de facto (`old_row`/
+`new_row` inclui nome/email sempre que um perfil muda, alcançável por 4 papéis via API
+directa, nunca pelo ecrã `/audit`), o registo interno do GoTrue e os logs dos containers
+(email em texto simples, retenção por volume não por dias), os logs do nginx (14 dias,
+`logrotate`), os dumps nocturnos (30 dias, mas mundialmente legíveis no host) e o escrow
+cifrado (só segredos de infra, confirmado sem dados pessoais). Duas decisões só do Pedro,
+perguntadas directamente, nunca assumidas: responsável pelo tratamento no piloto (ele
+próprio) e retenção do `audit_log` (5 anos, declarado como decisão distinta do que está
+implementado hoje — item novo **49**). Quatro outras lacunas, cada uma o seu item: sem
+apagamento/anonimização de utilizador (**45**), sem exportação própria de dados (**46**),
+alcance do `audit_log` por API a 4 papéis (**47**), dumps `644` em vez de `600` (**48**).
+`scripts/smoke.py` ganhou uma asserção nova (63/63) confirmando que `/privacy` sem sessão
+redirecciona para `/login`, nunca serve a página — a prova mais funda (um papel comum a
+ler o texto) fica para o Pedro, browser, mesma limitação de sempre para páginas Next.js.
+Detalhe completo: `docs/DATA-PROCESSING-NOTICE.md`.
 
 **43. Backup diário → semanal** 🟡 *(por executar)* — decisão do Pedro, 2026-09-06,
 justificada: o ficheiro de preços muda poucas vezes por ano, backup diário é frequência a

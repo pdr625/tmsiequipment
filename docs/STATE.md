@@ -3,7 +3,25 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: re-execução formal completa do protocolo — Execução n.º 2 (item 41) — ✅
+**Etapa actual: nota de tratamento de dados pessoais (item 42) — ✅ FECHADA 2026-09-16.**
+`docs/DATA-PROCESSING-NOTICE.md` (fonte, PT) + `/privacy` na app (inglês, qualquer
+utilizador autenticado, sem caixa de aceitação, sem gate de papel confirmado por leitura de
+código). Medido antes de escrever, contra a BD/containers/host reais, não um modelo: colunas
+de dados pessoais, conteúdo real do `tmsi.audit_log` (`old_row`/`new_row` inclui nome/email
+sempre que um perfil muda, alcançável por `admin`/`finance`/`branch_manager`/`viewer` via API
+directa, nunca pelo ecrã `/audit`), o registo interno do GoTrue e logs dos containers (email
+em texto simples, retenção por volume — `10m×3` ficheiros — não por dias), logs nginx (14
+dias, `logrotate`), dumps nocturnos (30 dias, mas `644` — mundialmente legíveis no host) e o
+escrow cifrado (só segredos de infra, sem dados pessoais). Duas decisões perguntadas
+directamente ao Pedro, nunca assumidas: responsável pelo tratamento no piloto (ele próprio,
+pessoalmente) e retenção do `audit_log` (5 anos, declarado como decisão distinta da
+implementação — que não existe ainda, item novo 49). Quatro outras lacunas registadas, cada
+uma o seu item de backlog (45-48) — sem apagamento de utilizador, sem exportação própria,
+alcance do `audit_log` por 4 papéis, permissões dos dumps. `scripts/smoke.py` 62→**63/63**
+(nova asserção: `/privacy` sem sessão redirecciona para `/login`, nunca serve a página).
+Detalhe completo: secção "Nota de tratamento de dados pessoais (item 42)" abaixo.
+
+**Etapa anterior: re-execução formal completa do protocolo — Execução n.º 2 (item 41) — ✅
 FECHADA 2026-09-16.** Primeira execução dos **8 papéis completos** desde a n.º 1
 (2026-09-05, só 0001–0005) — tudo o que veio depois (i9, i10, tarefa 6, 0007–0011) foi só
 adenda parcial. Escritas primeiro as duas adendas em falta (0012 margem interco/filiais,
@@ -100,6 +118,69 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Nota de tratamento de dados pessoais (item 42) — ✅ FECHADA 2026-09-16
+
+Texto completo: `docs/DATA-PROCESSING-NOTICE.md` (fonte, PT) e `/privacy` na app (inglês).
+Aqui, o resumo da medição e das provas.
+
+**F0 — medição, tabela completa** (categoria · onde vive · quem acede · como sai · quanto
+tempo): `tmsi.profiles`/`tmsi.user_roles` (nome/email/papel/filial, self ou admin);
+`auth.users.encrypted_password` (hash, nunca acessível); `auth.sessions` (IP+user-agent, 245
+linhas todas com os dois campos preenchidos, 0 expiradas residuais — o GoTrue limpa-as);
+`tmsi.audit_log` (1977+ linhas, `old_row`/`new_row` sem `REVOKE` nenhum para
+`admin`/`finance`/`branch_manager`/`viewer`, confirmado que uma linha `table_name='profiles'`
+tem nome/email em texto simples; o ecrã `/audit` só selecciona
+`id/at/actor/table_name/row_pk/action`, confirmado por leitura de código, nunca o conteúdo);
+`auth.audit_log_entries` (registo interno do GoTrue, 566 linhas desde 03/09, email em texto
+simples no `payload`, `ip_address` sempre vazio neste setup); logs dos containers (`docker
+inspect`: `json-file`, `10m×3`, retenção por volume — amostra do `supabase-auth` confirma
+email em quase toda a linha; amostra do `tmsi-app` não mostrou dados pessoais); logs do nginx
+(`/etc/logrotate.d/nginx`, sem sudo — ficheiro world-readable —, `daily`/`rotate 14`; formato
+`combined` por omissão, confirmado pela ausência de `log_format` customizado em
+`nginx.conf`); dumps nocturnos (`~/backups/tmsi/*.dump`, `find -mtime +30 -delete` no
+`tmsi-backup.service`, permissões `-rw-r--r--` — mundialmente legíveis, ao contrário do
+`.env`); escrow cifrado (`deploy/DEPLOY.md` §6: só `.env` + PAT do GHCR, sem dados pessoais).
+Exports Excel/PDF: `generatedBy` = o próprio utilizador que gera, nunca um terceiro
+(confirmado por leitura de `prices/export/route.ts`/`products/export/route.ts`). Ausências
+confirmadas: zero `deleteUser` em `admin/users/actions.ts`; zero exportação "os meus dados";
+zero purga do `audit_log`; zero analytics/tracking em `app/package.json` ou `app/src`.
+
+**As duas decisões (restrição do prompt: perguntadas, nunca assumidas por omissão):**
+responsável pelo tratamento no piloto = **Pedro, pessoalmente**
+(pedroalexandre625@gmail.com); retenção do `audit_log` = **5 anos**, declarado como decisão,
+não implementação — a tabela continua sem purga nenhuma hoje, item novo 49 regista o
+trabalho de a construir.
+
+**F1 — quatro achados, cada um o seu item de backlog:** 45 (sem apagar/anonimizar
+utilizador), 46 (sem exportação própria), 47 (`audit_log` alcançável por 4 papéis via API
+directa, não só `admin`), 48 (dumps `644`). Mais o item 49 (implementar a retenção decidida).
+
+**F2:** `docs/DATA-PROCESSING-NOTICE.md` — cada secção com origem citada na tabela de F0,
+secção 1 com as duas decisões (nunca `A DECIDIR`, o Pedro respondeu às duas), secção "o que o
+sistema ainda não faz" a listar os quatro achados sem rodeios.
+
+**F3:** `/privacy` (inglês) — sem caixa de aceitação (confirmado por leitura do próprio
+ficheiro, zero `<input type="checkbox">`/lógica de consentimento), sem gate de papel
+(confirmado por grep: zero chamada a `isAdmin`/`canRead*`/`canManage*` no ficheiro — o único
+gate é o da própria `middleware.ts`, "sessão existe", igual a todas as outras rotas
+autenticadas). Ligada da home, junto a "Change password".
+
+**F4 — provas:**
+- Código: zero gate de papel (grep, acima) — acesso incondicional a qualquer autenticado.
+- `curl` sem sessão a `/privacy` → `307` para `/login`, nunca o conteúdo da página —
+  confirmado ao vivo contra a app já implantada.
+- `scripts/smoke.py`, bloco novo `block_privacy_notice()` (opener sem seguir redirects, para
+  observar o `307` em vez de o esconder atrás de um `200` em `/login`) — **63/63**.
+- Verificação cruzada nota-vs-F0: cada afirmação da nota tem uma linha correspondente na
+  tabela de medição acima — nenhuma por confirmar.
+- **Não executado, fica para o Pedro** (mesma limitação de sempre, nunca resolvida por
+  `curl` neste projecto — tentado e abandonado várias vezes para outras páginas, i9/i10/item
+  26): um utilizador de papel comum a abrir `/privacy` no browser e a confirmar que o texto
+  é legível.
+
+**Deploy:** imagem `ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:d7c2df2e…`, CI verde,
+`docker compose up -d --no-deps tmsi-app`, healthy, smoke 63/63 contra a app viva.
 
 ## Execução n.º 2 do protocolo (item 41) — ✅ FECHADA 2026-09-16
 
