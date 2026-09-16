@@ -958,6 +958,178 @@ def block_branches_admin_only(token):
 
 
 # ---------------------------------------------------------------------------
+# AA — batch decision (item 44): tmsi.decide_price_proposal_batch() is
+# SECURITY DEFINER and classifies eligibility itself (same rule as
+# tmsi.decide_price_proposal(), 0007, unchanged) — a proposal outside the
+# caller's branch must be excluded, visibly, from the batch, never silently
+# dropped and never failing the ones that WERE eligible. Uses the same
+# active fixture product every other post-item-40 block needs (no active
+# product survives in the seed catalog, item 40) — created once per run in
+# main(), reused here rather than a second fixture.
+# ---------------------------------------------------------------------------
+def block_batch_decision(finance_token, finance_uuid, bm_token, bm_uuid):
+    own_branches = {r[0] for r in psql_rows(f"select branch_id from tmsi.user_roles where user_id = '{bm_uuid}' and role = 'branch_manager' and branch_id is not null;")}
+    if not own_branches:
+        check("AA: batch decision", True, "SKIP — branch_manager.test has no branch_id role row")
+        return
+    own_branch = sorted(own_branches)[0]
+    own_branches_sql = ",".join(f"'{b}'" for b in own_branches)
+    other_candidates = psql_rows(f"select id from tmsi.branches where active and id not in ({own_branches_sql}) limit 1;")
+    if not other_candidates:
+        check("AA: batch decision", True, "SKIP — no other active branch found")
+        return
+    other_branch = other_candidates[0][0]
+
+    def propose_override(branch_id, value, reason):
+        status, created = http(
+            "POST", f"{REST}/price_proposals", token=finance_token,
+            body={
+                "target_table": "price_overrides", "branch_id": branch_id,
+                "payload": {
+                    "product_id": SMOKE_FIXTURE_ID, "scope_type": "branch", "scope_id": branch_id,
+                    "kind": "margin", "value": value, "reason": reason,
+                    "valid_from": str(db_today()), "valid_to": None,
+                },
+                "reason": reason, "proposed_by": finance_uuid,
+            },
+            prefer="return=representation",
+        )
+        return created[0]["id"] if status == 201 and isinstance(created, list) and created else None
+
+    # mixed eligibility: own-branch proposal + another branch's, in one batch
+    own_id = propose_override(own_branch, 0.41, "smoke: batch own-branch")
+    other_id = propose_override(other_branch, 0.41, "smoke: batch other-branch")
+    check("AA: two proposals created for the batch", bool(own_id and other_id), f"own={own_id} other={other_id}")
+    if not (own_id and other_id):
+        for pid in (own_id, other_id):
+            if pid:
+                psql_rows(f"delete from tmsi.price_proposals where id = {pid};")
+        return
+
+    status, preview = http(
+        "POST", f"{REST}/rpc/decide_price_proposal_batch", token=bm_token,
+        body={"p_proposal_ids": [own_id, other_id], "p_decision": "approved", "p_reason": None, "p_dry_run": True},
+    )
+    ok = (
+        status == 200 and isinstance(preview, dict) and preview.get("dry_run") is True
+        and preview.get("eligible_count") == 1 and preview.get("excluded_count") == 1
+        and isinstance(preview.get("changes"), list) and len(preview["changes"]) == 1
+        and preview["changes"][0].get("after") == 0.41
+    )
+    check("AA: preview shows real before/after, not just a count", ok, f"http_{status} body={preview}")
+    excluded_ok = (
+        isinstance(preview, dict) and isinstance(preview.get("excluded"), list) and len(preview["excluded"]) == 1
+        and preview["excluded"][0].get("id") == other_id
+    )
+    check("AA: the other branch's proposal is excluded, with a reason, not silently dropped", excluded_ok, f"excluded={preview.get('excluded') if isinstance(preview, dict) else preview}")
+
+    audit_before = psql_rows("select count(*) from tmsi.audit_log where table_name='price_proposals' and action='UPDATE';")[0][0]
+    status, commit = http(
+        "POST", f"{REST}/rpc/decide_price_proposal_batch", token=bm_token,
+        body={"p_proposal_ids": [own_id, other_id], "p_decision": "approved", "p_reason": None, "p_dry_run": False},
+    )
+    ok = status == 200 and isinstance(commit, dict) and commit.get("decided_count") == 1 and commit.get("excluded_count") == 1
+    check("AA: commit decides only the eligible one", ok, f"http_{status} body={commit}")
+
+    rows = psql_rows(f"select id, status, decision_batch_id is not null from tmsi.price_proposals where id in ({own_id},{other_id}) order by id;")
+    statuses = {r[0]: (r[1], r[2]) for r in rows}
+    check(
+        "AA: ramo negado — the excluded proposal has no effect on the engine (still pending, no batch)",
+        statuses.get(str(other_id)) == ("pending", "f"),
+        f"other_id status={statuses.get(str(other_id))}",
+    )
+    check(
+        "AA: the eligible proposal was decided and stamped with the batch",
+        statuses.get(str(own_id)) == ("approved", "t"),
+        f"own_id status={statuses.get(str(own_id))}",
+    )
+    audit_after = psql_rows("select count(*) from tmsi.audit_log where table_name='price_proposals' and action='UPDATE';")[0][0]
+    check(
+        "AA: audit_log granularity — exactly one UPDATE entry for the one decided proposal, not zero, not two",
+        int(audit_after) - int(audit_before) == 1,
+        f"before={audit_before} after={audit_after}",
+    )
+
+    status, engine = http("POST", f"{REST}/rpc/compute_price", token=finance_token, body={"p_product": SMOKE_FIXTURE_ID, "p_scope_type": "branch", "p_scope_id": own_branch})
+    engine_row = engine[0] if status == 200 and isinstance(engine, list) and engine else None
+    check(
+        "AA: motor-vivo — the engine reflects the approved value immediately",
+        engine_row is not None and float(engine_row["margin"]) == 0.41,
+        f"http_{status} margin={engine_row.get('margin') if engine_row else None}",
+    )
+
+    # atomicity: a doomed proposal (nonexistent product_id) alongside a
+    # valid one, same batch — both must fail together, nothing residual.
+    def propose_doomed(branch_id):
+        status, created = http(
+            "POST", f"{REST}/price_proposals", token=finance_token,
+            body={
+                "target_table": "price_overrides", "branch_id": branch_id,
+                "payload": {
+                    "product_id": "T-0000", "scope_type": "branch", "scope_id": branch_id,
+                    "kind": "margin", "value": 0.5, "reason": "smoke: batch doomed",
+                    "valid_from": str(db_today()), "valid_to": None,
+                },
+                "reason": "smoke: batch doomed", "proposed_by": finance_uuid,
+            },
+            prefer="return=representation",
+        )
+        return created[0]["id"] if status == 201 and isinstance(created, list) and created else None
+
+    valid_id = propose_override(own_branch, 0.42, "smoke: batch atomic-valid")
+    doomed_id = propose_doomed(own_branch)
+    overrides_before = psql_rows("select count(*) from tmsi.price_overrides;")[0][0]
+    batches_before = psql_rows("select count(*) from tmsi.decision_batches;")[0][0]
+    status, failed = http(
+        "POST", f"{REST}/rpc/decide_price_proposal_batch", token=bm_token,
+        body={"p_proposal_ids": [valid_id, doomed_id], "p_decision": "approved", "p_reason": None, "p_dry_run": False},
+    )
+    check("AA: atomicidade — the doomed proposal makes the whole commit fail", status >= 400, f"http_{status} body={failed}")
+    overrides_after = psql_rows("select count(*) from tmsi.price_overrides;")[0][0]
+    batches_after = psql_rows("select count(*) from tmsi.decision_batches;")[0][0]
+    check(
+        "AA: atomicidade — the valid proposal's write was rolled back too, zero residue",
+        overrides_before == overrides_after and batches_before == batches_after,
+        f"overrides {overrides_before}->{overrides_after} batches {batches_before}->{batches_after}",
+    )
+    still_pending = psql_rows(f"select status from tmsi.price_proposals where id in ({valid_id},{doomed_id});")
+    check("AA: both proposals from the failed batch are still pending", all(r[0] == "pending" for r in still_pending), f"{still_pending}")
+    psql_rows(f"delete from tmsi.price_proposals where id in ({valid_id},{doomed_id});")
+
+    # rejection: refused without a reason, succeeds with one, engine untouched
+    reject_id = propose_override(own_branch, 0.60, "smoke: batch reject")
+    status, no_reason = http(
+        "POST", f"{REST}/rpc/decide_price_proposal_batch", token=bm_token,
+        body={"p_proposal_ids": [reject_id], "p_decision": "rejected", "p_reason": None, "p_dry_run": False},
+    )
+    check("AA: batch rejection without a reason is refused", status >= 400, f"http_{status}")
+    status, rejected = http(
+        "POST", f"{REST}/rpc/decide_price_proposal_batch", token=bm_token,
+        body={"p_proposal_ids": [reject_id], "p_decision": "rejected", "p_reason": "smoke: batch reject reason", "p_dry_run": False},
+    )
+    check("AA: batch rejection with a reason succeeds", status == 200 and isinstance(rejected, dict) and rejected.get("decided_count") == 1, f"http_{status} body={rejected}")
+    status, engine_after_reject = http("POST", f"{REST}/rpc/compute_price", token=finance_token, body={"p_product": SMOKE_FIXTURE_ID, "p_scope_type": "branch", "p_scope_id": own_branch})
+    engine_row2 = engine_after_reject[0] if status == 200 and isinstance(engine_after_reject, list) and engine_after_reject else None
+    check(
+        "AA: a rejected batch never reaches the engine",
+        engine_row2 is not None and float(engine_row2["margin"]) != 0.60,
+        f"margin={engine_row2.get('margin') if engine_row2 else None}",
+    )
+
+    # no residue: revert the fixture's approved override + the batches this
+    # block created — child rows (price_proposals, which reference
+    # decision_batches by FK) deleted before the parent batch rows, never
+    # the other way round.
+    psql_rows(f"delete from tmsi.price_overrides where product_id = '{SMOKE_FIXTURE_ID}' and scope_id = '{own_branch}' and kind = 'margin';")
+    batch_ids = psql_rows(f"select decision_batch_id from tmsi.price_proposals where id in ({own_id},{reject_id}) and decision_batch_id is not null;")
+    psql_rows(f"delete from tmsi.price_proposals where id in ({own_id},{other_id},{reject_id});")
+    for (bid,) in batch_ids:
+        psql_rows(f"delete from tmsi.decision_batches where id = '{bid}';")
+    remaining = psql_rows(f"select count(*) from tmsi.price_proposals where reason like 'smoke: batch%';")[0][0]
+    check("AA: no residue — all smoke batch proposals cleaned up", remaining == "0", f"remaining={remaining}")
+
+
+# ---------------------------------------------------------------------------
 # Z — bulk import (item 39): tmsi.run_import_hs_duty()/run_import_products()
 # are SECURITY DEFINER RPCs, not RLS policies — a non-admin/non-product_manager
 # role has to be refused by the function's own has_role() check, the same
@@ -1114,6 +1286,7 @@ def main():
     block_logistics_channel_scope(tokens["logistics"])
     block_interco_margin(claims["product_manager"])
     block_branches_admin_only(tokens["finance"])
+    block_batch_decision(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
     block_bulk_import(tokens["logistics"], tokens["product_manager"])
 
     delete_smoke_fixture_product()
