@@ -3,7 +3,24 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: higiene do seed fictício e das contas `.test` (item 40) — ✅ FECHADA
+**Etapa actual: re-execução formal completa do protocolo — Execução n.º 2 (item 41) — ✅
+FECHADA 2026-09-16.** Primeira execução dos **8 papéis completos** desde a n.º 1
+(2026-09-05, só 0001–0005) — tudo o que veio depois (i9, i10, tarefa 6, 0007–0011) foi só
+adenda parcial. Escritas primeiro as duas adendas em falta (0012 margem interco/filiais,
+0013 importação em massa — commit `5701607`), depois exercidas nesta mesma execução: 6 linhas
+novas na matriz da secção 3, secções 4.12/4.13 novas (5 passos, AAA–EEE). Quase tudo provado
+fresco (`BEGIN`/`ROLLBACK`, claims JWT reais, zero commit) — `scripts/smoke.py` cobre boa
+parte automaticamente (62/62 nos três modos do item 40, sem divergência), o resto directo
+contra a BD com 7 fixtures descartáveis (`T-9691`–`T-9698`, sobre o estado limpo do item 40,
+exactamente como o prompt antecipava). Zero resíduo confirmado por contagem no fecho —
+baseline idêntica ao início (13/17/68/6/20/1/4/1/7). Três divergências encontradas, **todas
+classe (b) — texto do protocolo desactualizado, zero defeito da app** — corrigidas no próprio
+texto (nota ⁸, passo K, passo RR), histórico preservado por tachado. Matriz reforçada da
+fronteira de custos (papel × caminho, incluindo `/import` da 0013): zero fuga. **Veredicto:
+gate de produção satisfeito para 0001–0013.** Detalhe completo: secção "Execução n.º 2 do
+protocolo (item 41)" abaixo.
+
+**Etapa anterior: higiene do seed fictício e das contas `.test` (item 40) — ✅ FECHADA
 2026-09-16.** Zero migração — só dados e `scripts/smoke.py`. Achado de F0 que corrige o
 próprio `docs/BACKLOG.md`: os IDs de fixture nunca foram `T-92xx`/`T-93xx` (essas gamas eram
 fixtures efémeras de medição de desempenho, item 14/28, já confirmadas limpas); o que estava
@@ -83,6 +100,59 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Execução n.º 2 do protocolo (item 41) — ✅ FECHADA 2026-09-16
+
+Registo formal completo, passo a passo, com todos os valores: `docs/VERIFICATION-PROTOCOL.md`
+secção 7, "Execução n.º 2 — 2026-09-16 (completa, migrações 0001–0013)". Aqui, só o resumo.
+
+**F0:** confirmado por medição directa (não por ler `docs/STATE.md`) que as 6 contas `.test`
+continuavam activas (`banned_until` nulo nas 6) e que a BD está mesmo em 0013 (9 objectos
+verificados existirem/não-existirem contra o schema real). Baseline capturada: `products`=13,
+`hs_codes`=17, `customs_rates`=68, `price_overrides`=6, `price_proposals`=20,
+`import_batches`=1, `branches`=4, `channels`=1, `user_roles`=7.
+
+**F1:** duas adendas escritas e commitadas (`5701607`) **antes** de correr os blocos que as
+exercem (restrição 3 do prompt) — 6 linhas novas na matriz da secção 3 (margem interco, editar
+filiais/canais, importar direitos, importar produtos+config, ver/desfazer lotes), notas ¹¹/¹²,
+secções 4.12 (AAA–BBB, 0012) e 4.13 (CCC–EEE, 0013).
+
+**F2:** todos os blocos considerados — executados os que a BD/API permite, `scripts/smoke.py`
+para o que já tinha cobertura automatizada, e marcados **NÃO EXECUTADO** (não "ok por
+inspecção") os que precisam mesmo de um browser ou caixa de correio reais (S/T, CC/DD, metades
+de V/W/X/KK/LL) — mesma limitação desde a execução n.º1, não agravada por esta sessão. Sete
+fixtures descartáveis (`T-9691`–`T-9698`), todos dentro de `BEGIN`/`ROLLBACK`, incluindo uma
+concessão efémera de `viewer` a uma identidade `.test` já existente (nunca commitada, para
+testar o papel N — não existe conta `.test` de `viewer`, nunca existiu).
+
+**Três divergências, todas classe (b) — texto do protocolo atrasado em relação ao schema,
+nunca um defeito da app:**
+1. Nota ⁸: dizia que `tmsi.channels.margin_delta` "foi removido" — a coluna continua na
+   tabela, só ficou sem leitores desde a 0009. Corrigido.
+2. Passo K: dizia "pode criar um override de duty" — texto de antes da 0007. Hoje é
+   propor→só admin aprova→só depois visível. Resultado final idêntico, mecanismo mudou.
+   Corrigido.
+3. Passo RR: registava um achado (logistics vê qualquer canal) que a nota XX (migração 0010)
+   já tinha corrigido — nunca marcado. Reconfirmado nesta execução: 0 linhas, não 1. Corrigido,
+   marcado `SUPERSEDED`.
+
+**F3 (matriz reforçada da fronteira de custos):** papel × caminho (tabela base API directa,
+vistas, exports/impressão por leitura de código, `/import` + pré-visualizações da 0013) para
+`sales`/`agent`/`logistics`/`branch_manager` fora da sua filial — zero célula com fuga de
+custo, incluindo os dois caminhos novos da 0013 (`run_import_hs_duty`/`run_import_products`
+recusados por inteiro para papéis sem `admin`/`product_manager`).
+
+**F4:** `scripts/smoke.py` nos três modos do item 40, mesma execução — **62/62** omissão,
+**62/62** `TMSI_VERIFY_MODE=login` explícito (um `504` transitório do GoTrue na primeira
+tentativa, confirmado saudável por `/auth/v1/health` de imediato, resolvido na repetição —
+nada a ver com contas banidas), **62/62** `jwt` com as `.test` simuladas indisponíveis. Sem
+divergência entre os três.
+
+**Zero resíduo confirmado no fecho** — todas as contagens de volta à baseline exacta de F0.
+
+**Veredicto:** gate de produção satisfeito para 0001–0013 — primeira vez a cobrir os 8 papéis
+completos desde a execução n.º 1. Nenhum item novo de backlog — as três divergências foram
+correcções de texto, fechadas na própria sessão, não achados por resolver depois.
 
 ## Higiene do seed e das contas `.test` (item 40) — ✅ FECHADA 2026-09-16
 

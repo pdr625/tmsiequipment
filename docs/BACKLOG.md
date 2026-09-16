@@ -136,22 +136,27 @@ existente, `ban_duration` via GoTrue). Backup fresco tirado e **verificado por r
 (não só por existir o ficheiro) antes das alterações de dados — contagens do restauro
 conferidas 1:1 contra o vivo. Detalhe completo, achado a achado: `docs/STATE.md`.
 
-**41. Re-execução formal completa do `docs/VERIFICATION-PROTOCOL.md`** 🔴 *(obrigatória antes
-dos dados reais)* — a última execução dos **8 papéis da matriz completa** cobriu só as
-migrações 0001–0005 (registo da secção 7, 2026-09-05). Toda execução desde aí — i9, i10,
-tarefa 6, migrações 0007, 0008, 0009, 0010+0011, **0012, 0013** — foi uma **adenda parcial**,
-re-testando só os passos novos de cada sessão, nunca os 8 papéis outra vez desde o início. É
-o gate que sustenta perante a equipa/direcção que os custos não vazam a quem não deve — não se
-pode assumir que continua válido depois de treze migrações de schema sem o re-confirmar por
-inteiro. **Corre agora sobre o estado limpo do item 40** (zero produto activo real ou
-fictício na BD, os 12 fictícios retirados de circulação, os 5 HS de fixture marcados) — os
-passos O/J da `Execução n.º 1` (2026-09-05) usavam `T-8515`/`T-9004` por id directo; uma
-`Execução n.º 2` vai precisar de fixtures próprios (o smoke ganhou um padrão pronto a copiar,
-`create_smoke_fixture_product()`/`delete_smoke_fixture_product()` em `scripts/smoke.py`, item
-40). **Inclui obrigatoriamente as adendas em falta da 0012 e da 0013** (nota interina em
-`docs/VERIFICATION-PROTOCOL.md`, item 39). Se as contas `.test` entretanto tiverem sido
-desactivadas, os passos S/T (login real por browser) precisam de uma conta reactivada
-temporariamente ou nova — ver `docs/TEST-ACCOUNTS.md`.
+~~**41. Re-execução formal completa do `docs/VERIFICATION-PROTOCOL.md`**~~ ✅ **fechado
+2026-09-16 — Execução n.º 2, 8 papéis completos, migrações 0001–0013.** Primeira execução
+completa desde a n.º 1 (2026-09-05, só 0001–0005) — tudo o que veio depois (i9, i10, tarefa 6,
+0007–0011) tinha sido só adenda parcial. As duas adendas em falta (0012/0013) escritas
+primeiro (commit `5701607`), depois exercidas nesta mesma execução — matriz da secção 3 com 6
+linhas novas, secções 4.12/4.13 novas (5 passos). Quase tudo provado fresco (`BEGIN`/
+`ROLLBACK`, claims JWT reais, zero commit) — `scripts/smoke.py` cobre boa parte
+automaticamente (62/62), o resto directo contra a BD (fixtures próprios `T-9691`–`T-9698`,
+sobre o estado limpo do item 40, exactamente como antecipado); zero resíduo confirmado por
+contagem no fecho (baseline 13/17/68/6/20/1/4/1/7, idêntica no fim). Passos que só um browser/
+caixa de correio real consegue exercer marcados **NÃO EXECUTADO** (não "ok por inspecção") —
+ficam para o Pedro, mesma limitação de sempre. **Três divergências encontradas, todas classe
+(b) — texto do protocolo desactualizado, zero defeito da app:** a nota ⁸ dizia
+`channels.margin_delta` "foi removido" (a coluna continua lá, só sem leitores); o passo K
+dizia "pode criar" um override de duty (texto pré-0007, hoje é propor→admin aprova→visível); o
+passo RR registava um achado que a nota XX (0010) já tinha corrigido, nunca actualizado para o
+dizer. Todas corrigidas no próprio texto, histórico preservado por tachado. Matriz reforçada
+da fronteira de custos (papel × caminho, incluindo `/import` da 0013): zero fuga em qualquer
+célula. **Veredicto: gate de produção satisfeito para 0001–0013** — primeira vez a cobrir os
+8 papéis completos desde a execução n.º 1. Detalhe completo, passo a passo: `docs/
+VERIFICATION-PROTOCOL.md` secção 7, "Execução n.º 2".
 
 **42. Nota de tratamento de dados aos utilizadores** 🟠 *(por escrever)* — pedida pelo Pedro,
 2026-09-06: finalidade do tratamento, quem acede (por papel), prazo de retenção. Nenhum

@@ -273,14 +273,20 @@ email (S/T) só cobriram Gmail e Hotmail pessoais — a variante com gateway cor
 M365/EOP, a mesma quarentena identificada na i3, continua por cobrir. Detalhe completo:
 `STATE.md` e `docs/VERIFICATION-PROTOCOL.md` (secções 6/7).
 
-⚠️ **Esta é a única execução dos 8 papéis completa até hoje — nota da reconciliação
-2026-09-15 (`docs/BACKLOG.md` item 41).** Cada migração desde a 0005 (0007, 0008, 0009,
-0010+0011) ganhou a sua própria adenda em `docs/VERIFICATION-PROTOCOL.md` §7, cada uma
-explicitamente **parcial** (só os passos novos dessa sessão, nunca os 8 papéis outra vez do
-zero) — a migração 0012 nem isso, não tem nenhuma adenda. "Gate satisfeito" acima descreve o
-estado de 2026-09-05 (0001–0005); o estado actual é 0001–0012, sete migrações depois, sem
-uma re-execução completa desde então. O critério de entrada da E6 abaixo continua por
-cumprir.
+✅ **Gate satisfeito por inteiro para o estado actual — Execução n.º 2, 2026-09-16
+(`docs/BACKLOG.md` item 41, fechado).** Entre a execução n.º 1 (0001–0005) e esta, cada
+migração (0007, 0008, 0009, 0010+0011) só tinha ganho uma adenda **parcial** em
+`docs/VERIFICATION-PROTOCOL.md` §7 (só os passos novos dessa sessão) — a 0012 nem isso. A
+Execução n.º 2 escreveu primeiro as duas adendas em falta (0012/0013) e depois re-testou os 8
+papéis completos sobre 0001–0013, digest `sha256:b47070dfb4307fea66f827b5d84cdcdf1ea774434ab681ec2fdba3d01bc0fb5f`
+— zero fuga na fronteira de custos por nenhum dos 4 caminhos testados (API directa, vistas,
+exports, `/import` da 0013), três correcções de texto ao próprio protocolo (documentação
+desactualizada, nunca a app), zero defeito encontrado. Passos que só um browser/caixa de
+correio real consegue exercer continuam por confirmar pelo Pedro (mesma limitação desde a
+execução n.º 1) — não bloqueiam o gate, nunca tocaram a fronteira de custos. **O critério de
+entrada da E6 abaixo está cumprido** pelo lado técnico; falta o carregamento do catálogo real
+em si (fora do âmbito deste gate). Detalhe completo: `docs/VERIFICATION-PROTOCOL.md` secção 7,
+"Execução n.º 2".
 
 ## Migração 0003/0004 — protecção de custos ao nível da BD — ✅ FECHADA 04/09/2026
 Fecha a pendência da i4: RLS só protegia linhas, nunca colunas — um pedido manual à API,
