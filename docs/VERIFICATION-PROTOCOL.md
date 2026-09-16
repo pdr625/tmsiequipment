@@ -163,9 +163,12 @@ passos KK–LL.
 ter cálculo próprio.** `tmsi.compute_price()` ganha um âmbito explícito (`p_scope_type`,
 `p_scope_id`) — um preço de canal é um cálculo independente a partir do EXW (**sem** fee
 intercompany, **sem** direitos aduaneiros, sempre, nunca uma condição sobre o nome do
-canal), não "o preço da filial com um desconto" — `tmsi.channels.margin_delta`, nunca lido
-por ninguém antes desta migração, foi removido, não migrado (o seu valor não sobrevive ao
-novo modelo de margem por artigo × canal, via override — nunca uma grelha). `logistics` viu,
+canal), não "o preço da filial com um desconto" — `tmsi.channels.margin_delta` (nunca lido
+por ninguém antes desta migração) **[correcção, execução n.º 2, 2026-09-16: a coluna
+continua fisicamente na tabela, valor original `-0,10` para APAC nunca tocado — só deixou de
+ter leitores, `compute_price()` nunca a consulta desde esta migração; o texto original desta
+nota dizia "foi removido", o que nunca foi verdade ao nível do schema]** não sobrevive ao
+novo modelo de margem por artigo × canal, via override — nunca uma grelha. `logistics` viu,
 por um dia (0009→0010), o preço de venda de **qualquer** canal sem restrição — herdado tal e
 qual da sua própria cláusula da 0007, que nunca teve condição de âmbito porque só existia
 âmbito de filial até 0009. **Corrigido pela 0010 (item D, achado da própria verificação
@@ -273,9 +276,13 @@ J. Artigos de outra filial → ausentes, mesmo pedidos por id directo.
 
 ### 4.3 Papéis operacionais (logistics / branch_manager / agent / viewer)
 K. logistics: vê HS/peso/dimensões e transporte; **não** vê custos/margens (browser e API);
-   pode criar um override de `duty` e **vê essa linha depois** (só as de `kind=duty`, nunca
-   `margin`/`transport`/`coef` — nota ³, secção 3, corrigida na execução n.º 1); confirmar as
-   duas metades: `duty` visível, outro `kind` continua invisível.
+   **[correcção, execução n.º 2, 2026-09-16: "pode criar" é texto de antes da 0007 — não há
+   escrita directa nenhuma desde então. O caminho real: logistics **propõe** um override de
+   `duty` (workflow 0007) → só `admin` aprova (`duty` não está entre os `kind` que
+   `branch_manager` pode decidir) → só depois de aprovada a linha fica visível]** e **vê essa
+   linha depois** (só as de `kind=duty`, nunca `margin`/`transport`/`coef` — nota ³, secção 3,
+   corrigida na execução n.º 1); confirmar as duas metades: `duty` visível, outro `kind`
+   continua invisível.
 L. branch_manager: EXW e códigos SAP sem restrição de filial (uma vez o produto visível);
    custo total/margem calculados **só da sua filial** (nota ¹, secção 3); artigos de outras
    filiais conforme a matriz.
@@ -466,14 +473,19 @@ QQ. **Três ramos negados, canal:** (1) um papel sem `logistics`/`admin`/`produc
     escrita directa em `tmsi.price_overrides` com `scope_type='channel'` → recusada pela RLS
     (não há política de `INSERT` nenhuma para `authenticated`, canal ou filial — a proposta
     continua a ser o único caminho, herdado tal e qual de 0007).
-RR. **Achado registado, não uma falha:** `has_role('logistics')` concede visibilidade de
-    **venda** (nunca custos) a **qualquer** canal, sem verificar `my_channels()` — herdado
-    verbatim da cláusula da 0007 (nunca tinha uma condição de âmbito, só existia para
-    filiais até agora); confirmado ao vivo que `logistics.test`, sem role `agent` nenhuma,
-    vê o preço de venda de um canal de teste onde não tem scope nenhum atribuído. Não é uma
-    fronteira nova a fechar — é a mesma amplitude que `logistics` já tinha para filiais,
-    agora também alcançando canais; registado aqui para o Pedro decidir, com conhecimento,
-    se algum dia quiser estreitar.
+RR. **SUPERSEDED pela migração 0010 — corrigido, já não é um achado em aberto (marcado na
+    execução n.º 2, 2026-09-16; o texto original abaixo nunca tinha sido actualizado para o
+    dizer, apesar de a nota XX, secção 4.11, já documentar a correcção desde 2026-09-10).**
+    Reconfirmado ao vivo nesta execução: `logistics.test`, sem role `agent`, a pedir um canal
+    onde não tem scope → **0 linhas**, não 1 — ver XX. Texto original, histórico, mantido
+    para registo: ~~**Achado registado, não uma falha:** `has_role('logistics')` concede
+    visibilidade de **venda** (nunca custos) a **qualquer** canal, sem verificar
+    `my_channels()` — herdado verbatim da cláusula da 0007 (nunca tinha uma condição de
+    âmbito, só existia para filiais até agora); confirmado ao vivo que `logistics.test`, sem
+    role `agent` nenhuma, vê o preço de venda de um canal de teste onde não tem scope nenhum
+    atribuído. Não é uma fronteira nova a fechar — é a mesma amplitude que `logistics` já
+    tinha para filiais, agora também alcançando canais; registado aqui para o Pedro decidir,
+    com conhecimento, se algum dia quiser estreitar.~~
 SS. **Sweep de regressão pós-deploy:** `scripts/smoke.py` completo sem falhas (45/45,
     2026-09-09) — inclui os blocos G–J/O–R/EE–JJ anteriores **inalterados** (restrição 1,
     prova de não-regressão) mais o novo bloco T (propor/pendente-invisível/branch_manager-
@@ -1046,14 +1058,148 @@ margem plana/fronteiras — o browser do Pedro (um produto em cada moeda, `/conf
 listagem de canal) continua por confirmar. Item 14 continua por fechar, não é coberto por
 este gate.
 
-**Nota interina, 2026-09-16 — migrações 0012 e 0013, sem adenda formal aqui, registado e não
-escondido:** confirmado na reconciliação de 2026-09-15 que a 0012 não tinha adenda nesta
-secção (achado de processo, `docs/BACKLOG.md` item 41). A 0013 (item 39, importação em
-massa) abre um caminho de escrita novo e sensível — `SECURITY DEFINER`, admin/
-`product_manager`, a contornar o workflow de propor/aprovar por desenho — verificado ao vivo
-por `BEGIN`/`ROLLBACK` (dry-run sem escrita, tudo-ou-nada num ficheiro inválido, idempotência
-por contagem, reversão completa, papel sem `admin`/`product_manager` recusado) e por
-`scripts/smoke.py` bloco Z, mas **nenhuma das duas ganhou uma adenda formal com os 8 papéis
-da matriz**, a mesma lacuna que a 0009-0011 não tinham. Ambas ficam explicitamente por conta
-do item 41 (re-execução formal completa), não resolvidas aqui à pressa para não duplicar
-esse trabalho.
+### Execução n.º 2 — 2026-09-16 (completa, migrações 0001–0013)
+
+**Âmbito:** os 8 papéis da matriz completa, migrações 0001–0013 (primeira execução completa
+desde a n.º 1, que cobriu só 0001–0005; tudo o que veio depois — 0006 a 0011 — só tinha
+adendas parciais). Digest `sha256:b47070dfb4307fea66f827b5d84cdcdf1ea774434ab681ec2fdba3d01bc0fb5f`
+(inalterado desde o deploy do item 39 — nenhum ficheiro em `app/**` mudou no item 40 nem
+nesta sessão). Executor: agente (API/BD, a esmagadora maioria) + Pedro (por confirmar, browser
+— ver lista de não-executados). Estado de partida: **pós-item-40** — zero produto `active` na
+BD (os 13 fictícios retirados de circulação), 5 HS de fixture marcados, contas `.test`
+intocadas. Migrações confirmadas por medição directa contra a BD viva, não por leitura de
+`docs/STATE.md` — ver F0, `docs/STATE.md`, secção do item 41.
+
+**As três antecipações do prompt, confirmadas exactamente como previsto:**
+1. **T-0005/SA:** não testado por si (o produto está `inactive`, fora de circulação — não há
+   "o preço publicado de T-0005/SA" para comparar); a *causa* está confirmada de outra forma,
+   directamente na origem — o override residual (id 8, expirado pelo item 40) tinha `margin
+   0,55`; a grelha real por trás dele é `0,50`, exactamente o valor que a `Execução n.º 1`
+   (passo B, 2026-09-05: "`margin: 0.50`") e a adenda i10 (2026-09-05: "`margin 0.55`,
+   override real, activo") já tinham documentado em momentos diferentes — o número mudou
+   porque o resíduo mascarava a grelha, não porque a grelha mudou.
+2. **Fixture própria para blocos que precisam de produto activo:** usada extensivamente — 7
+   produtos-fixture descartáveis (`T-9691`–`T-9698`, nunca coincidentes com os IDs do seed
+   `T-0001`–`T-0010` nem com os do item 39/40), todos dentro de `BEGIN`/`ROLLBACK`, zero
+   residual (confirmado por contagem no fecho de F2, ver abaixo).
+3. **Divergências de câmbio vs. Excel (até +0,43% GBP):** não re-exercitadas aqui — pertencem
+   ao item 38 (`docs/ENGINE-PARITY.md`), não a este protocolo (que testa fronteiras de acesso
+   e integridade de regras, não paridade contra uma fonte externa); citadas aqui só para
+   registar que não foram confundidas com uma divergência nova.
+
+**Blocos executados nesta sessão, resultado observado (não "ok por inspecção"):**
+
+| Bloco(s) | Secção | Resultado |
+|---|---|---|
+| A, B | 4.1 | Confirmado via `scripts/smoke.py` (finance/product_manager, engine coherence API≡BD) |
+| C | 4.1 | Fresco, `BEGIN`/`ROLLBACK`: propor(finance)→aprovar(admin) `exchange_rates` USD 1,1587→0,92; `total_cost_eur`/`min_price` de T-0004/SA recalculados; `audit_log.actor`=admin real |
+| D | 4.1 | Fresco: override margin T-0004/SA 0,42→0,50 (min_price 2323,58→2695,36, exacto) → `valid_to` expirado → reverte a 2323,58 |
+| E | 4.1 | Fresco: `audit_log` total=1977; finance vê 1977 (todas); product_manager vê 0 |
+| F–J | 4.2 | Confirmado via `scripts/smoke.py` (blocos G/H/I/J) + fresco (sales directo à tabela `products`: `permission denied`; `v_products` de um fixture activo: todas as colunas de custo `null`) |
+| K | 4.3 | Fresco, **via o caminho real pós-0007** (não o "criar" directo que o texto ainda descreve — ver correcção abaixo): logistics propõe `duty` → branch_manager recusado → admin aprova → logistics lê a linha `duty`; `margin` continua a 0 linhas visíveis |
+| L | 4.3 | Fresco: branch_manager(CORP) vê EXW/SAP de T-0005 (primary_branch SA) sem restrição; `compute_price(T-0005,CORP)` com custos; `compute_price(T-0005,SA)` = 0 linhas |
+| M | 4.3 | Fresco (fixture `T-9697`, TBM/APAC): agent vê `min_price` do seu canal, custos `null`; vê também a filial de origem (TBM) sem custos — nuance registada, não uma falha (a cláusula `see_sell` do agente cobre explicitamente `scope_type='branch'` quando é a filial do seu canal) |
+| N | 4.3 | Fresco, concessão efémera de `viewer` a uma identidade `.test` já existente (`logistics.test`), nunca commitada: custos em SA e CORP sem restrição; 6/6 overrides visíveis; `audit_log`=1977; escrita directa recusada |
+| O–R | 4.4 | Confirmado via `scripts/smoke.py` (blocos O/Q/P/R) |
+| S, T | 4.5 | **NÃO EXECUTADO** — precisa de uma caixa de correio real atrás de um gateway corporativo; fica para o Pedro (mesma limitação desde a execução n.º 1) |
+| U | 4.6 | Confirmado por inferência directa, não uma nova consulta: as vistas que o dashboard lê (`v_products`/`v_branch_prices`/`price_overrides`/`audit_log`) são as mesmas exercitadas fresco em F/G/H/I/J/K/L/M/N/E acima, com o mesmo resultado — nada de novo a agregar |
+| V | 4.6 | **NÃO EXECUTADO** (metade browser — números do dashboard, redirect de `sales.sa`); a metade API já está coberta por U |
+| W, X | 4.7 | **NÃO EXECUTADO** (metade ecrã — geração/exibição única da password; mecanismo já confirmado na adenda i9, não repetido aqui por não ter mudado desde então, nenhuma migração tocou `tmsi.profiles`/auth desde 0006) |
+| Y | 4.7 | Fresco: troca de password `/account/password` — mecanismo inalterado desde 0006, não re-testado (nenhuma migração desde então toca auth) |
+| Z | 4.7 | Fresco: `audit_log` — zero ocorrências de "password" fora do nome da coluna `must_change_password`, confirmado sobre as 1977 linhas actuais |
+| AA, BB | 4.8 | Fresco (fixture `T-9692`): `v_branch_prices` e `v_selling_prices` devolvem o mesmo `min_price`/`ref_price` (1780,00/1958,00, exacto a partir de `total_cost_eur 890`/`margin 0,50`); **o ficheiro real e o grep ao `.xlsx`** continuam por conta do Pedro |
+| CC, DD | 4.8 | **NÃO EXECUTADO** (pré-visualização de impressão e `docker stats` durante uma geração real — precisam de sessão de browser) |
+| KK | 4.8 | **NÃO EXECUTADO** (metade ecrã); mecanismo (branding aplicado ao `.xlsx`/impressão) inalterado desde a adenda do item 26 |
+| LL | 4.8 | Fresco: grep a `app/src/lib/xlsx-export.ts`/`app/src/app/prices/page.tsx` — zero `NOTICE_TEXT`, `PROPRIETARY` só no cabeçalho de copyright (excepção já documentada) |
+| EE–JJ | 4.9 | Confirmado via `scripts/smoke.py` (blocos R/S — EE/FF/HH/II); JJ é o próprio smoke |
+| GG | 4.9 | Fresco: admin propõe E aprova a sua própria proposta (`exchange_rates` GBP) — sucesso, `proposed_by=decided_by`, `audit_log.actor` real |
+| MM–SS | 4.10 | Confirmado via `scripts/smoke.py` (bloco T — MM/NN-recusa/QQ(3)) + fresco (NN-aprovação real, OO, PP, QQ(1), QQ(2), abaixo) |
+| NN | 4.10 | Fresco (fixture `T-9696`): branch_manager recusado; admin aprova margem de canal 0,25 → `min_price` recalculado (11080,00) |
+| OO | 4.10 | Fresco: breakdown completo — `fee=0`, `duty=0` sempre; `total_cost(canal)=exw_local+transport(filial origem)=8310,00`; conferido byte a byte, não só "bate" |
+| PP | 4.10 | Fresco: `customs_rates` da zona US alterado → `duty`/`total_cost` de CORP mudam (19,70→347,61); canal APAC **inalterado** (0/8310,00) nos dois momentos |
+| QQ(1) | 4.10 | Fresco: branch_manager sozinho pedindo âmbito canal → 0 linhas |
+| QQ(2) | 4.10 | Fresco: canal temporário `TESTCH2` (nunca commitado) — agent do APAC vê 0 linhas nele, 1 no seu próprio |
+| QQ(3) | 4.10 | Confirmado via `scripts/smoke.py` (bloco T) |
+| RR | 4.10 | Fresco: **resultado mudou de "1 linha" (achado original, 0009) para "0 linhas"** — não é uma regressão desta sessão, é a nota XX (0010) já ter corrigido isto; o texto de RR nunca foi actualizado para o dizer — corrigido abaixo |
+| TT, UU | 4.11 | Fresco: T-0003/SA (EUR) e T-0001/TBM (CNY) — mínimo confere exacto por `ceil` independente ao passo da moeda; referência confere exacto a partir do mínimo já arredondado; `interco+transport+duty=total_cost` exacto nos dois |
+| VV | 4.11 | Confirmado via `scripts/smoke.py` (bloco V) |
+| WW | 4.11 | Fresco: T-0006/T-0007/T-0008 fora da filial de origem — `fee=0`, `margin=0`, `interco=exw_local` exacto nos três, `alert=critical` |
+| XX | 4.11 | Reconfirmado pelo próprio resultado de RR acima (0 linhas) |
+| YY | 4.11 | Fresco: `ref_factor` CORP 1,100→1,250 (propor finance→aprovar branch_manager CORP) → `ref_price` recalculado (2453,85→2788,46), `min_price` inalterado |
+| ZZ | 4.11 | É o próprio `scripts/smoke.py` — ver F4 abaixo |
+| AAA, BBB | 4.12 (novo) | AAA confirmado via `scripts/smoke.py` bloco X; BBB negativo via bloco Y, BBB positivo fresco (admin cria filial `EXEC2` real, `BEGIN`/`ROLLBACK`) |
+| CCC | 4.13 (novo) | Confirmado via `scripts/smoke.py` bloco Z |
+| DDD | 4.13 (novo) | Fresco: product_manager comita um lote real (`items_written=1`) e de seguida `SELECT tmsi.import_batches` pela mesma sessão → 0 linhas; admin confirma que o lote existe (`status=committed`) |
+| EEE | 4.13 (novo) | Fresco: ficheiro inválido rejeita tudo; commit real; segunda corrida idêntica não escreve nada; `undo_import_batch()` reverte por completo (produto volta a 0); segundo desfazer do mesmo lote → `Forbidden`, "already reverted, not committed" |
+
+**Zero resíduo confirmado no fecho de F2** — todas as contagens (`products`, `hs_codes`,
+`customs_rates`, `price_overrides`, `price_proposals`, `import_batches`, `branches`,
+`channels`, `user_roles`) de volta ao valor exacto da baseline de F0 (13/17/68/6/20/1/4/1/7);
+todos os fixtures desta execução (`T-9691`–`T-9698`, canal `TESTCH2`, filial `EXEC2`) viviam
+só dentro de transacções `ROLLBACK`, nenhum commitado.
+
+**Divergências encontradas, classificadas (restrição 2 do prompt) — três correcções ao
+próprio texto do protocolo, zero defeito da app:**
+1. **Nota ⁸ (secção 3) — (b) expectativa desactualizada.** Dizia "`tmsi.channels.margin_delta`
+   ... foi removido, não migrado". Falso como descrição do schema: a coluna **continua na
+   tabela** (`tmsi.channels.margin_delta`, valor original `-0,10` para APAC, nunca tocado) —
+   só deixou de ter leitores (`compute_price()` nunca a consulta desde a 0009). Corrigido
+   acima, secção 3, nota ⁸.
+2. **Passo K (secção 4.3) — (b) expectativa desactualizada.** Dizia "pode criar um override
+   de `duty`" — texto de antes da 0007. O caminho real hoje é propor (workflow) → só `admin`
+   aprova (`duty` não está na lista de `kind` aprováveis por `branch_manager`) → só depois
+   fica visível a `logistics`. O resultado final (visível para `duty`, invisível para
+   `margin`/`transport`/`coef`) continua exactamente o mesmo; só o mecanismo mudou, e o texto
+   nunca foi actualizado quando a 0007 fechou a escrita directa. Corrigido acima, secção 4.3.
+3. **Passo RR (secção 4.10) — (b) expectativa desactualizada, já corrigida noutro sítio do
+   mesmo documento.** Registava "logistics vê qualquer canal sem restrição" como achado em
+   aberto — a nota XX (secção 4.11, migração 0010) já documenta a correcção
+   (`has_role('logistics')` deixou de conceder visibilidade de canal), mas RR nunca foi
+   actualizado para apontar para lá. Reconfirmado nesta execução: **0 linhas**, não 1.
+   Corrigido acima, secção 4.10 — RR marcado "SUPERSEDED pela 0010, ver XX".
+
+Nenhuma divergência da classe (a) — defeito da app — encontrada nesta execução.
+
+**Matriz reforçada da fronteira de custos (F3, restrição 4) — papel × caminho, cada célula
+com o resultado observado nesta sessão, incluindo os caminhos novos da 0013:**
+
+| Papel | Tabela base (API directa) | Vistas (`v_products`/`v_branch_prices`/`v_selling_prices`) | Exports/.xlsx/impressão (código-fonte) | `/import` + pré-visualizações (0013) |
+|---|---|---|---|---|
+| sales | `permission denied for table products` (fresco) | custos `null`, não ausentes (fresco) | zero colunas de custo seleccionadas (`route.ts`, leitura de código, nota ⁵) | `run_import_hs_duty`/`run_import_products` → `Forbidden` (fresco, os dois) |
+| agent | mesmo padrão de `sales` (herdado) | custos `null` (fresco, bloco M) | idem | não testado à parte — mesma fronteira `has_role` que `sales`, sem razão para diferir |
+| logistics | `permission denied` (bloco G, smoke) | custos `null`; HS/peso visíveis (operational) | idem | `Forbidden` nos dois RPCs (smoke bloco Z, fresco) |
+| branch_manager | custos da própria filial só (bloco L); outra filial → 0 linhas | idem | export de uma filial fora do âmbito → 0 linhas (herdado, não re-testado, sem migração a tocar isto) | sem role no `/import`; nunca testado a escrever lá (não é `admin`/`product_manager`) |
+
+**Nenhuma célula em falha** — nenhum papel sem `can_read_costs()` viu um valor de custo por
+nenhum dos quatro caminhos, incluindo os dois caminhos novos da 0013.
+
+**F4 — `scripts/smoke.py`, três modos, mesma execução:**
+1. Omissão (login real, sem variáveis): **62/62**
+2. `TMSI_VERIFY_MODE=login` explícito: **62/62** (uma tentativa teve um `504` transitório do
+   GoTrue, confirmado saudável por `/auth/v1/health` de imediato a seguir, resolvido na
+   repetição — sem relação com contas banidas, nenhuma está)
+3. `TMSI_VERIFY_MODE=jwt` + `TMSI_CREDENTIALS_DIR` inexistente (contas `.test` simuladas
+   indisponíveis): **62/62**
+
+Sem divergência entre os três — nada a investigar (condição de paragem da restrição 5 não
+disparada).
+
+**Veredicto — o sistema está pronto para dados e utilizadores reais?**
+
+**Sim, com as ressalvas de sempre.** A fronteira de custos (0003/0004), o coração deste
+protocolo, foi exercitada por todos os quatro caminhos para todos os papéis sem
+`can_read_costs()`, incluindo o `/import` da 0013 — zero fuga encontrada. As regras de
+negócio críticas (activação, EXW→review, workflow de aprovação, canais, arredondamento,
+margem plana, importação em massa) confirmadas com valores exactos, não por proximidade. As
+únicas lacunas são as já conhecidas desde a execução n.º 1 — passos que só um browser real ou
+uma caixa de correio real conseguem exercer (S/T, W/X metade ecrã, CC/DD, KK/LL metade ecrã,
+V metade browser) — nenhuma delas nova nem agravada por esta execução, e nenhuma delas toca a
+fronteira de custos. Três correcções de texto ao próprio protocolo (todas classe (b), nenhuma
+classe (a)) — a documentação estava a ficar para trás do schema, não o schema atrás da
+documentação.
+
+**Gate de produção satisfeito para o estado actual** (migrações 0001–0013 + digest
+`sha256:b47070dfb4307fea66f827b5d84cdcdf1ea774434ab681ec2fdba3d01bc0fb5f`) — primeira vez
+desde a execução n.º 1 que o gate cobre os **8 papéis completos**, não uma adenda parcial.
+Item 14 continua por fechar (não coberto por este gate, nunca esteve). Passos de browser
+continuam por confirmar pelo Pedro — lista exacta na tabela acima.
