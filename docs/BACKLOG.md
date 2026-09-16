@@ -109,19 +109,40 @@ histórico de acções que o envolvem). Hoje, uma pergunta dessas só se respond
 directa à BD, feita por quem lá tem acesso. Não desenhado aqui.
 
 **47. `tmsi.audit_log` sem retenção nem purga, e alcança dados pessoais de colegas por API
-directa** — **REGISTADO 2026-09-16**, achado de F0 do item 42. A tabela é append-only desde a
-0001, sem TTL nem tarefa de limpeza (confirmado: nenhum timer/cron além do
-`tmsi-backup.timer`) — cresce para sempre. O ecrã `/audit` nunca mostra `old_row`/`new_row`
-(só `id/at/actor/table_name/row_pk/action`, confirmado por leitura de código) e só resolve o
-email de um `actor` para o próprio utilizador ou para `admin` (RLS de `tmsi.profiles`,
-`profiles_self`) — mas os quatro papéis com leitura de `audit_log`
+directa** — **REGISTADO 2026-09-16 (item 42), investigado e reclassificado 2026-09-16 (itens
+47+48).** A tabela é append-only desde a 0001, sem TTL nem tarefa de limpeza (confirmado:
+nenhum timer/cron além do `tmsi-backup.timer`) — cresce para sempre. O ecrã `/audit` nunca
+mostra `old_row`/`new_row` (só `id/at/actor/table_name/row_pk/action`, confirmado por leitura
+de código) e só resolve o email de um `actor` para o próprio utilizador ou para `admin` (RLS
+de `tmsi.profiles`, `profiles_self`) — mas os quatro papéis com leitura de `audit_log`
 (`admin`/`finance`/`branch_manager`/`viewer`) têm privilégio de coluna para `old_row`/
 `new_row` (confirmado, sem `REVOKE` nenhum), e uma linha de auditoria da tabela `profiles`
 contém `full_name`/`email` em texto simples — alcançável por pedido directo à API
-(`/rest/v1/audit_log?select=*`) por qualquer um desses quatro papéis, não só `admin`. Nunca
-testado como "falha de segurança" (é a mesma amplitude que a fronteira de custos já aceita
-para estes papéis, item 41) — registado aqui como um dado a decidir sobre retenção, não uma
-regressão a corrigir.
+(`/rest/v1/audit_log?select=*`) por qualquer um desses quatro papéis, não só `admin`.
+
+**F0 dos itens 47+48 (2026-09-16) mediu a hipótese mais grave — se isto também alcança
+custos, contornando 0003/0004 — e a resposta é NÃO, com prova, não presunção:**
+`tmsi.audit_log` tem uma única política RLS (`audit_read`, `admin`/`finance`/`viewer`/
+`branch_manager`) — um subconjunto estrito de `can_read_costs()`
+(`admin`/`product_manager`/`finance`/`branch_manager`/`viewer`). Todo papel sem custos
+(`logistics`/`sales`/`agent`) devolve **zero linhas** de `audit_log`, por sessão real
+(login real para `logistics`, JWT assinado para `sales`/`agent`) contra
+`GET /rest/v1/audit_log?table_name=eq.products&action=eq.INSERT&select=id,new_row` — não uma
+coluna mascarada, a própria RLS nega a linha antes de qualquer coluna importar.
+`product_manager` (tem custos, mas a matriz do item 41 já o excluía de `audit_log`): também
+zero linhas, confirmado. Controlo positivo: `finance`/`branch_manager` (login real) devolvem
+a linha com `exw_price` presente — confirma que o mecanismo de teste funciona e que a leitura
+é real quando o papel tem direito. Como `audit_log` é UMA tabela com UMA política aplicada a
+todas as linhas independentemente de `table_name`, esta prova generaliza — nenhuma tabela
+auditada (mesmo as com custos) pode vazar por este caminho a um papel sem `can_read_costs()`.
+
+**Reclassificação: NÃO é falha de segurança da fronteira de custos — item 47 volta a ser
+exactamente o que o item 42 tinha registado: um achado de privacidade** (dados pessoais de
+colegas — não custos — alcançáveis por 4 papéis via API directa, nunca pelo ecrã). Sem
+urgência de fronteira, sem correcção implementada nesta sessão (decisão deliberada, não
+esquecimento — a correcção do ângulo de privacidade fica registada aqui, pendente, ao mesmo
+nível dos itens 45/46/49, não implementada por decisão explícita de não alargar o âmbito
+desta sessão de investigação além do que a urgência — agora afastada — justificava).
 
 **48. Dumps nocturnos mundialmente legíveis no host (`644`, não `600`)** — **REGISTADO
 2026-09-16**, achado de F0 do item 42. `~/backups/tmsi/*.dump` (cópia completa da BD — inclui

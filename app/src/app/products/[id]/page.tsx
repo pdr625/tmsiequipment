@@ -157,9 +157,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       .eq('product_id', id)
       .order('version', { ascending: false })
       .overrideTypes<PriceVersion[], { merge: false }>(),
+    // 0014 (items 47+48): reads tmsi.v_audit_log, not tmsi.audit_log directly —
+    // authenticated no longer has column SELECT on old_row/new_row on the base
+    // table (item 42's finding: a profiles-table row carries a colleague's
+    // name/email in the clear). The view re-exposes both columns unmasked for
+    // every table_name except 'profiles' — this query is always table_name=
+    // 'products', so it is byte-for-byte unaffected by the mask.
     supabase
       .schema('tmsi')
-      .from('audit_log')
+      .from('v_audit_log')
       .select('id, at, actor, action, old_row, new_row')
       .eq('table_name', 'products')
       .eq('row_pk', id)

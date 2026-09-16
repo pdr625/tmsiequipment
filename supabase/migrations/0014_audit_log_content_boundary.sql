@@ -38,7 +38,17 @@
 --
 -- Never edit 0001-0013 (already applied). This file is additive.
 
-revoke select (old_row, new_row) on tmsi.audit_log from authenticated;
+-- Table-level SELECT revoked first, then column-level SELECT re-granted for
+-- exactly the safe set — a column-level REVOKE alone would be a no-op
+-- against 0001's table-level `grant all on all tables in schema tmsi to
+-- authenticated` (column privileges are additive over table-level ones,
+-- never restrictive of them). The exact bug 0003 already found once for
+-- tmsi.products, found again live here before this file was finalised: the
+-- first version of this migration tried the column-level REVOKE alone,
+-- applied cleanly with no error, and changed nothing — caught only by
+-- testing the actual grant afterward, not by the DDL succeeding.
+revoke select on tmsi.audit_log from authenticated;
+grant select (id, at, actor, table_name, row_pk, action) on tmsi.audit_log to authenticated;
 
 create or replace view tmsi.v_audit_log as
   select
