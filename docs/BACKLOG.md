@@ -96,6 +96,54 @@ decidir: aprovação em lote (seleccionar várias propostas do mesmo `target_tab
 de uma vez) ou um papel novo "gestor de configuração" mais estreito que `admin`. Nenhuma
 desenhada aqui — registo, não correcção.
 
+**45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
+achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
+remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de
+password — nenhuma função apaga ou anonimiza um utilizador (confirmado por leitura completa
+do ficheiro, zero `deleteUser`). Um pedido de apagamento (RGPD ou não) hoje não tem botão
+nenhum — seria manual, directo à BD, fora de qualquer fluxo da app. Não desenhado aqui.
+
+**46. Sem exportação dos próprios dados (self-service)** — **REGISTADO 2026-09-16**, achado
+de F0 do item 42. Nenhum ecrã deixa um utilizador pedir "os meus dados" (perfil, papel,
+histórico de acções que o envolvem). Hoje, uma pergunta dessas só se responde por consulta
+directa à BD, feita por quem lá tem acesso. Não desenhado aqui.
+
+**47. `tmsi.audit_log` sem retenção nem purga, e alcança dados pessoais de colegas por API
+directa** — **REGISTADO 2026-09-16**, achado de F0 do item 42. A tabela é append-only desde a
+0001, sem TTL nem tarefa de limpeza (confirmado: nenhum timer/cron além do
+`tmsi-backup.timer`) — cresce para sempre. O ecrã `/audit` nunca mostra `old_row`/`new_row`
+(só `id/at/actor/table_name/row_pk/action`, confirmado por leitura de código) e só resolve o
+email de um `actor` para o próprio utilizador ou para `admin` (RLS de `tmsi.profiles`,
+`profiles_self`) — mas os quatro papéis com leitura de `audit_log`
+(`admin`/`finance`/`branch_manager`/`viewer`) têm privilégio de coluna para `old_row`/
+`new_row` (confirmado, sem `REVOKE` nenhum), e uma linha de auditoria da tabela `profiles`
+contém `full_name`/`email` em texto simples — alcançável por pedido directo à API
+(`/rest/v1/audit_log?select=*`) por qualquer um desses quatro papéis, não só `admin`. Nunca
+testado como "falha de segurança" (é a mesma amplitude que a fronteira de custos já aceita
+para estes papéis, item 41) — registado aqui como um dado a decidir sobre retenção, não uma
+regressão a corrigir.
+
+**48. Dumps nocturnos mundialmente legíveis no host (`644`, não `600`)** — **REGISTADO
+2026-09-16**, achado de F0 do item 42. `~/backups/tmsi/*.dump` (cópia completa da BD — inclui
+`tmsi.profiles`, `tmsi.audit_log`, `auth.users` com hash de password, `auth.sessions` com
+IP/user-agent) tem permissões `-rw-r--r--` (dono `pedro`, mas legível por qualquer conta
+local do host), ao contrário de `deploy/supabase/.env` (`600`, só o dono) e do escrow cifrado
+(`.gpg`, conteúdo ilegível sem a passphrase). Neste VPS só `pedro` tem shell hoje, por isso o
+risco prático é baixo — mas o ficheiro em si não impõe essa garantia, um utilizador local
+novo herdaria leitura por omissão. Corrigir é um `chmod 600` no ficheiro do serviço
+`tmsi-backup.service` (`create` do próprio script ou um `umask`) — não feito aqui, fora do
+âmbito desta sessão de documentação.
+
+**49. Implementar a retenção de 5 anos do `tmsi.audit_log`** — **REGISTADO 2026-09-16**,
+decisão do Pedro no item 42 (`docs/DATA-PROCESSING-NOTICE.md` secção 1): a tabela guarda-se
+hoje sem limite (`append-only` desde a 0001, sem purga nenhuma); o prazo decidido é 5 anos a
+partir da data de cada entrada. Por desenhar: mecanismo de apagamento (uma tarefa periódica?
+uma política a nível de linha por data?), se o apagamento é definitivo ou passa primeiro por
+um arquivo frio, e como isto interage com o valor probatório do registo (uma alteração de
+preço de há 4 anos ainda pode interessar numa auditoria). Nada implementado aqui — a nota já
+declara o prazo decidido como distinto do que está em vigor, para não prometer o que ainda
+não existe.
+
 ~~**40. Higiene do seed fictício e das contas `.test`**~~ ✅ **fechado 2026-09-16.** Achado de
 F0 que corrige o próprio texto acima: os IDs de fixture nunca foram `T-92xx`/`T-93xx` — essas
 gamas eram fixtures **efémeras** de medição de desempenho (item 14/28), já confirmadas em

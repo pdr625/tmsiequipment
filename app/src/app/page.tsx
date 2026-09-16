@@ -116,6 +116,12 @@ export default async function HomePage() {
         >
           Change password
         </Link>
+        <Link
+          href="/privacy"
+          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+        >
+          Data processing notice
+        </Link>
         <form action="/logout" method="post">
           <button
             type="submit"
