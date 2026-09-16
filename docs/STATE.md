@@ -3,7 +3,27 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 43 — cadência de backup, diário↔semanal com janela de carga — ✅
+**Etapa actual: item 44 — decisão em lote de propostas — ✅ FECHADA 2026-09-16 — migração
+0015.** Mecânica apenas (§1 do prompt): a mesma elegibilidade da 0007 (admin, ou
+`branch_manager` da filial afectada), nunca alargada. `tmsi.decide_price_proposal_batch()`
+classifica cada proposta pedida em elegível/excluída (motivo visível, nunca falha o resto do
+lote); pré-visualização (omissão) devolve valor antes/depois real por proposta, não só uma
+contagem — decisão deliberada para não reabrir o "aprovar sem ler" que a adenda F1 do item 38
+recusou. Decisão atómica por construção: uma falha a meio reverte tudo o que o lote tinha
+decidido até aí, provado pelo ramo de falha (proposta condenada a violar FK ao lado de uma
+válida — nenhuma fica decidida). `tmsi.decide_price_proposal()` ganhou um 5.º parâmetro
+opcional (`p_batch_id`), backward-compatible — a mesma materialização, sem cópia — para que
+`audit_log` fique com exactamente uma entrada por proposta decidida, com a referência do
+lote. Ecrã `/proposals`: checkbox nas linhas decidíveis, pré-visualizar antes de confirmar,
+exclusões visíveis. `docs/IMPORT.md` ganhou o contrato do segundo modo de importação
+(proposta agrupada), não implementado. `scripts/smoke.py` bloco novo (AA), 63→**78/78**,
+confirmado nos três modos do item 40 — um bug real apanhado pelo próprio bloco (ordem de
+`DELETE` errada na limpeza, violando a FK de `decision_batches`), corrigido antes de fechar.
+Item novo **50** regista a pergunta de política que o item 44 deliberadamente não respondeu
+(deve um `branch_manager` poder aprovar configuração global?) — decisão do Pedro, sem prazo.
+Detalhe completo: secção "Item 44 — decisão em lote" abaixo.
+
+**Etapa anterior: item 43 — cadência de backup, diário↔semanal com janela de carga — ✅
 FECHADA 2026-09-16.** `tmsi-backup.timer`/`.service` (único, `OnCalendar=03:30`, 30 dias)
 substituído por dois pares independentes e mutuamente exclusivos —
 `tmsi-backup-weekly.timer`/`.service` (regime permanente, `Mon *-*-* 03:30:00`, últimas 8
@@ -158,6 +178,92 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Item 44 — decisão em lote (2026-09-16)
+
+### F0 — desenho, citado antes de qualquer DDL
+
+Lido 0007 (`tmsi.price_proposals`/`decide_price_proposal()`) e 0013 (`tmsi.import_batches` —
+o padrão de lote a seguir). Propostas pendentes hoje: **0** (só `approved`/`rejected`
+históricas, 20 no total). Backup confirmado em modo janela antes do DDL (`tmsi-backup-
+window.timer` activo, `tmsi-backup-weekly.timer` inactivo).
+
+**Decisão de desenho (refactor, não duplicação):** `decide_price_proposal()` ganha um 5.º
+parâmetro opcional (`p_batch_id uuid default null`) em vez de se copiar a sua lógica de
+materialização (~60 linhas, 8 `target_table`) para uma segunda função — a alternativa criaria
+exactamente a armadilha de manutenção que o próprio cabeçalho da 0007 já avisa (uma 9.ª
+`target_table` só actualizada num sítio, esquecida no outro). `CREATE OR REPLACE` não muda a
+assinatura de uma função existente (lição já documentada pela 0007, a propósito de
+`branch_margin()`) — a versão de 3 argumentos foi `DROP`ada primeiro, a nova com o 4.º
+parâmetro por omissão é compatível com todos os chamadores existentes (`app/src/app/
+proposals/actions.ts` nunca precisou de mudar).
+
+`tmsi.decide_price_proposal_batch(p_proposal_ids, p_decision, p_reason, p_dry_run default
+true)`: classifica cada id em elegível/excluído com **a mesma condição booleana** de
+`decide_price_proposal()` (repetida, não partilhada — só LÊ para classificar, nunca escreve;
+a escrita real, e a aplicação real da regra, continuam a acontecer só dentro de
+`decide_price_proposal()`, chamada em loop só para os elegíveis). Pré-visualização devolve,
+por proposta elegível, o valor **antes** (a mesma consulta "mais recente em vigor" que
+`compute_price()`/`fx_rate()`/`branch_margin()` já usam, uma por `target_table`) e **depois**
+(o valor da proposta). Confirmação: gera um `decision_batches.id`, chama
+`decide_price_proposal()` em loop só para os elegíveis — atómico por construção (uma
+invocação de função é uma transacção; qualquer excepção reverte tudo o que esse lote tinha
+feito até aí, incluindo a própria linha de `decision_batches`).
+
+### F1 — migração 0015
+
+Validada exaustivamente em `BEGIN`/`ROLLBACK` antes do commit: elegibilidade mista
+(`branch_manager` com uma proposta da sua filial e outra alheia — só a própria decidida, a
+outra excluída com motivo, `compute_price()` confirma zero efeito da excluída), motor-vivo
+para 2 propostas de câmbio decididas por admin num só lote (`fx_rate()` reflecte as duas),
+atomicidade pelo ramo de falha (proposta condenada a violar FK `price_overrides_product_id_
+fkey` ao lado de uma válida — nenhuma das duas fica decidida, `price_overrides`/
+`decision_batches` inalterados), rejeição em lote (recusada sem motivo, aceite com motivo,
+`decision_reason` gravado por proposta, motor inalterado).
+
+Backup fresco tirado e **verificado por restauro real** com o procedimento **documentado**
+(`-U supabase_admin`, não o atalho `-U postgres`) — zero erros, ownership `auth.*`/`tmsi.*`
+confirmado — antes do DDL. Migração aplicada; `scripts/smoke.py` corrido de imediato
+(63/63, sem regressão) para confirmar que o refactor de `decide_price_proposal()` não mudou
+nada do caminho de decisão individual já em produção.
+
+### F2 — ecrã `/proposals`
+
+Checkbox nas linhas pendentes decidíveis (mesma linha que já mostra a proposta por inteiro —
+não uma segunda lista ao lado, redesenhado depois de uma primeira versão duplicar a
+informação). Barra de lote: seleccionar → pré-visualizar (mostra tabela de deltas + exclusões
+com motivo) → confirmar (só depois da pré-visualização, nunca directo). `decideProposal`/
+`DecideProposalForm` (decisão individual) intocados — o caminho novo é aditivo.
+`docs/IMPORT.md` ganhou o contrato que o segundo modo de importação (proposta agrupada)
+terá de seguir — não implementado, só o contrato.
+
+### F3 — deploy
+
+CI verde, `sha256:def7ea31…`, `docker compose up -d --no-deps tmsi-app`, healthy,
+`scripts/smoke.py` 63/63 contra a app viva (sem regressão do TSX novo, nunca localmente
+type-checked — só a própria CI o confirmou, este VPS não tem node/npm).
+
+### F4 — as seis provas
+
+Bloco novo de `scripts/smoke.py`, **AA**, contra a app viva (não só `BEGIN`/`ROLLBACK`):
+mistura de elegibilidade, legibilidade (deltas reais na pré-visualização), atomicidade pelo
+ramo de falha, rejeição em lote, granularidade do `audit_log` (uma entrada por proposta
+decidida, confirmada por contagem antes/depois, nunca duas). Motor-vivo para **N>1**
+propostas elegíveis num só lote fica coberto pela prova de F1 (2 propostas de câmbio,
+admin) — o bloco AA por si só testa N=1 elegível + 1 excluído, a combinação das duas prova o
+espaço todo. **Bug real apanhado pelo próprio bloco, não por leitura do código:** a limpeza
+tentava apagar `decision_batches` antes de `price_proposals`, violando a FK que aponta de lá
+para cá — corrigido (ordem invertida) antes de considerar o bloco fechado. 63→**78/78**,
+confirmado nos três modos do item 40 (omissão, `login` explícito, `jwt` com `.test`
+simuladas indisponíveis), zero resíduo em cada corrida.
+
+### F5 — fecho
+
+`docs/VERIFICATION-PROTOCOL.md`: nova linha na matriz ("Decidir em lote"), nota ¹³, secção
+4.14 nova (passos FFF-III) com a cobertura automatizada citada. `docs/BACKLOG.md`: item 44
+riscado; item novo **50** regista a pergunta de política (branch_manager aprovar
+configuração global?) que o item 44 deliberadamente não respondeu. `docs/IMPORT.md`
+actualizada com o contrato do segundo modo.
 
 ## Item 43 — cadência de backup (2026-09-16)
 

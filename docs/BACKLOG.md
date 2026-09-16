@@ -84,17 +84,34 @@ erro que a 0010 já tinha apanhado uma vez; um `array_agg` sobre zero linhas a d
 vez de lista vazia, a violar o `not null` de `sold_in`). Detalhe completo:
 `docs/IMPORT.md`.
 
-**44. `decide_price_proposal()` sem caminho de aprovação em lote para configuração
-global** — **REGISTADO 2026-09-15/16**, achado de desenho do item 38, não resolvido aqui.
-Uma proposta de âmbito global (`branch_id IS NULL` — hoje só `customs_rates`,
-`exchange_rates`, `currency_rounding_params`) só pode ser aprovada por `admin`; não há
-caminho nenhum para um `branch_manager` ou outro papel partilhar essa carga, mesmo sendo a
-sua própria filial afectada. Medido no item 38: uma revisão de 12 códigos HS × 4 zonas já
-são 48 aprovações, uma a uma, só na conta do Pedro. Com o catálogo real (item 39), este
-número sobe para a ordem das centenas por revisão de tarifa. Duas direcções possíveis, por
-decidir: aprovação em lote (seleccionar várias propostas do mesmo `target_table` e decidir
-de uma vez) ou um papel novo "gestor de configuração" mais estreito que `admin`. Nenhuma
-desenhada aqui — registo, não correcção.
+~~**44. `decide_price_proposal()` sem caminho de aprovação em lote**~~ ✅ **fechado
+2026-09-16 — migração 0015, mecânica apenas.** Medido no item 38: 48 aprovações só para uma
+revisão de direitos (12 HS × 4 zonas), 163 entradas de configuração para 13 artigos — com o
+catálogo real (50–70 artigos), centenas de cliques, um de cada vez, numa única conta.
+`tmsi.decide_price_proposal_batch(p_proposal_ids, p_decision, p_reason, p_dry_run)`: **a
+mesma elegibilidade da 0007, nunca alargada** — admin, ou branch_manager da filial afectada;
+propostas inelegíveis excluídas à cabeça, visíveis com motivo, nunca fazem o lote falhar.
+Pré-visualização (omissão) mostra deltas reais — valor antes/depois por proposta, não só uma
+contagem — decisão desenhada explicitamente para não reabrir o "aprovar sem ler" que a adenda
+F1 do item 38 já tinha recusado. Atómico: uma falha a meio reverte o lote inteiro, provado
+pelo ramo de falha (uma proposta condenada a violar FK ao lado de uma válida — nenhuma das
+duas fica decidida). `audit_log`: uma entrada por proposta decidida, com a referência do
+lote — nunca duas, nunca perde granularidade. `docs/IMPORT.md` ganhou o contrato que o
+segundo modo de importação (proposta agrupada) terá de seguir, não implementado ainda.
+`scripts/smoke.py` bloco **AA**, 63→**78/78**, confirmado nos três modos do item 40.
+Detalhe completo: `docs/STATE.md`.
+
+**50. Aprovação de configuração global — `branch_manager` ou só `admin`?** — **REGISTADO
+2026-09-16**, decisão de política que o item 44 deliberadamente não resolveu (§1 do prompt: é
+organização, não mecânica). Hoje, uma proposta de âmbito global (`branch_id IS NULL` —
+`customs_rates`, `exchange_rates`, `currency_rounding_params`) só pode ser aprovada por
+`admin`, mesmo em lote — não há caminho nenhum para um `branch_manager` partilhar essa carga,
+mesmo sendo a sua própria filial afectada por uma revisão de tarifa. A resposta determina
+quem consegue trabalhar sem o Pedro quando a equipa entrar: manter admin-only significa que
+toda a revisão de configuração global cai sempre na mesma conta; alargar significa desenhar
+ou um papel novo ("gestor de configuração", mais estreito que admin) ou uma regra de
+elegibilidade nova para `branch_manager` em propostas sem filial própria — nenhuma das duas
+desenhada aqui. Decisão do Pedro, sem prazo.
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,

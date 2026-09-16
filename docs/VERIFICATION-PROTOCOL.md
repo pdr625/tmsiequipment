@@ -60,7 +60,8 @@ partir do desenho original. 16 correcções feitas à proposta inicial; detalhe 
 | Criar/editar produtos | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Propor configuração (câmbios, fees, transporte, direitos, margens, arredondamento, factor de referência) ⁶ ¹⁰ | ✅ | ❌ | ✅ | ❌ | ◐ transporte/direitos | ❌ | ❌ | ❌ |
 | Propor overrides ⁶ | ✅ | ❌ | ✅ | ◐ transp./margem/coef, filial própria | ◐ só duty, qualquer filial | ❌ | ❌ | ❌ |
-| **Aprovar modificações propostas (workflow, 0007)** ⁶ | ✅ **(incl. as suas próprias — nota)** | ❌ | ❌ | ◐ só filial própria, só tipos com filial (transporte/margem/coef de overrides, `transport_tiers`, `margin_grids`, `branch_pricing_params` ¹⁰) | ❌ | ❌ | ❌ | ❌ |
+| **Aprovar modificações propostas (workflow, 0007)** ⁶ ¹³ | ✅ **(incl. as suas próprias — nota)** | ❌ | ❌ | ◐ só filial própria, só tipos com filial (transporte/margem/coef de overrides, `transport_tiers`, `margin_grids`, `branch_pricing_params` ¹⁰) | ❌ | ❌ | ❌ | ❌ |
+| **Decidir em lote (0015, item 44)** ¹³ | ✅ **(mesma elegibilidade acima, agrupada)** | ❌ | ❌ | ◐ só as suas próprias, entre as seleccionadas — outras excluídas do lote, visíveis, nunca fazem o lote falhar | ❌ | ❌ | ❌ | ❌ |
 | Ver valores de overrides de preço | ✅ | ✅ | ✅ | ◐ filial própria | ◐ só `kind=duty` ³ | ❌ | ❌ | ✅ |
 | Auditoria global | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
 | Dashboard (acesso à página) | ✅ | ✅ | ✅ | ✅ ² | ❌ | ❌ | ❌ | ✅ |
@@ -244,6 +245,27 @@ COMMITAR um lote (RPC de escrita concedida) mas não tem `SELECT` em
 vê o histórico dos seus próprios lotes nem os pode desfazer; o ecrã `/import`, secção "Lotes
 recentes", já reflecte isto (só visível a `admin`, `docs/IMPORT.md`). Testado na secção 4.13
 (novo, passos CCC–EEE).
+
+¹³ **Migração 0015 (2026-09-16, item 44) — decidir várias propostas num acto, mesma
+elegibilidade da 0007, nunca alargada.** `tmsi.decide_price_proposal_batch(p_proposal_ids,
+p_decision, p_reason, p_dry_run)` classifica cada id pedido em elegível/excluído usando **a
+mesma condição** de `tmsi.decide_price_proposal()` (`admin`, ou `branch_manager` da filial da
+proposta) — uma proposta de outra filial nunca entra no lote, visível com motivo, nunca faz o
+lote falhar. `p_dry_run` por omissão `true` (padrão da 0013): a pré-visualização devolve, por
+proposta elegível, o valor **antes** (a mesma consulta "mais recente em vigor" que
+`compute_price()`/`fx_rate()`/`branch_margin()` já usam por tabela) e **depois** (o valor da
+proposta) — nunca só uma contagem, decisão explícita do item 44 §1 para não reabrir o que a
+adenda F1 do item 38 já tinha recusado ("aprovar sem ler"). Decisão é atómica: uma só
+invocação da função é uma só transacção — qualquer falha a meio (incluindo uma proposta
+decidida por outra pessoa entre a pré-visualização e a confirmação) reverte tudo o que esse
+lote tinha decidido até aí, não só a linha que falhou. `tmsi.decide_price_proposal()` ganhou
+um 5.º parâmetro opcional (`p_batch_id`, omissão `null`) — a mesma materialização, a mesma
+elegibilidade, sem cópia — para que a linha de `decision_batch_id` fique gravada na MESMA
+`UPDATE` que já grava `status`/`decided_by`/`decided_at`: uma entrada de `audit_log` por
+proposta decidida, com a referência do lote, nunca duas. `tmsi.decision_batches`: um registo
+por decisão em lote, visível a quem já vê propostas amplamente (`admin`/`finance`/
+`product_manager`/`viewer`) ou a quem decidiu esse lote em particular. Testado na secção 4.14
+(novo, passos FFF–III).
 
 ## 4. Protocolo de teste por papel
 Para cada papel testado: um utilizador dedicado a testes (em produção: conta de teste real
@@ -590,6 +612,28 @@ cobertura em `scripts/smoke.py`** (precisam de um `COMMIT` real seguido de rever
 próprio ecrã admin — mesma limitação de sempre para os passos que só um `admin` real ou um
 browser conseguem exercer) — confirmadas directamente contra a BD nesta execução; ver
 secção 7.
+
+### 4.14 Decisão em lote (migração 0015, item 44, novo nesta revisão)
+FFF. **Elegibilidade agrupada, nunca alargada:** um lote submetido por um `branch_manager`
+     com propostas da sua própria filial e de outra — a proposta de outra filial fica
+     **excluída**, visível na resposta com o motivo, e o resto do lote não falha por causa
+     dela; confirmar que a proposta excluída fica sem efeito no motor (`compute_price()`
+     inalterado para essa filial).
+GGG. **Legibilidade, não só contagem:** a pré-visualização (`p_dry_run=true`) devolve, por
+     proposta elegível, o valor real actualmente em vigor e o valor proposto — verificado
+     contra o que a proposta de facto continha, não um placeholder.
+HHH. **Atomicidade pelo ramo de falha:** um lote com uma proposta que falharia a
+     materialização (ex.: referência inexistente) ao lado de uma proposta válida — a
+     confirmação falha por inteiro; nenhuma das duas fica decidida, nenhuma escrita na tabela
+     de destino fica por reverter.
+III. **Rejeição em lote com motivo único:** sem motivo, recusada por inteiro; com motivo,
+     todas as propostas do lote ficam rejeitadas, cada uma com esse motivo gravado
+     individualmente (`decision_reason`), o motor nunca reflecte nenhuma delas.
+
+📌 **Cobertura automatizada:** `scripts/smoke.py` bloco **AA** cobre FFF, GGG, HHH e III por
+inteiro, contra a app viva (não só `BEGIN`/`ROLLBACK`) — inclui a granularidade do
+`audit_log` (uma entrada por proposta decidida, nunca duas) e a confirmação de resíduo zero
+no fecho do próprio bloco.
 
 ## 5. Regras de execução em produção
 - Executor: o administrador + uma segunda pessoa como testemunha para os testes do ramo
