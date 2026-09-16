@@ -1203,3 +1203,29 @@ documentação.
 desde a execução n.º 1 que o gate cobre os **8 papéis completos**, não uma adenda parcial.
 Item 14 continua por fechar (não coberto por este gate, nunca esteve). Passos de browser
 continuam por confirmar pelo Pedro — lista exacta na tabela acima.
+
+**Nota, 2026-09-16 (itens 47+48) — um caminho de leitura que a matriz nunca listou, medido e
+fechado, migração 0014.** A Execução n.º 2 (acima) testou a fronteira de custos por quatro
+caminhos (API directa, vistas, exports, `/import`) — `tmsi.audit_log` não era um deles,
+porque não se parece com um caminho de leitura. Medido depois, especificamente: `audit_log`
+guarda cópia de linha (`old_row`/`new_row`) de qualquer tabela auditada, incluindo
+`tmsi.products` (`exw_price`, `sap_code_*`, `supplier_id`) — se a RLS de `audit_log` alguma
+vez incluir um papel sem `can_read_costs()`, esse papel passa a ler custos por este caminho,
+sem tocar em `v_products`/`compute_price()` nem em nenhuma das quatro colunas já testadas.
+**Hoje não acontece** — `audit_log` tem uma única política (`admin`/`finance`/`viewer`/
+`branch_manager`), um subconjunto estrito de `can_read_costs()`, confirmado com sessões reais
+dos três papéis sem custos (zero linhas, não uma coluna mascarada) e um controlo positivo
+(`finance`/`branch_manager` recebem `exw_price`). **O que ficou corrigido foi mais estreito**
+— um achado de privacidade genuíno (não custos): uma linha de auditoria de `tmsi.profiles`
+continha nome/email de um colega, alcançável por `finance`/`branch_manager`/`viewer`, não só
+`admin`. `tmsi.v_audit_log` (migração 0014) mascara `old_row`/`new_row` só quando
+`table_name='profiles'` e o chamador não é `admin` — todas as outras tabelas auditadas,
+incluindo `products`, continuam sem máscara para quem já tinha o direito. **Invariante a
+preservar em qualquer migração futura que toque `tmsi.audit_log`:** o conjunto de papéis da
+sua política RLS tem de continuar um subconjunto de `can_read_costs()` — se algum dia deixar
+de ser (ex.: um novo papel operacional ganhar leitura de auditoria), este caminho reabre-se
+para custos, não só para perfis, e a próxima execução do protocolo tem de o testar
+explicitamente, não assumir que continua seguro por analogia com esta nota. Detalhe completo,
+incluindo o bug real apanhado a meio (uma primeira versão do `REVOKE` era um no-op contra o
+`grant` de tabela da 0001 — mesma classe de erro já documentada pela 0003): `docs/STATE.md`,
+secção "Itens 47+48".

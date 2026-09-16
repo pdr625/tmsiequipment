@@ -144,16 +144,17 @@ esquecimento — a correcção do ângulo de privacidade fica registada aqui, pe
 nível dos itens 45/46/49, não implementada por decisão explícita de não alargar o âmbito
 desta sessão de investigação além do que a urgência — agora afastada — justificava).
 
-**48. Dumps nocturnos mundialmente legíveis no host (`644`, não `600`)** — **REGISTADO
-2026-09-16**, achado de F0 do item 42. `~/backups/tmsi/*.dump` (cópia completa da BD — inclui
-`tmsi.profiles`, `tmsi.audit_log`, `auth.users` com hash de password, `auth.sessions` com
-IP/user-agent) tem permissões `-rw-r--r--` (dono `pedro`, mas legível por qualquer conta
-local do host), ao contrário de `deploy/supabase/.env` (`600`, só o dono) e do escrow cifrado
-(`.gpg`, conteúdo ilegível sem a passphrase). Neste VPS só `pedro` tem shell hoje, por isso o
-risco prático é baixo — mas o ficheiro em si não impõe essa garantia, um utilizador local
-novo herdaria leitura por omissão. Corrigir é um `chmod 600` no ficheiro do serviço
-`tmsi-backup.service` (`create` do próprio script ou um `umask`) — não feito aqui, fora do
-âmbito desta sessão de documentação.
+~~**48. Dumps nocturnos mundialmente legíveis no host (`644`, não `600`)**~~ ✅ **fechado
+2026-09-16.** `~/backups/tmsi/` passou a `700` e os dumps existentes a `600` (directamente,
+sem sudo — ficheiros do próprio `pedro`). O produtor (`tmsi-backup.service`, `/etc/systemd/
+system/`, root) ganhou um passo novo — `chmod 600` logo a seguir ao `docker cp`, antes da
+limpeza dos +30 dias — aplicado pelo Pedro directamente (o classificador de permissões da
+sessão recusou a criação de um drop-in `sudoers` `NOPASSWD` para isto; o Pedro correu os
+comandos exactos dados pela sessão). **Provado por execução real do serviço, não por leitura
+do script:** `sudo systemctl start tmsi-backup.service` → os quatro `ExecStart` a
+`status=0/SUCCESS`, incluindo o `chmod` novo; dump novo (`tmsi-2026-09-16.dump`) confirmado
+`600` pela sessão a seguir, sem sudo (ficheiro do próprio dono). Escrow cifrado (`.gpg`) já
+estava `600`, confirmado, sem alteração.
 
 **49. Implementar a retenção de 5 anos do `tmsi.audit_log`** — **REGISTADO 2026-09-16**,
 decisão do Pedro no item 42 (`docs/DATA-PROCESSING-NOTICE.md` secção 1): a tabela guarda-se

@@ -8,8 +8,9 @@ ser usada pela empresa, este texto tem de passar por quem trata de protecção d
 Condat antes de valer como política formal.
 
 Servida na app, em inglês, em `/privacy` — este ficheiro é a fonte, em português. Cada
-afirmação abaixo tem origem medida (item 42, 2026-09-16); nada aqui descreve uma intenção,
-só o que foi confirmado directamente contra o schema, o código, os containers e o host.
+afirmação abaixo tem origem medida (item 42, 2026-09-16; revista pelos itens 47+48,
+2026-09-16); nada aqui descreve uma intenção, só o que foi confirmado directamente contra o
+schema, o código, os containers e o host.
 
 ## 1. As duas perguntas que só o responsável pode responder
 
@@ -33,16 +34,16 @@ sessão — não uma lista teórica.
 
 | Dado | Onde vive | Quem lhe acede | Como pode sair | Quanto tempo fica |
 |---|---|---|---|---|
-| Nome, email | `tmsi.profiles` | a própria pessoa (a sua linha); `admin` (todas); indirectamente, `finance`/`branch_manager`/`viewer` via `tmsi.audit_log` (ver linha abaixo) | dump nocturno; `audit_log` quando o perfil muda | indefinido — sem apagamento |
+| Nome, email | `tmsi.profiles` | a própria pessoa (a sua linha); `admin` (todas, incluindo o histórico de alterações no `audit_log` — ver linha abaixo) | dump nocturno; `audit_log`, só para `admin`, desde a correcção dos itens 47+48 | indefinido — sem apagamento |
 | Password | `auth.users.encrypted_password` (hash, nunca em texto simples) | ninguém directamente — só o GoTrue a compara no login | dump nocturno (o hash, nunca a password) | enquanto a conta existir |
 | Papel, filial/canal | `tmsi.user_roles` | a própria pessoa; `admin` (todas) | dump nocturno | indefinido |
 | Sessões (IP, browser) | `auth.sessions` | ninguém via ecrã da app — só quem tem acesso directo à base de dados | dump nocturno | enquanto a sessão for válida; sessões expiradas confirmadas limpas pelo próprio GoTrue |
-| Quem fez o quê, quando (produtos, preços, config, perfis) | `tmsi.audit_log` | `admin`/`finance`/`branch_manager`/`viewer` — o ecrã `/audit` só mostra data/autor/tabela/acção, nunca o conteúdo da alteração; **um pedido directo à API pode obter o conteúdo completo**, incluindo nome/email de um colega sempre que o perfil dele mudou | dump nocturno; API directa (ver nota) | **hoje: indefinido. Decidido: 5 anos — implementação por fazer, item 49** |
+| Quem fez o quê, quando (produtos, preços, config, perfis) | `tmsi.audit_log` | `admin`/`finance`/`branch_manager`/`viewer` — o ecrã `/audit` só mostra data/autor/tabela/acção, nunca o conteúdo da alteração; o conteúdo completo (`old_row`/`new_row`) é lido por `tmsi.v_audit_log`, não pela tabela em bruto (fechada por `REVOKE`, itens 47+48, 2026-09-16) — **igual para produtos/preços/configuração** (`finance`/`branch_manager`/`viewer` continuam a ver tudo, sem mudança); **para um perfil de colega, só `admin` vê o nome/email da alteração** — os outros três recebem o valor mascarado (`null`) | dump nocturno; `v_audit_log` via API (mascarado como acima) | **hoje: indefinido. Decidido: 5 anos — implementação por fazer, item 49** |
 | Registo interno de login do GoTrue (email, hora, tipo de evento) | `auth.audit_log_entries` | só por acesso directo à base de dados | dump nocturno | indefinido — sem purga observada |
 | Ficheiro gerado num export (Excel/PDF) | não guardado — gerado por pedido | quem o pede | o ficheiro inclui `generatedBy`, o email/id de **quem o gerou**, nunca de terceiros | não aplicável (não persiste no servidor) |
 | Registos de acesso ao servidor (IP real do visitante, URL, browser) | `/var/log/nginx/*.log`, no host | só contas do sistema operativo com privilégio (não a app) | — | **14 dias** (rotação diária, confirmada em `/etc/logrotate.d/nginx`) |
 | Registos dos containers (aplicação, autenticação) | `docker logs` | só quem tem acesso ao host | — | **por volume, não por tempo** — até 30 MB por container (`max-size 10m × max-file 3`); o registo de autenticação (GoTrue) inclui o email de quem entra em quase todas as linhas; o registo da aplicação não mostrou dados pessoais na amostra verificada |
-| Cópia diária completa da base de dados | `~/backups/tmsi/*.dump`, no host | qualquer conta local do sistema operativo (ficheiro **legível por omissão**, achado registado — item 48) | — | **30 dias** (apagamento automático confirmado no serviço de backup) |
+| Cópia diária completa da base de dados | `~/backups/tmsi/*.dump`, no host | só `pedro` (`600`/directório `700` desde a correcção do item 48, 2026-09-16, provada numa execução real do serviço — antes, `644`/`775`, mundialmente legível) | — | **30 dias** (apagamento automático confirmado no serviço de backup) |
 | Segredos de infraestrutura cifrados (chaves, não dados pessoais) | `~/backups/tmsi/*.gpg` | só quem tiver a frase-passe | — | não aplicável — não contém dados pessoais, confirmado por leitura da documentação de desastre |
 
 ## 3. Para que serve cada tratamento
@@ -78,16 +79,24 @@ nome/email errado, ou pedir para deixares de ter uma conta.
 - **Entregar a uma pessoa, em ficheiro, todos os dados que o sistema tem sobre ela** — não
   existe um botão "os meus dados". Registado como item 46.
 
-## 5. Achados desta medição, registados, não corrigidos aqui
+## 5. Achados desta medição
 
+**Corrigidos nesta revisão (itens 47+48, 2026-09-16):**
+- O conteúdo de uma alteração de perfil (nome/email de um colega) já não é alcançável por
+  `finance`/`branch_manager`/`viewer` via API directa — só `admin`. Medido primeiro se isto
+  também alcançava CUSTOS (contornando as fronteiras 0003/0004) — não alcançava: confirmado
+  com sessões reais dos três papéis sem custos (`logistics`/`sales`/`agent`), zero linhas
+  devolvidas em qualquer caso, por uma política RLS só sua (`admin`/`finance`/`viewer`/
+  `branch_manager`, um subconjunto de quem já vê custos). A correcção foi só do ângulo de
+  privacidade — migração 0014.
+- Os dumps nocturnos deixaram de ser legíveis por qualquer conta local do host — `600`/`700`,
+  provado numa execução real do serviço de backup, não só no ficheiro do serviço.
+
+**Registados, por corrigir (sem urgência de fronteira):**
 - `tmsi.audit_log` sem retenção implementada (secção 1, item 49 a criar).
 - Sem mecanismo de apagamento de utilizador (item 45).
 - Sem exportação dos próprios dados (item 46).
-- Um pedido directo à API (não o ecrã) pode obter o conteúdo completo de uma alteração de
-  perfil (nome/email) por quatro papéis, não só `admin` (item 47).
-- Os dumps nocturnos, no host, são legíveis por qualquer conta local do sistema operativo, não
-  só pelo dono do ficheiro (item 48).
 
-Nenhum destes é tratado como incidente de segurança — nenhum está acessível a alguém sem
+Nenhum destes é tratado como incidente de segurança — nenhum esteve acessível a alguém sem
 autorização legítima de acesso a este servidor ou a estes papéis dentro da aplicação. São
 lacunas de processo/retenção, registadas para decisão e trabalho futuro.

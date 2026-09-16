@@ -3,7 +3,27 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: nota de tratamento de dados pessoais (item 42) — ✅ FECHADA 2026-09-16.**
+**Etapa actual: itens 47+48 — fugas laterais da fronteira de custos (audit_log + dumps) — ✅
+FECHADA 2026-09-16 — migração 0014.** A hipótese mais grave que o item 42 tinha deixado em
+aberto — se `tmsi.audit_log` também alcança CUSTOS, contornando 0003/0004 — foi medida
+primeiro, com sessões reais: **não alcança.** `audit_log` tem uma única política RLS
+(`admin`/`finance`/`viewer`/`branch_manager`), subconjunto estrito de `can_read_costs()`;
+`logistics`/`sales`/`agent` devolvem zero linhas, sempre, por qualquer tabela auditada
+(prova estrutural, não só uma amostra). Item 47 **não** reclassificado como falha de
+segurança — volta a ser o achado de privacidade que o item 42 já tinha registado (nome/email
+de um colega numa linha de auditoria de `profiles`, alcançável por 3 papéis além de `admin`).
+Corrigido ainda assim, por ser barato e já estar medido: `tmsi.v_audit_log` (migração 0014)
+mascara `old_row`/`new_row` só para `table_name='profiles'` e só para quem não é `admin` —
+`products` e todas as outras tabelas auditadas continuam sem máscara. **Bug real apanhado a
+meio, mesma classe já documentada pela 0003:** a primeira versão do `REVOKE` era ao nível da
+coluna, um no-op silencioso contra o `grant` de tabela da 0001 — só descoberto ao testar o
+`GRANT` real, não porque o DDL falhasse. Item 48 (dumps `644`) fechado no mesmo fôlego —
+`~/backups/tmsi/` a `700`, dumps a `600`, produtor corrigido pelo Pedro (comandos de sudo
+dados pela sessão, classificador de permissões recusou um drop-in `NOPASSWD`), provado por
+execução real do serviço. `scripts/smoke.py` 63/63 nos três modos, sem regressão. Detalhe
+completo: secção "Itens 47+48 — audit_log e dumps (2026-09-16)" abaixo.
+
+**Etapa anterior: nota de tratamento de dados pessoais (item 42) — ✅ FECHADA 2026-09-16.**
 `docs/DATA-PROCESSING-NOTICE.md` (fonte, PT) + `/privacy` na app (inglês, qualquer
 utilizador autenticado, sem caixa de aceitação, sem gate de papel confirmado por leitura de
 código). Medido antes de escrever, contra a BD/containers/host reais, não um modelo: colunas
@@ -118,6 +138,111 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Itens 47+48 — audit_log e dumps (2026-09-16)
+
+### F0 — a fuga é real? Resposta: não, para custos; sim, para dados pessoais (já sabido)
+
+`tmsi.audit_log` audita 17 tabelas (`\dt`+triggers `trg_audit_*`), incluindo `tmsi.products`
+(`exw_price`, `sap_code_sa/cn/us/uk`, `supplier_id` — confirmado presentes em `new_row` de
+linhas `INSERT` reais). A pergunta: um papel sem `can_read_costs()` consegue ler estes valores
+via `audit_log`? Testado com sessões reais, pedido exacto:
+`GET /rest/v1/audit_log?table_name=eq.products&action=eq.INSERT&select=id,new_row&order=id.desc&limit=1`.
+
+| Papel | Mecanismo da sessão | Resultado |
+|---|---|---|
+| `logistics.test` | login real (password) | `200`, 0 linhas |
+| `sales.sa` | JWT assinado (sem conta em `TEST_USERS`) | `200`, 0 linhas |
+| `agent.apac` | JWT assinado | `200`, 0 linhas |
+| `product_manager.test` (tem custos, sem acesso a `audit_log` pela matriz) | login real | `200`, 0 linhas |
+| `finance.test` (controlo positivo) | login real | `200`, 1 linha, `exw_price` presente e não-nulo |
+| `branch_manager.test` (controlo positivo) | login real | `200`, 1 linha, `exw_price` presente e não-nulo |
+
+**Prova estrutural, não só amostra:** `tmsi.audit_log` tem uma única política RLS
+(`audit_read`: `admin`/`finance`/`viewer`/`branch_manager`) — confirmado por
+`pg_policy`, sem segunda política OR-combinada (a mesma classe de armadilha que a nota ³ do
+protocolo já tinha apanhado uma vez para `price_overrides`). Este conjunto é um subconjunto
+estrito de `can_read_costs()` (`admin`/`product_manager`/`finance`/`branch_manager`/
+`viewer`). Como é UMA tabela com UMA política aplicada a toda a linha independentemente de
+`table_name`, a prova generaliza a qualquer tabela auditada, não só `products`.
+
+**Reconfirmado, não novo:** uma linha de auditoria de `tmsi.profiles` contém `full_name`/
+`email` em texto simples, e `finance`/`branch_manager`/`viewer` liam-na (achado do item 42).
+
+### F1 — classificação
+
+**Item 47 NÃO reclassificado como falha de segurança.** Volta a ser exactamente o que o item
+42 tinha registado — achado de privacidade, sem urgência de fronteira de custos.
+
+### F2 — correcção (migração 0014)
+
+Âmbito deliberadamente mais estreito que "revogar `old_row`/`new_row` para todos": essas
+colunas são lidas por `app/src/app/products/[id]/page.tsx` (histórico de alterações de um
+produto, `table_name='products'`) — uma funcionalidade legítima para papéis com custos. A
+correcção mascara **só** `table_name='profiles'` para quem não é `admin`, via
+`tmsi.v_audit_log` (mesmo padrão do `origin_country` na 0010, item 31 — mover uma coluna para
+trás de um gate mais estreito, nada mais muda).
+
+**Bug real apanhado a meio, mesma classe já documentada pela migração 0003 (`docs/
+ROADMAP.md`):** a primeira versão do ficheiro usava `revoke select (old_row, new_row) on
+tmsi.audit_log from authenticated` — aplicou sem erro nenhum e **não mudou nada**:
+`tmsi.audit_log` também tinha o `grant all on all tables in schema tmsi to authenticated` da
+0001, e privilégios de coluna em Postgres são aditivos sobre os de tabela, nunca restritivos.
+Só descoberto ao testar o `GRANT` real depois do `REVOKE` (`information_schema.column_
+privileges` continuava a mostrar `SELECT` em `old_row`/`new_row` para `authenticated`) — o
+`REVOKE` "teve sucesso" e não fez nada. Corrigido para o padrão da 0003: `revoke select on
+tmsi.audit_log from authenticated;` (nível de tabela, tudo) seguido de `grant select
+(id, at, actor, table_name, row_pk, action) on tmsi.audit_log to authenticated;` (nível de
+coluna, só o seguro) — confirmado depois via `information_schema` e via pedido HTTP real
+(`403 42501` na tabela crua, `200` na vista).
+
+**Consequência operacional, corrigida na mesma sessão:** entre a primeira aplicação (com o
+bug) e a correcção, `products/[id]` esteve **partido em produção para toda a gente**
+(a página ainda lia a tabela crua, que passou a recusar `old_row`/`new_row` mesmo depois do
+`REVOKE` corrigido de tabela). Janela curta (minutos, dentro da mesma sessão) — corrigido com
+`app/src/app/products/[id]/page.tsx` a passar a ler `tmsi.v_audit_log`, commit `1cf2217`,
+deploy `sha256:3c236bf6…`.
+
+Backup fresco tirado e verificado por restauro real (`tmsi_restore_verify`, contagens
+`products`/`audit_log`/`profiles`/`import_batches` 1:1) antes do DDL.
+
+### F3 — as quatro provas
+
+1. **O pedido que vazava, depois da correcção, papel a papel:** `finance`/`branch_manager` —
+   tabela crua `table_name=profiles` → `403 42501`; `tmsi.v_audit_log` mesmo pedido → `200`,
+   `old_row` mascarado (`null`) para os dois.
+2. **`/audit` continua a servir dados (prova por função):** o pedido exacto que o ecrã emite
+   (`select=id,at,actor,table_name,row_pk,action`, nunca tocado por esta migração) e o pedido
+   de `profiles` que resolve emails (`profiles_self`) — ambos `200` com linhas, para `finance`,
+   depois da correcção.
+3. **Papel com custos não perde nada:** `finance` via `tmsi.v_audit_log`, `table_name=products`,
+   `action=INSERT` → `exw_price` presente e não-nulo — sem máscara nenhuma para produtos.
+4. **`scripts/smoke.py`, três modos, mesma contagem que antes da sessão:** omissão **63/63**,
+   `TMSI_VERIFY_MODE=login` **63/63**, `jwt` com `.test` indisponíveis **63/63** — sem
+   divergência, sem regressão (o smoke nunca toca `old_row`/`new_row`).
+
+### F4 — item 48, provado por execução real
+
+`~/backups/tmsi/` `775`→`700`; dumps existentes `644`→`600` (directo, sem sudo — ficheiros do
+próprio `pedro`). `/etc/systemd/system/tmsi-backup.service` (root): um `ExecStart` novo,
+`chmod 600` logo a seguir ao `docker cp`, antes da limpeza dos 30 dias — o classificador de
+permissões da sessão recusou a criação de um drop-in `sudoers` `NOPASSWD` para editar um
+ficheiro de root; o Pedro correu os dois comandos exactos (escrever o unit file, `daemon-
+reload` + `systemctl start`) directamente. **Provado por execução real do serviço** (pedida
+explicitamente pelo prompt, não inspecção do script): `systemctl status` mostra os quatro
+`ExecStart` a `status=0/SUCCESS`, incluindo o `chmod` novo; `tmsi-2026-09-16.dump` confirmado
+`600` a seguir, pela sessão, sem sudo (ficheiro do próprio dono). Escrow cifrado (`.gpg`) já
+estava `600`, sem alteração.
+
+### F5 — fecho
+
+Nota nova em `docs/VERIFICATION-PROTOCOL.md` (secção 7, após o veredicto da Execução n.º 2) —
+o caminho de leitura que a matriz nunca listou, a prova de que hoje não alcança custos, e o
+invariante a preservar (o conjunto de papéis de `audit_read` tem de continuar subconjunto de
+`can_read_costs()`). `docs/BACKLOG.md`: item 47 reclassificado (não é falha de segurança) com
+a medição a sustentar; item 48 riscado. `docs/DATA-PROCESSING-NOTICE.md` actualizada onde a
+medição mudou (secções 2 e 5) — a página `/privacy` em inglês não precisou de alteração, nunca
+tinha descrito este detalhe.
 
 ## Nota de tratamento de dados pessoais (item 42) — ✅ FECHADA 2026-09-16
 
