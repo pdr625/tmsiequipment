@@ -204,6 +204,34 @@ def block_health():
     check("health: /auth/v1/health", status == 200, f"http_{status}")
 
 
+# item 42: the deepest proof ("a common-role user opens the page and reads
+# the text") needs a real authenticated browser session — this suite hits
+# PostgREST/GoTrue directly and has never replicated Next.js's own cookie
+# session (tried and abandoned for the login flow itself, i9/i10) — stays
+# the Pedro's browser step it always was. What IS provable without one:
+# the route isn't accidentally public. A no-redirect opener so the 307
+# itself is observed, not silently followed to a 200 on /login.
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_no_redirect_opener = urllib.request.build_opener(_NoRedirect)
+
+
+def block_privacy_notice():
+    try:
+        resp = _no_redirect_opener.open(f"{BASE}/privacy", timeout=15)
+        status, location = resp.status, resp.headers.get("Location")
+    except urllib.error.HTTPError as e:
+        status, location = e.code, e.headers.get("Location")
+    check(
+        "privacy: /privacy without a session redirects to /login, never serves the page",
+        status in (302, 307) and location == "/login",
+        f"http_{status} location={location}",
+    )
+
+
 # ---------------------------------------------------------------------------
 # 4.2 G/H/I — sales/logistics-class role, zero cost visibility (no-cost role)
 # ---------------------------------------------------------------------------
@@ -1043,6 +1071,7 @@ def delete_smoke_fixture_product():
 def main():
     print(f"=== TMSI smoke — {BASE} — {date.today().isoformat()} ===")
     block_health()
+    block_privacy_notice()
 
     # UUIDs looked up from TEST_USERS' own emails, not hardcoded alongside
     # them — a test account recreated with a new id would otherwise go
