@@ -2,8 +2,10 @@
 
 Copyright © 2026 Pedro Alexandre. Proprietary — see ../LICENSE.
 
-**Data:** 2026-09-19. **Estado:** proposta. **Não substitui `docs/ROADMAP.md`** — o Pedro valida
-primeiro. Parte do estado real apurado em `docs/STATUS-REPORT-2026-09.md`, não do plano antigo.
+**Data:** 2026-09-19, **emendada no mesmo dia** depois da sessão «verificar, registar, provar» —
+quatro afirmações da auditoria não sobreviveram à verificação (off-site, rate limit, `sap_code_cn`,
+`sap_code_us`) e dois passos passaram de futuros a feitos (registo da carga, gate reposto).
+**Estado:** proposta. **Não substitui `docs/ROADMAP.md`** — o Pedro valida primeiro. Parte do estado real apurado em `docs/STATUS-REPORT-2026-09.md`, não do plano antigo.
 Sem estimativas de datas, por desenho.
 
 **Mudança de eixo face ao ROADMAP actual:** o eixo deixa de ser «que etapa falta construir» e passa
@@ -31,8 +33,12 @@ Entregue **e** com prova re-executável (smoke, protocolo executado, ou mediçã
 | Guardas de integridade (activação, motivo de override, EXW→review) | smoke O·Q·P |
 | Auditoria global + fronteira de conteúdo | 0001 + 0014; `/audit`, `v_audit_log` |
 | Backups, restauro provado, escrow, kit de desastre | `docs/DISASTER-DRILL.md`; restauro re-provado |
+| Off-site do backup | Verificado a 19/09 pelo padrão de `atime`: o pull nocturno corre e já levou dumps com a carga real (A1) |
 | Security headers | `deploy/nginx/tmsiequipment.conf:14-17`; confirmados ao vivo |
-| Paridade do motor contra o Excel | `docs/ENGINE-PARITY.md` (amostra) + 245 linhas do catálogo real |
+| Rate limit no `/auth/v1/token` | `limit_req` no vhost versionado; provado ao vivo a 19/09 (`503` do 7.º ao 9.º pedido) |
+| Fronteira de conteúdo do `audit_log` (0014) | Smoke bloco BB desde 19/09 — incluindo o ângulo do no-op que a 1.ª versão teve |
+| `sales`, `agent`, `viewer` | Smoke bloco CC desde 19/09 |
+| Matriz dos 8 papéis sobre 0001–0015 | Execução n.º 3 do protocolo, 19/09 |
 
 ---
 
@@ -42,14 +48,15 @@ Existe e funcionou uma vez; **não tem prova que sobreviva a uma regressão**.
 
 | Item | Porque está aqui | Critério de «feito» |
 |---|---|---|
-| Fronteira de privacidade do `audit_log` (0014) | **Zero asserções de smoke**; a 1.ª versão da migração foi um no-op silencioso e só se soube por teste manual | Bloco de smoke que prove `old_row`/`new_row` de `profiles` mascarados para não-admin e visíveis para admin |
+| **Paridade do catálogo completo** | Está **escrita** (`ENGINE-PARITY.md` §9) mas **não é re-executável**: o comparador foi um script de sessão e o ficheiro-fonte vive fora do git. Uma regressão do motor não seria apanhada por nada | Um comparador versionado (em `scripts/`) que leia um ficheiro de paridade e produza a mesma classificação — e que corra na próxima carga sem se reinventar |
 | Gestão de passwords (0006) | Zero asserções; passos W/X do protocolo NÃO EXECUTADOS | Asserção ou execução registada dos passos W/X |
 | Branding / white-label (0008) | Zero asserções; passo KK NÃO EXECUTADO | Ficheiro `.xlsx` real com o branding aplicado, verificado |
 | Correcção de FX no mesmo dia (0005) | Teste directo foi **substituído** pelo bloco R, não reforçado | Asserção própria, ou nota explícita de que o bloco R a cobre |
 | Exportações `.xlsx` | Nunca geradas por via automatizada (a rota exige cookies) | Um ficheiro real gerado por sessão autenticada e o seu conteúdo verificado |
 | Dashboard | Metade browser NÃO EXECUTADA (passo V) | Passo V executado e registado |
 | Convites, ban/unban | Sem asserções | Asserção ou passo de protocolo executado |
-| Papéis `sales`, `agent`, `viewer`, `admin` | Sem sessão própria no smoke (4 dos 8 papéis) | Contas de teste para os que faltam, ou decisão registada de que ficam manuais |
+| ~~Papéis `sales`, `agent`, `viewer`, `admin`~~ | **Resolvido 19/09** — blocos CC e BB, sem criar conta nenhuma (claims injection e concessões em transacção revertida) | ✅ |
+| Fronteira de custo no **export**, papel sem custos | Estruturalmente defendida em duas camadas, mas **nunca exercida com linhas visíveis** — hoje é impossível, nada está `active` | Um `.xlsx` real de um papel sem custos, com artigos activos, sem coluna nem valor de custo |
 
 ---
 
@@ -60,14 +67,16 @@ Ordem proposta — cada passo desbloqueia o seguinte.
 
 | # | O quê | Depende de | Critério de «feito» | Porquê nesta ordem |
 |---|---|---|---|---|
-| 1 | **Registar a carga** em `STATE.md`, `BACKLOG.md`, `ENGINE-PARITY.md` e `deploy/DEPLOY.md`, e comitar | — | `git log` mostra a carga; `DEPLOY.md` deixa de dizer «not yet loaded» | Enquanto não existir registo, qualquer decisão seguinte assenta em memória. É o único passo que não depende de ninguém |
-| 2 | **Decidir a `unit`** dos 49 artigos | Pedro | Os 49 têm `unit` não-nula | Bloqueia a activação de **todos** — nenhum outro trabalho a contorna |
-| 3 | **Obter os `sap_code_cn`** dos 39 artigos de origem TBM | Pedro / gestor de filial | Os 39 têm `sap_code_cn` único | Segunda metade do mesmo bloqueio; o trigger exige o código SAP da filial de origem |
-| 4 | **Completar o `hs_code` do `T-1020`** e corrigir o `sap_code_us` duplicado (`NC01728-998`, 3 artigos) | Pedro | `compute_price` sem `errors[]` no catálogo; zero duplicados em `sap_code_us` | Barato, e evita que a 2.ª importação rebente contra a constraint UNIQUE |
-| 5 | **Activar** os artigos completos | 2, 3, 4 | ≥1 artigo `active`; `sales`/`agent` vêem preço | É o primeiro momento em que a app serve para o que foi feita |
-| 6 | **Exercer a fronteira de custo no export** com `logistics`/`sales`/`agent` | 5 | Ficheiro real de um papel sem custos, sem coluna de custo e sem número de custo | Só é exercível depois de existir algo `active`; fecha o item A da F4 |
-| 7 | **Carregar as 3 refs diferidas** (47/48/49) | Pedro (artigo-pai + filial primária) | 52 artigos carregados | Fica por último por serem 3 e por precisarem de decisão, não de trabalho |
-| 8 | **Resposta do despachante** sobre a base do direito por zona (item 32) | Externa | Item 32 fechado | **Até lá os preços são operacionais, não definitivos** — não anunciar à equipa como finais |
+| 1 | ~~**Registar a carga**~~ | — | ✅ **feito 2026-09-19** — `STATE.md` item 51, `BACKLOG` 51–57, `ENGINE-PARITY` §9, `DEPLOY.md` corrigido, quatro commits | Enquanto não existia registo, qualquer decisão seguinte assentava em memória |
+| 2 | ~~**Repor o gate de produção**~~ | 1 | ✅ **feito 2026-09-19** — execução n.º 3 (0001–0015), smoke 78→**91** verde nos três modos, matriz dos 8 papéis medida, sem fuga | A activação é o momento em que `sales`/`agent` vêem dados reais pela primeira vez. A prova tem de vir **antes**, não depois |
+| 3 | **Decidir a `unit`** dos 49 artigos | Pedro | Os 49 têm `unit` não-nula | Bloqueia a activação de **todos** — nenhum outro trabalho a contorna |
+| 4 | **`sap_code_cn`: derivar os 37, decidir os 2** | Pedro | Os 39 de origem TBM têm `sap_code_cn` único | Medido a 19/09: a regra já escrita (`MODEL-GAP-ANALYSIS.md:27`) resolve **37 dos 39** por derivação (`S` + `sap_code_sa`), com 37 valores distintos e zero colisões. Só `T-1002` e `T-1020` são excepção, por não terem `sap_code_sa` de origem. Deixou de ser «obter 39 códigos» e passou a ser «derivar 37 e decidir 2» |
+| 5 | **Completar o `hs_code` do `T-1020`** | Pedro | `compute_price` sem `errors[]` em todo o catálogo | Hoje 3 dos 5 âmbitos deste artigo devolvem `missing customs rate for HS/zone` |
+| 6 | **Decidir o `sap_code_us` duplicado** (`NC01728-998`) | Pedro | Ou o ficheiro corrigido, ou a constraint revista com fundamento escrito | Deixou de ser «correcção barata». Os três artigos (`T-1021`, `T-1023`, `T-1042`) são todos `equipment`, nenhum é acessório de outro, e o terceiro difere em categoria **e** em filial de origem — não é o padrão de um código de kit. São duas leituras opostas: **dado errado**, ou **constraint errada** porque a CORP usa mesmo um código para três artigos. Não chegou à base (o importador não escreve `sap_code_us`), logo não há pressa — mas a 2.ª importação vai exercê-la |
+| 7 | **Activar** os artigos completos | 3, 4, 5 | ≥1 artigo `active`; `sales`/`agent` vêem preço | É o primeiro momento em que a app serve para o que foi feita |
+| 8 | **Exercer a fronteira de custo no export** com `logistics`/`sales`/`agent` | 7 | Ficheiro real de um papel sem custos, com linhas visíveis, sem coluna nem valor de custo | Só é exercível depois de existir algo `active` — é a única parte do gate que a execução n.º 3 não conseguiu fechar |
+| 9 | **Carregar as 3 refs diferidas** (47/48/49) | Pedro (artigo-pai + filial primária) | 52 artigos carregados | Fica por último por serem 3 e por precisarem de decisão, não de trabalho. Quem lá mexer trata **duas** barreiras: o importador recusa `exw_price < 0` para todos os tipos, e não escreve `parent_id` |
+| 10 | **Resposta do despachante** sobre a base do direito por zona (item 32) | Externa | Item 32 fechado | **Até lá os preços são operacionais, não definitivos** — não anunciar à equipa como finais |
 
 ---
 
@@ -75,15 +84,19 @@ Ordem proposta — cada passo desbloqueia o seguinte.
 
 | # | O quê | Depende de | Critério de «feito» |
 |---|---|---|---|
-| 1 | **Execução n.º 3 do protocolo**, cobrindo 0014 e 0015 | §3 passo 5 (para exercer com dados activos) | Registo assinado na secção 7 do protocolo, digest citado, 8 papéis |
-| 2 | Fechar as lacunas da §2 que o Pedro considerar bloqueantes | — | Cada item da §2 com prova ou decisão registada |
-| 3 | `ORDER BY` no export + rótulo `Scope` coerente com canais | — | Linhas de canal ao lado do artigo; rótulo descreve o conteúdo |
-| 4 | Decidir o `Alert` dos serviços de margem plana | Pedro | Regra isenta `service`/`option`, ou a coluna sai do ficheiro que circula |
-| 5 | Desactivar as contas `.test` | Pedro | Contas desactivadas, `TEST-ACCOUNTS.md` actualizado |
-| 6 | Retenção de 5 anos do `audit_log` (item 49) | — | Mecanismo implementado, não só decidido |
-| 7 | E5-HOMELAB: off-site do backup | — | Cópia off-site verificada por restauro |
-| 8 | Renome de repo/imagem/domínio | Pedro | Decisão de 09-06 executada |
-| 9 | CPI L113-9 / formalidades da migração para a empresa | Pedro | Conforme `ROADMAP.md` E6 |
+| 1 | ~~Execução n.º 3 do protocolo (0014/0015)~~ | — | ✅ **feito 2026-09-19** — deixou de depender da activação: fez-se sobre os artigos fictícios, que é o que o gate sempre pediu (provas fictícias validam o mecanismo) |
+| 2 | **Re-execução do protocolo com dados reais activos** | §3 passo 7 | Matriz dos 8 papéis refeita com ≥1 artigo real `active`; em particular as linhas de `sales` e `agent`, hoje a zero por falta de artigos activos, e a fronteira de custo no export (§3 passo 8) |
+| 3 | **⚠️9 — `/audit` lê a tabela crua, `/products/[id]` lê a vista** | — | As duas rotas lêem `tmsi.v_audit_log`. Funciona hoje só porque `/audit` selecciona exactamente as 6 colunas re-concedidas pela 0014: qualquer coluna acrescentada ao `select` fura a fronteira sem aviso. Precisa de deploy |
+| 4 | **⚠️10 — `/products/export` sem gate de papel próprio** | — | A rota ramifica por `can_read_costs()` como `/prices/export` já faz, em vez de depender só da RLS de `v_products`. Precisa de deploy |
+| 5 | `ORDER BY` no export + rótulo `Scope` coerente com canais | — | Linhas de canal ao lado do artigo; rótulo descreve o conteúdo. Precisa de deploy |
+| 6 | Fechar as lacunas da §2 que o Pedro considerar bloqueantes | — | Cada item da §2 com prova ou decisão registada |
+| 7 | Decidir o `Alert` dos serviços de margem plana | Pedro | Regra isenta `service`/`option`, ou a coluna sai do ficheiro que circula |
+| 8 | Desactivar as contas `.test` | Pedro | Contas desactivadas, `TEST-ACCOUNTS.md` actualizado |
+| 9 | Retenção de 5 anos do `audit_log` (item 49) | — | Mecanismo implementado, não só decidido |
+| 10 | **E5-HOMELAB: confirmar o destino e medir a cópia** | — | O off-site **já corre** (verificado a 19/09 pelo padrão de `atime`; ver §7). Falta: confirmar no homelab que o ficheiro está íntegro (`pg_restore -l`), e uma métrica de idade da cópia off-site — hoje o `status.json` só publica a idade do dump **no VPS**, logo se o pull parar ninguém dá por isso (item 55) |
+| 11 | Versionar a `limit_req_zone` do rate limit (item 54) | — | Um restauro só a partir do repo põe o nginx de pé; hoje não põe |
+| 12 | Renome de repo/imagem/domínio | Pedro | Decisão de 09-06 executada |
+| 13 | CPI L113-9 / formalidades da migração para a empresa | Pedro | Conforme `ROADMAP.md` E6 |
 
 ---
 
@@ -109,7 +122,7 @@ Ordem proposta — cada passo desbloqueia o seguinte.
 | Item | Decisão | Data |
 |---|---|---|
 | Piloto com utilizadores reais | Adiado; só contas `.test` até ao deployment final | 2026-09-05 |
-| Terceira perna do backup | Suspensa — ficam 2 cópias em 2 máquinas | 2026-09-06 |
+| Terceira perna do backup | Suspensa — e as **duas** primeiras existem mesmo: o off-site corre e já levou dumps com a carga real (verificado 19/09, §7) | 2026-09-06 |
 | Dark mode | Removido, não só desligado; app light-only | 2026-09-05 |
 | `channels.margin_delta` | Largada na 0009 por não corresponder ao modelo real | 2026-09-09 |
 | `interco_fees` | Viva no schema como histórico; o motor deixou de a ler na 0012 | 2026-09-10 |
@@ -134,12 +147,16 @@ Ordem proposta — cada passo desbloqueia o seguinte.
 
 **Movido**
 
-- **Gate de produção:** o ROADMAP declara-o satisfeito (`ROADMAP.md:275-287`). Proponho reabri-lo
-  como §4 passo 1 — pela regra do próprio gate, que manda repetir a cada migração que toque
-  RLS/vistas/privilégios; a 0014 faz `REVOKE`/`GRANT` e cria uma vista, e entrou depois da última
-  execução.
+- **Gate de produção:** o ROADMAP declarava-o satisfeito (`ROADMAP.md:275-287`) para um estado que
+  já não era o actual. Foi reaberto **e fechado na sessão de 19/09** — execução n.º 3, migrações
+  0001–0015, matriz dos 8 papéis, smoke 78→91. O que dele fica para depois não é o gate: é a sua
+  repetição com **dados reais activos** (§4 passo 2), que é outra coisa e só é possível depois da
+  activação.
 - **E6** deixa de depender só do gate técnico e passa a depender também da §3 (dados activos) — não
   se valida um piloto sobre um catálogo que os papéis comerciais não vêem.
+- **Off-site:** sai de «por iniciar» e entra em §1 como feito e verificado, com o que falta
+  (confirmação no destino e métrica de idade) em §4 passo 10. O `ROADMAP.md` dizia «o dump só
+  existe no VPS»; é falso desde antes desta auditoria — o repo é que nunca foi actualizado.
 
 **Fundido**
 
