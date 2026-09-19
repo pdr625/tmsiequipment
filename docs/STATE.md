@@ -179,6 +179,44 @@ limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
 
+## Incidente — linha de catálogo real impressa no output da sessão (F0 da carga, 2026-09-16) — ✅ FECHADO
+
+Durante o diagnóstico de linhas "irregulares" do CSV de carga (mais campos do que colunas
+esperadas), um `awk -F';'` imprimiu uma linha inteira, posicionalmente, para localizar o campo
+a mais — incluindo colunas de valor (`exw_price`, `gross_weight_kg`, `in_transport`,
+`in_duty_pct`, `in_margin` e as cinco colunas `excel_*` derivadas) no output visível/persistido
+da sessão. **Não reproduzido aqui** — nem a ref, nem o artigo, nem nenhum número. Chamada de
+parar-e-sinalizar foi correcta (regra do próprio prompt: "um valor real fugido é um
+incidente"); o Pedro confirmou a gravidade como menor (dados do próprio Pedro, no próprio
+host, conversa própria) mas manteve o tratamento como incidente, não como nota informal.
+
+**Verificação de contenção (read-only, antes de qualquer remediação):**
+- Transcript da sessão (`~/.claude/projects/-home-pedro/<sessão>.jsonl`): contém o valor
+  (confirmado por contagem `grep -c`, nunca impresso outra vez); já `600`, dono `pedro` — sem
+  alteração necessária.
+- `timeline.jsonl` do job em background: também contém o valor; permissões eram **`644`**
+  (grupo+outros com leitura) — **corrigido para `600`**, mesmo tratamento dado aos dumps do
+  item 48.
+- Grupo `pedro` não tem outros membros; únicos utilizadores com shell de login no host são
+  `pedro` e `root` — exposição real, mesmo com a permissão `644`, nunca saiu da conta do
+  próprio Pedro.
+- Dossier, git, log partilhado: **nada** — confirmado, não assumido.
+- Nenhum ficheiro apagado (transcript é histórico legítimo da sessão, não se destrói).
+
+**Causa do sintoma de origem (campo a mais), separada da fuga:** a coluna `notas` do CSV
+continha `;` interno dentro de campos correctamente citados (`"`) — `awk -F';'` não respeita
+aspas CSV, por isso via mais campos do que existem. **Não era defeito do ficheiro** — o
+ficheiro estava correctamente citado; convidava ao erro mesmo assim. Ficheiro corrigido pelo
+Pedro: `tmsi-catalogo-completo-2026-09-16-v2.csv` (separadores internos de `notas`
+substituídos, zero aspas no ficheiro inteiro — confirmado `csv` real e contagem ingénua de
+`;` a darem 26/25 em todas as linhas). v1 a descartar (`shred -u -z`) depois de confirmada a
+v2 como substituta.
+
+**Regra de processo acrescentada a `~/atelier-vps/CLAUDE.md`:** ao diagnosticar ficheiros com
+dados reais, nunca imprimir uma linha inteira — nomes de colunas, contagens, comprimentos, ou
+o valor de uma coluna sabidamente não sensível respondem à pergunta de estrutura sem expor
+valor.
+
 ## Item 44 — decisão em lote (2026-09-16)
 
 ### F0 — desenho, citado antes de qualquer DDL
