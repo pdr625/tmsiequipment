@@ -1143,6 +1143,205 @@ def block_batch_decision(finance_token, finance_uuid, bm_token, bm_uuid):
 # whole file, never a partial write) is exercised the same way — an invalid
 # margin, real product count unchanged after.
 # ---------------------------------------------------------------------------
+def block_audit_content_boundary(cost_no_admin_token, cost_no_admin_uuid):
+    """BB — migration 0014: audit_log content boundary.
+
+    The bug this block exists to catch is specific and already happened once:
+    0014's first version revoked old_row/new_row at the COLUMN level, which is
+    a silent no-op against 0001's table-level grant (column privileges are
+    additive, never restrictive — the same class 0003 had already documented).
+    It applied with no error and changed nothing; only asking the API for the
+    column caught it. So assertion 1 is that request, and it has to be REFUSED
+    — a 200 there means the boundary is back to being decorative.
+
+    Assertion 4 is the positive control that makes assertion 3 mean something:
+    the view masks profiles rows only. If it ever started returning NULL for
+    every table, assertion 3 would still pass while the audit trail had gone
+    blind — 4 fails in that case."""
+    safe_cols = "id,at,actor,table_name,row_pk,action"
+
+    status, _ = http("GET", f"{REST}/audit_log?select=old_row,new_row&limit=1", token=cost_no_admin_token)
+    check(
+        "BB: raw audit_log content columns refused to a non-admin cost role (0014 REVOKE is real, not a no-op)",
+        status >= 400,
+        f"http_{status}",
+    )
+
+    status, rows = http("GET", f"{REST}/audit_log?select={safe_cols}&limit=1", token=cost_no_admin_token)
+    check(
+        "BB: the six safe columns stay readable on the raw table (0014 re-grant)",
+        status == 200 and isinstance(rows, list),
+        f"http_{status}",
+    )
+
+    status, rows = http(
+        "GET", f"{REST}/v_audit_log?select=old_row,new_row&table_name=eq.profiles&limit=50",
+        token=cost_no_admin_token,
+    )
+    masked = isinstance(rows, list) and len(rows) > 0 and all(
+        r.get("old_row") is None and r.get("new_row") is None for r in rows
+    )
+    check(
+        "BB: v_audit_log masks profiles content for a non-admin (name/email of a colleague)",
+        status == 200 and masked,
+        f"http_{status} rows={len(rows) if isinstance(rows, list) else '?'}",
+    )
+
+    status, rows = http(
+        "GET", f"{REST}/v_audit_log?select=old_row,new_row&table_name=eq.products&or=(old_row.not.is.null,new_row.not.is.null)&limit=5",
+        token=cost_no_admin_token,
+    )
+    unmasked = isinstance(rows, list) and len(rows) > 0 and any(
+        r.get("old_row") is not None or r.get("new_row") is not None for r in rows
+    )
+    check(
+        "BB: the mask is scoped to profiles — products audit content still visible (positive control)",
+        status == 200 and unmasked,
+        f"http_{status} rows={len(rows) if isinstance(rows, list) else '?'}",
+    )
+
+    counts = psql_rows(
+        "select (select count(*) from tmsi.audit_log), (select count(*) from tmsi.v_audit_log);",
+        claims_uuid=cost_no_admin_uuid,
+    )
+    raw_n, view_n = counts[0]
+    check(
+        "BB: v_audit_log and the raw table agree on which rows exist (the view narrows content, never rows)",
+        raw_n == view_n,
+        f"raw={raw_n} view={view_n}",
+    )
+
+    # The other half of the mask, and what turns assertion 3 into a real
+    # differential: admin DOES see profiles content. There is no admin `.test`
+    # account and this suite never touches the Pedro's personal one, so the
+    # role is granted inside a transaction that is rolled back — the same
+    # device block CC uses for `viewer`, and for the same reason.
+    rows = psql_rows(
+        "begin;\n"
+        "insert into tmsi.user_roles (user_id, role) select user_id, 'admin' "
+        f"from tmsi.profiles where email = '{TEST_USERS['finance'][0]}';\n"
+        "do $$ begin perform set_config('request.jwt.claims', "
+        f"'{{\"sub\":\"{cost_no_admin_uuid}\",\"role\":\"authenticated\"}}', false); end $$;\n"
+        "set role authenticated;\n"
+        "select count(*) filter (where old_row is not null or new_row is not null) "
+        "from tmsi.v_audit_log where table_name = 'profiles';\n"
+        "reset role;\n"
+        "rollback;"
+    )
+    check(
+        "BB: with admin, the same rows come back unmasked (so assertion 3 measures the mask, not an empty table)",
+        int(rows[0][0]) > 0,
+        f"linhas_com_conteudo={rows[0][0]}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# CC — the three roles the suite never had a session for (sales, agent,
+# viewer). Deliberately at the DB layer via claims injection, not HTTP: these
+# roles have no password file (sales/agent) or no account at all (viewer), and
+# the CLAUDE.md rule for RLS/data proofs is claims injection anyway. That also
+# makes the block behave identically in all three verify modes.
+#
+# Nothing is `active` in this database (the real catalog is loaded but still
+# draft), so asserting "sales sees no cost" against an empty result set would
+# prove nothing. The block therefore activates ONE fictitious product inside
+# the transaction it rolls back — never a real one, and never committed.
+# ---------------------------------------------------------------------------
+_ACTIVATABLE = (
+    "p.id not like 'T-1%' and p.hs_code is not null and p.gross_weight_kg is not null "
+    "and p.unit is not null and ("
+    "(p.primary_branch='SA' and p.sap_code_sa is not null) or "
+    "(p.primary_branch='TBM' and p.sap_code_cn is not null) or "
+    "(p.primary_branch='CORP' and p.sap_code_us is not null) or "
+    "(p.primary_branch='LTD' and p.sap_code_uk is not null))"
+)
+
+
+def _sell_side_block(label, role, claims_uuid, reachable_branches_sql):
+    """One sell-side role (sales or agent): sees an active product, sees no
+    cost on it, and sees nothing that is not active."""
+    rows = psql_rows(
+        "begin;\n"
+        "update tmsi.products set status='active' where id in ("
+        f"  select p.id from tmsi.products p where {_ACTIVATABLE}"
+        f"  and p.sold_in && ({reachable_branches_sql}) limit 1);\n"
+        "do $$ begin perform set_config('request.jwt.claims', "
+        f"'{{\"sub\":\"{claims_uuid}\",\"role\":\"authenticated\"}}', false); end $$;\n"
+        "set role authenticated;\n"
+        "select count(*), count(exw_price), count(*) filter (where status <> 'active') "
+        "from tmsi.v_products;\n"
+        "reset role;\n"
+        "rollback;"
+    )
+    visible, with_cost, non_active = (int(x) for x in rows[0])
+    check(
+        f"CC: {role} sees the activated article but no cost column on it",
+        visible >= 1 and with_cost == 0,
+        f"{label} visible={visible} com_custo={with_cost}",
+    )
+    check(
+        f"CC: {role} sees nothing that is not active",
+        non_active == 0,
+        f"{label} nao_active={non_active}",
+    )
+
+
+def block_sell_side_roles(sales_uuid, agent_uuid, logistics_uuid, logistics_email):
+    _sell_side_block(
+        "sales", "sales", sales_uuid,
+        "select coalesce(array_agg(branch_id), '{}') from tmsi.user_roles where role='sales'",
+    )
+    _sell_side_block(
+        "agent", "agent", agent_uuid,
+        "select coalesce(array_agg(c.branch_id), '{}') from tmsi.channels c "
+        "join tmsi.user_roles ur on ur.channel_id = c.id where ur.role='agent'",
+    )
+
+    # viewer: no account exists, so the role is granted inside the rolled-back
+    # transaction, to an account that has no cost access of its own. Measuring
+    # the same query before and after the grant is what makes this a proof
+    # about `viewer` and not about whoever it was granted to.
+    rows = psql_rows(
+        "begin;\n"
+        "do $$ begin perform set_config('request.jwt.claims', "
+        f"'{{\"sub\":\"{logistics_uuid}\",\"role\":\"authenticated\"}}', false); end $$;\n"
+        "set role authenticated;\n"
+        "select 'antes', count(exw_price) from tmsi.v_products;\n"
+        "reset role;\n"
+        "insert into tmsi.user_roles (user_id, role) select user_id, 'viewer' "
+        f"from tmsi.profiles where email = '{logistics_email}';\n"
+        "set role authenticated;\n"
+        "select 'depois', count(exw_price) from tmsi.v_products;\n"
+        "do $$ begin\n"
+        "  insert into tmsi.price_proposals (target_table, branch_id, payload, reason, proposed_by)\n"
+        "  values ('exchange_rates', null, '{}'::jsonb, 'smoke viewer write attempt', auth.uid());\n"
+        "  perform set_config('smoke.viewer_write', 'allowed', true);\n"
+        "exception\n"
+        "  when insufficient_privilege then perform set_config('smoke.viewer_write', 'refused', true);\n"
+        "  when others then perform set_config('smoke.viewer_write', 'erro:'||SQLSTATE, true);\n"
+        "end $$;\n"
+        "select 'escrita', current_setting('smoke.viewer_write', true);\n"
+        "reset role;\n"
+        "rollback;"
+    )
+    measured = {r[0]: r[1] for r in rows}
+    check(
+        "CC: without viewer, that account reads no cost at all (baseline)",
+        int(measured["antes"]) == 0,
+        f"com_custo={measured['antes']}",
+    )
+    check(
+        "CC: granting viewer alone turns cost reads on",
+        int(measured["depois"]) > 0,
+        f"com_custo={measured['depois']}",
+    )
+    check(
+        "CC: viewer reads costs but cannot propose (RLS refuses, not a constraint)",
+        measured["escrita"] == "refused",
+        f"resultado={measured['escrita']}",
+    )
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -1288,6 +1487,27 @@ def main():
     block_branches_admin_only(tokens["finance"])
     block_batch_decision(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
     block_bulk_import(tokens["logistics"], tokens["product_manager"])
+    block_audit_content_boundary(tokens["finance"], claims["finance"])
+
+    # item 56: the three roles with no session of their own. Looked up by the
+    # role they hold rather than by a hardcoded address — an account renamed
+    # or recreated must not make this silently skip. sales/agent have accounts
+    # but no password file (so: claims injection, never a token); viewer has
+    # no account at all and is granted inside the rolled-back transaction.
+    sell_side = {}
+    for role in ("sales", "agent"):
+        found = psql_rows(
+            "select p.user_id from tmsi.profiles p join tmsi.user_roles r on r.user_id = p.user_id "
+            f"where r.role = '{role}' limit 1;"
+        )
+        sell_side[role] = found[0][0] if found else None
+    if sell_side["sales"] and sell_side["agent"]:
+        block_sell_side_roles(
+            sell_side["sales"], sell_side["agent"],
+            claims["logistics"], TEST_USERS["logistics"][0],
+        )
+    else:
+        check("CC: sell-side roles", True, "SKIP — no sales/agent account found in tmsi.user_roles")
 
     delete_smoke_fixture_product()
 
