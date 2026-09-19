@@ -186,6 +186,12 @@ que verão dados reais primeiro quando os artigos do item 51 forem activados, a 
 existir **antes** dessa activação. Também sem asserções: 0005 (substituída pelo bloco R, não
 reforçada), 0006 e 0008.
 
+~~**57. Três contas reais sem papel atribuído**~~ ✅ **fechado 2026-09-19 por decisão do Pedro:
+nenhuma conta é removida nem desactivada.** Todas as contas existentes — as seis `.test`, a de
+admin e estas três sem papel — são de teste e ficam como estão **até à fase de produção**, altura
+em que a limpeza se faz de uma vez. Sem papel não vêem nada (verificado: toda a leitura passa por
+`has_role()`), logo não há urgência. Texto original do achado, para contexto:
+
 **57. Três contas reais sem papel atribuído** — **REGISTADO 2026-09-19**, achado da auditoria
 (C4). Além da conta `admin` do Pedro, existem em `tmsi.profiles` **três contas reais sem
 nenhuma linha em `tmsi.user_roles`**: um endereço pessoal alternativo, um endereço corporativo
@@ -196,6 +202,22 @@ verificado que a fronteira não depende da ausência de papel, mas da sua presen
 por fazer, e tocam o item 45 (não há mecanismo de apagamento/anonimização): decidir, para cada
 uma, se leva papel, se é desactivada, ou se fica como está e porquê. Não foram tocadas nesta
 sessão.
+
+~~**58. Completar `sap_code_cn` dos artigos de origem TBM**~~ ✅ **fechado 2026-09-19 —
+37 escritos, 2 excepções nomeadas.** Autorizado pelo Pedro nessa noite; regra de 09/09
+(`docs/MODEL-GAP-ANALYSIS.md:27`): TBM = `S` + `sap_code_sa`. Recalculado na hora, não reutilizado
+da sessão anterior: 39 de origem TBM, **37 com `sap_code_sa`**, 37 derivados **distintos**, zero
+colisões entre si e zero contra qualquer `sap_code_*` já existente. Escrita directa numa **única
+transacção**, assinada pela identidade `admin` (zero entradas de auditoria com autoria nula), com
+**desfazer provado antes** num artigo fictício que já tinha valor (`T-0001`: valor → ensaio →
+valor original restaurado). Efeitos secundários medidos e **ausentes**: os 37 continuam `draft`;
+`price_versions` 67→67; **impressão digital dos preços idêntica antes e depois**
+(`md5` de todas as linhas de `v_branch_prices`), logo zero preços mudaram. **Excepções:**
+`T-1002` e `T-1020`, sem `sap_code_sa` de origem — nada a derivar. **Nota:** `T-1012` tinha
+`sap_code_cn` preenchido com `Ytghuu`, escrito às 22:29 desse mesmo dia por conta conhecida — o
+`audit_log` mostra-o; é resíduo do teste no browser, não um código SAP, e foi substituído pelo
+derivado. O desfazer repõe o valor exacto anterior de cada um dos 37, `Ytghuu` incluído.
+**Valores derivados, sujeitos a revisão humana na fase de produção**, por decisão do Pedro.
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,

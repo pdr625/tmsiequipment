@@ -198,6 +198,52 @@ limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
 
+## Item 58 — `sap_code_cn` dos 37 artigos de origem TBM (2026-09-19, noite)
+
+**Autorização:** do Pedro, nessa noite, com a ressalva de que **todos os dados serão revistos por
+um humano na fase de produção, antes da difusão** — por isso não se exigiu conferência prévia
+contra o SAP da TBM. **Regra aplicada:** a de 09/09, já registada em `docs/MODEL-GAP-ANALYSIS.md:27`
+— TBM = `S` + `sap_code_sa` (LTD = `sap_code_sa` tal e qual; CORP = `NC` próprio).
+
+**Mecanismo escolhido: escrita directa numa única transacção**, não extensão do importador. O
+importador daria lote, pré-visualização e desfazer nativos, mas custava código de app e um deploy,
+e obrigava a mudar o contrato de `docs/IMPORT.md` por causa de um preenchimento único. A escrita
+directa cumpre os quatro requisitos pedidos sem nada disso: uma transacção, rasto no `audit_log`,
+desfazer provado, autoria real.
+
+**Recalculado na hora** (não reutilizado da sessão anterior): 39 de origem TBM · **37** com
+`sap_code_sa` · 37 derivados **distintos** · **zero** colisões entre si e zero contra qualquer
+`sap_code_sa/cn/us/uk` já em uso.
+
+**Desfazer provado antes de escrever**, e no caso difícil: `T-0001` (fictício, origem TBM, **já
+com valor**) → valor de ensaio → **valor original restaurado exactamente**. O ficheiro de desfazer
+repõe, artigo a artigo, o valor anterior exacto — `NULL` em 36 casos e `Ytghuu` no 37.º.
+
+**Efeitos secundários: medidos e ausentes.**
+
+| | Antes | Depois |
+|---|---|---|
+| Com `sap_code_cn` (dos 39) | 1 | **37** |
+| `status` dos 37 | `draft` | `draft` |
+| `price_versions` | 67 | **67** |
+| Impressão digital dos preços (`md5` de `v_branch_prices`) | `dd46265…` | **`dd46265…`** |
+| Entradas de auditoria desta escrita | — | 37, **zero com autoria nula** |
+
+A impressão digital idêntica é a prova de que **nenhum preço mudou** — comparada sem expor um
+único valor.
+
+**Uma nota que não é detalhe:** o `T-1012` já tinha `sap_code_cn = Ytghuu`, escrito às **22:29
+desse mesmo dia** por conta conhecida (o `audit_log` regista-o). Não é um código SAP — é resíduo
+do teste no browser de há minutos. Foi substituído pelo derivado, e o desfazer repõe-no tal e
+qual, caso o Pedro discorde. **Decisão registada, não assumida em silêncio.**
+
+**Excepções, por desenho:** `T-1002` e `T-1020` ficam sem `sap_code_cn` — não têm `sap_code_sa`
+de onde derivar. **Efeito na activação:** a guarda deixa de reclamar o código SAP da filial de
+origem para os 37; continua a reclamar `unit`, que é o bloqueio que resta e é do Pedro preencher.
+
+Lista dos 37 códigos: **fora do repo**, em `~/tmp/tmsi-sap/` (`700`, ficheiros `600`), com o
+script de aplicação e o de desfazer ao lado.
+
 ## Item 51 — carga do catálogo real (2026-09-16, registado 2026-09-19)
 
 Registo reconstruído **de produção**, não de memória: `tmsi.import_batches`, `tmsi.audit_log` do
