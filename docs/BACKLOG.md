@@ -175,6 +175,17 @@ a 19/09 03:02) — mas isso é inferência de uma sessão, não um sinal contín
 nada nesta infra dá por isso. Uma métrica de "idade da última cópia off-site" fecharia a
 lacuna; o trabalho é do lado do homelab, não deste repo.
 
+**56. Cobertura de prova em falta: 0014 sem smoke, e 4 dos 8 papéis sem sessão automatizada** —
+**REGISTADO 2026-09-19**, achado da auditoria (§5.2 do `docs/STATUS-REPORT-2026-09.md`). A 0014
+não tem **nenhuma** asserção no `scripts/smoke.py` — e a sua primeira versão foi um `REVOKE` ao
+nível da coluna que aplicou sem erro e **não fez nada**, exactamente o tipo de regressão que só
+um teste apanha. O `TEST_USERS` do smoke tem 4 papéis (`finance`, `product_manager`,
+`logistics`, `branch_manager`); a matriz do protocolo tem 8 — `sales`, `agent`, `viewer` e
+`admin` nunca são exercidos automaticamente. Como `sales` e `agent` são precisamente os papéis
+que verão dados reais primeiro quando os artigos do item 51 forem activados, a prova tem de
+existir **antes** dessa activação. Também sem asserções: 0005 (substituída pelo bloco R, não
+reforçada), 0006 e 0008.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de
@@ -223,6 +234,16 @@ esquecimento — a correcção do ângulo de privacidade fica registada aqui, pe
 nível dos itens 45/46/49, não implementada por decisão explícita de não alargar o âmbito
 desta sessão de investigação além do que a urgência — agora afastada — justificava).
 
+**Correcção de estado (2026-09-19, achado da auditoria ⚠️2):** o parágrafo acima descreve a
+decisão tomada *no momento da investigação* e ficou desactualizado no mesmo dia — **a correcção
+acabou por ser implementada, ainda a 2026-09-16, pela migração 0014**
+(`0014_audit_log_content_boundary.sql:50-62`): `revoke select` ao nível da tabela em
+`tmsi.audit_log`, re-`grant` das 6 colunas seguras, e vista `tmsi.v_audit_log` a mascarar
+`old_row`/`new_row` das linhas de `profiles` para quem não é `admin`. Aplicada em produção
+(sondagem positiva a 19/09) e documentada no protocolo (`docs/VERIFICATION-PROTOCOL.md:1252`).
+**Item 47 dá-se por fechado** pelo ângulo de privacidade. Falta-lhe prova automatizada: a 0014
+não tem nenhuma asserção no smoke — ver o bloco novo do item 56.
+
 ~~**48. Dumps nocturnos mundialmente legíveis no host (`644`, não `600`)**~~ ✅ **fechado
 2026-09-16.** `~/backups/tmsi/` passou a `700` e os dumps existentes a `600` (directamente,
 sem sudo — ficheiros do próprio `pedro`). O produtor (`tmsi-backup.service`, `/etc/systemd/
@@ -253,7 +274,11 @@ produtos do seed real (`T-0001`–`T-0010`) **e** três produtos residuais de um
 verificação anterior (`T-8515`, `T-9002`, `T-9004` — mantidos deliberadamente nessa altura
 como exemplos vivos, nunca fechados depois), nenhum destes derivável de `import_batches` (a
 0013 só tem um lote, e esse lote não escreveu produto nenhum — todo o `tmsi.products` de hoje
-é fictício, zero linhas reais). Achado extra: 3 `price_overrides` residuais de sessões
+é fictício, zero linhas reais). **[Verdadeiro em 2026-09-16, falso a partir do mesmo dia: a
+carga do item 51 entrou nessa noite. Desde então `tmsi.products` tem 62 linhas, 49 delas
+catálogo real `T-1001`–`T-1052`. A separação seed/real mantém-se — os 13 fictícios continuam
+`inactive`/`discontinued` e a gama de identificadores não colide. Nota da auditoria de
+2026-09-19, ⚠️7.]** Achado extra: 3 `price_overrides` residuais de sessões
 manuais antigas (`reason`: "tst"/"41"/"25", nada a ver com o seed) — expirados como as
 demais, não escondidos.
 **Feito:** (a) as contas `.test` **mantêm-se intocadas**, exactamente como o Pedro decidiu —

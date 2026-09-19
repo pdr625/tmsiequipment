@@ -138,8 +138,16 @@ depth every time the cadence changes; a copy count doesn't.
   immediately (weekly → next Monday 03:30; window → tomorrow 03:30).
 - **Exit condition, written down so this doesn't stay in window mode by inertia:** switch
   back to `tmsi-backup-weekly.timer` once the real catalog (item 39's importer) has been
-  loaded **and verified** — not merely loaded. Until then, stay in window mode. State as of
-  2026-09-16: **window mode, real catalog not yet loaded.**
+  loaded **and verified** — not merely loaded. Until then, stay in window mode.
+  **State as of 2026-09-19 (updated; the 2026-09-16 line below was stale within hours):** window
+  mode, **real catalog loaded** — 49 articles `T-1001`–`T-1052`, 485 overrides, batch
+  `ee1db00c-…` on 16/09 19:53 (`docs/BACKLOG.md` item 51) — and **parity-verified** against the
+  source spreadsheet on 19/09: all 245 lines compared, zero unexplained (`docs/ENGINE-PARITY.md`
+  §9). The remaining half of "verified" is **operational, not arithmetic**: every one of the 49
+  is still `status='draft'`, so no sales-facing role can see a price yet. Deciding when this
+  flips back to weekly is the Pedro's call and the gesture is the one documented above — this
+  file just stops claiming the catalog isn't loaded.
+  ~~State as of 2026-09-16: window mode, real catalog not yet loaded.~~
 - **Filenames are date-first, tag-last on purpose** (`tmsi-<date>-weekly.dump` /
   `tmsi-<date>-window.dump`, never `tmsi-weekly-<date>.dump`) — a plain alphabetical sort of
   `~/backups/tmsi/*.dump` still sorts chronologically regardless of which mode produced which

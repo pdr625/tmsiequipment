@@ -373,10 +373,20 @@ Três frentes do lado do VPS (prompt E5-VPS), detalhe: `STATE.md`.
    taxa de câmbio mais recente **dispensada** — exigiria o `vps-stats.service` (hoje sem
    dependência de Postgres) ligar-se à BD, não "barato"; fica para quando fizer falta a sério.
 
-### E5-HOMELAB — por iniciar (depende da F3 da E5-VPS, já fechada)
-Off-site do backup (o dump só existe no VPS) · tile no dashboard do homelab a consumir as
-chaves `tmsi_*` novas do `status.json` · métrica T8.
+### E5-HOMELAB — 🟠 parcial (depende da F3 da E5-VPS, já fechada)
+Off-site do backup · tile no dashboard do homelab a consumir as chaves `tmsi_*` novas do
+`status.json` · métrica T8.
 Pode correr em paralelo com a E3; não bloqueia nem é bloqueada por ela.
+
+**Correcção de estado (2026-09-19, auditoria A1):** a linha "o dump só existe no VPS" já não
+descreve a realidade — **o off-site está a correr.** O pull nocturno do homelab apanha os
+ficheiros `-window` e já levou dumps que contêm a carga real do item 51: `atime` do dump de
+16/09 lido a 17/09 03:08, o de 17/09 a 18/09 03:05, o de 18/09 a 19/09 03:02 (sistema em
+`relatime`; o `wtmp` só regista sessões interactivas, logo estas leituras não são de pessoa).
+O trabalho off-site vive no projecto do homelab, não neste repo — este ROADMAP é que nunca foi
+actualizado. **Fica por fechar:** a confirmação do lado do destino (que daqui não se vê) e a
+métrica de idade da cópia off-site, hoje inexistente — o `status.json` só publica
+`tmsi_backup_age_h`, que é a idade do dump **no VPS**. Ver `docs/BACKLOG.md` item 55.
 
 ✅ **Lockfile/pinagem definitiva das imagens da app — resolvida na tarefa 3 (2026-09-05,
 sessão VPS), não precisou de esperar pela E5-HOMELAB:** `generate-lockfile.yml` gera e
