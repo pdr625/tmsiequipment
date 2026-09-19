@@ -14,18 +14,34 @@ procedimento pronto a seguir **nesse dia**, e o registo de porque é seguro faz�
 | `pm.test@example.test` | `product_manager` | — | `scripts/smoke.py` (login) |
 | `logistics.test@example.test` | `logistics` | — | `scripts/smoke.py` (login) |
 | `branch_manager.test@example.test` | `branch_manager` | `CORP` | `scripts/smoke.py` (login) |
-| `sales.sa@example.test` | `sales` | `SA` | `docs/VERIFICATION-PROTOCOL.md` (manual/API) |
-| `agent.apac@example.test` | `agent` | canal `APAC` | `docs/VERIFICATION-PROTOCOL.md` (manual/API) |
+| `sales.sa@example.test` | `sales` | `SA` | protocolo (manual/API) **e `smoke.py` bloco CC** desde 2026-09-19 |
+| `agent.apac@example.test` | `agent` | canal `APAC` | protocolo (manual/API) **e `smoke.py` bloco CC** desde 2026-09-19 |
+
+**`sales` e `agent` não têm ficheiro de password** — e continuam a não precisar de um. O bloco CC
+do smoke exercita-os por injecção de claims no `psql` (o método que o `CLAUDE.md` do VPS prescreve
+para provas de RLS/dados), não por login, o que também faz o bloco comportar-se igual nos três
+modos de verificação.
+
+**`viewer` e `admin` não têm conta nenhuma, e não é preciso criarem-se.** Os dois papéis são
+exercidos por uma concessão **dentro de uma transacção que é revertida** — `viewer` no bloco CC
+(concedido a uma conta sem acesso a custos, para medir a diferença antes/depois) e `admin` no
+bloco BB (para provar que o conteúdo de auditoria que fica mascarado a um não-admin aparece a um
+admin). Nada é comitado; o resíduo é verificado no fim de cada execução. Criar uma conta `admin`
+com login em produção seria um risco desnecessário para o que estas duas asserções provam.
 
 Todas fictícias (`@example.test`, um domínio reservado pela IANA para isto, nunca resolve).
 Nenhuma corresponde a uma pessoa real. Existem para provar a matriz de 8 papéis do
 `VERIFICATION-PROTOCOL.md` e para o smoke suite exercitar RLS/regras de negócio como cada
 papel realmente as vê — não para uso operacional.
 
-Três contas reais também existem no sistema (`pedroalexandre625@gmail.com` — admin — e duas
-outras, `pedro_alexandre625@hotmail.com`/`pedro.dacosta@condat.fr`, sem papel atribuído). Este
+**Quatro** contas reais também existem no sistema (medido 2026-09-19, corrigindo o "três" que
+aqui estava): a do Pedro, única com papel `admin`, e **três sem papel nenhum** — um endereço
+pessoal alternativo, um endereço corporativo `condat.fr`, e um alias `+verifiteste` do endereço
+principal, este último visivelmente criado para testar o fluxo de verificação por email. Este
 documento não as cobre — não são `.test`, não são fictícias, ficam de fora de qualquer
-desactivação por definição.
+desactivação por definição. **Sem papel, nenhuma delas vê seja o que for** (toda a leitura de
+produtos e preços passa por `has_role()`), por isso não são uma fuga; são higiene por fazer —
+`docs/BACKLOG.md` item 57.
 
 ## O que se perde ao desactivar — antes e depois do item 40
 

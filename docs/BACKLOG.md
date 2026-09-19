@@ -186,6 +186,17 @@ que verão dados reais primeiro quando os artigos do item 51 forem activados, a 
 existir **antes** dessa activação. Também sem asserções: 0005 (substituída pelo bloco R, não
 reforçada), 0006 e 0008.
 
+**57. Três contas reais sem papel atribuído** — **REGISTADO 2026-09-19**, achado da auditoria
+(C4). Além da conta `admin` do Pedro, existem em `tmsi.profiles` **três contas reais sem
+nenhuma linha em `tmsi.user_roles`**: um endereço pessoal alternativo, um endereço corporativo
+`condat.fr` e um alias `+verifiteste` do endereço principal (este criado, pelo aspecto, para
+testar o fluxo de verificação por email). Todas `active`. **Não são uma fuga** — sem papel,
+`has_role()` devolve falso em tudo e nenhuma delas vê produtos, preços ou auditoria; foi
+verificado que a fronteira não depende da ausência de papel, mas da sua presença. São higiene
+por fazer, e tocam o item 45 (não há mecanismo de apagamento/anonimização): decidir, para cada
+uma, se leva papel, se é desactivada, ou se fica como está e porquê. Não foram tocadas nesta
+sessão.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de
