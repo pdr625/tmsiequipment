@@ -113,6 +113,68 @@ ou um papel novo ("gestor de configuração", mais estreito que admin) ou uma re
 elegibilidade nova para `branch_manager` em propostas sem filial própria — nenhuma das duas
 desenhada aqui. Decisão do Pedro, sem prazo.
 
+~~**51. Carga do catálogo real**~~ 🟠 **carregado 2026-09-16, por activar — registado
+2026-09-19.** **49 dos 52 artigos** entraram por um único lote do importador do item 39
+(`tmsi.import_batches` `ee1db00c-1d14-4e32-8813-83b6acd19dca`, 245 linhas, 16/09 19:53):
+**49 produtos `T-1001`–`T-1052` + 485 `price_overrides`**, 534 itens escritos, zero rejeições.
+Antes dele, um lote de complemento de direitos (`d1baa128-…`, 4 códigos HS × 4 zonas = 20
+itens) e, fora do importador, **11 categorias reais** inseridas directo (mesma excepção
+nomeada que o item 38 usou para configuração: tabela de referência, sem preço, fora do
+workflow da 0007). Contagens em produção depois da carga: `products` 13→62, `price_overrides`
+6→491, `hs_codes` 17→21, `customs_rates` 68→84, `categories` 6→17, `import_batches` 1→3.
+**Esquema de identificadores:** `T-1NNN` com `NNN` = `ref` do Excel — determinístico e
+reversível, sem colisão com os legados (`T-0001`–`T-0010`, `T-8515`, `T-9002`, `T-9004`).
+**Três artigos diferidos** (refs 47/48/49, `item_type='option'`): `primary_subsidiary` vazio
+na origem **e** duas barreiras independentes do importador — a validação recusa `exw_price < 0`
+para **todos** os tipos (mais estrita do que a constraint da BD, que isenta `option`), e o
+`INSERT` não escreve `parent_id`, que `products_check` exige para `option`. Quem lá mexer tem
+de tratar as duas, não uma. **Estado hoje: os 49 estão em `draft`** — a activação exige `unit`
+(ausente no ficheiro e no importador, bloqueia os 49) e o código SAP da filial de origem
+(`sap_code_cn` para os 39 de origem TBM; ver item 52). Paridade completa do catálogo contra o
+Excel: `docs/ENGINE-PARITY.md` §9. Detalhe da execução: `docs/STATE.md`.
+
+**52. `sap_code_cn` dos artigos de origem TBM — derivável, com 2 excepções** — **REGISTADO
+2026-09-19.** A regra de negócio já está escrita (`docs/MODEL-GAP-ANALYSIS.md:27`, item 10):
+TBM = `sap_code_sa` com prefixo `S`, LTD = `sap_code_sa` tal e qual, CORP = `NC` próprio; o
+schema guarda os quatro valores e **não deriva nenhum**. Medido a 19/09 sobre os 39 artigos de
+origem TBM: **37 têm `sap_code_sa`**, a derivação daria **37 valores distintos** e **zero
+colisões** contra `sap_code_cn` existentes. As duas excepções são **T-1002** e **T-1020**,
+ambos sem `sap_code_sa` de origem. O ficheiro da carga **não traz coluna de código CN** (só
+`sap_code_sa` e `sap_code_us`), por isso não confirma nem contradiz a regra — apenas não a
+alimenta. Decisão do Pedro: derivar os 37 e tratar os 2 à mão, ou esperar pelos códigos reais.
+
+**53. `sap_code_us` duplicado no ficheiro-fonte — dado errado ou constraint errada?** —
+**REGISTADO 2026-09-19.** `NC01728-998` aparece em três artigos do ficheiro da carga:
+**T-1021** (FOAM GUN, `equipment`, cat. `2-FOAM GENERATOR`, origem SA), **T-1023** (M4N FOAM
+GENERATOR, `equipment`, mesma categoria e origem) e **T-1042** (EASY BRUSH FILLER ASSEMBLY,
+`equipment`, cat. `4-EASY BRUSH FILLER`, origem TBM). Os três são `equipment`, nenhum é opção
+nem acessório de outro, e o terceiro difere em categoria **e** em filial de origem — não é o
+padrão de "um código de kit para uma família". Facto adicional, sem interpretação: o T-1002
+leva `NC01726-998`, número adjacente. **Nada disto chegou à base** — o importador da 0013
+nunca escreve `sap_code_us`, logo `products_sap_code_us_key` ainda não foi exercida por estes
+dados; será, na segunda importação. Duas leituras possíveis e opostas (o dado está errado, ou
+a CORP usa mesmo um código para três artigos e a constraint é que está errada) — decisão do
+Pedro, não desenhada aqui.
+
+**54. `limit_req_zone` do rate limit vive fora do repo** — **REGISTADO 2026-09-19**, lacuna do
+kit de desastre achada ao verificar o ⚠️ do relatório de auditoria. O vhost versionado traz
+`limit_req zone=tmsi_auth burst=5 nodelay` (`deploy/nginx/tmsiequipment.conf:34`,
+`location = /auth/v1/token`), mas a zona correspondente — `limit_req_zone $binary_remote_addr
+zone=tmsi_auth:10m rate=10r/m` — só existe em `/etc/nginx/conf.d/tmsi-rate-limits.conf`, **no
+host, fora do repo**. Um restauro que reponha só o que está versionado dá um vhost a
+referenciar uma zona inexistente, e o nginx **recusa arrancar** (`unknown limit_req zone`). O
+limite funciona hoje (provado ao vivo a 19/09: seis pedidos passam, do 7.º ao 9.º `503`, o
+10.º volta a passar — `rate=10r/m burst=5`). Falta versionar o ficheiro da zona, ou registá-lo
+explicitamente no `deploy/DEPLOY.md` como passo manual de restauro.
+
+**55. A perna off-site é invisível à monitorização** — **REGISTADO 2026-09-19.** O
+`status.json` publica `tmsi_backup_age_h` (idade do dump **no VPS**) e nada sobre o off-site.
+A 19/09 confirmou-se, pelo padrão de `atime` dos dumps, que o pull nocturno do homelab corre e
+apanha os ficheiros `-window` (16/09 lido a 17/09 03:08, 17/09 lido a 18/09 03:05, 18/09 lido
+a 19/09 03:02) — mas isso é inferência de uma sessão, não um sinal contínuo. Se o pull parar,
+nada nesta infra dá por isso. Uma métrica de "idade da última cópia off-site" fecharia a
+lacuna; o trabalho é do lado do homelab, não deste repo.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de

@@ -3,7 +3,26 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 44 — decisão em lote de propostas — ✅ FECHADA 2026-09-16 — migração
+**Etapa actual: item 51 — carga do catálogo real — 🟠 CARREGADO 2026-09-16, POR ACTIVAR —
+registado 2026-09-19.** 49 dos 52 artigos entraram num único lote do importador do item 39
+(`import_batches ee1db00c-…`, 245 linhas, 16/09 19:53): **49 produtos `T-1001`–`T-1052` + 485
+`price_overrides`**, 534 itens, zero rejeições, tudo-ou-nada respeitado. Antes dele, 4 códigos
+HS de complemento (lote `d1baa128-…`, 20 itens) e 11 categorias reais inseridas directo (mesma
+excepção nomeada do item 38 para tabelas de referência). Contagens: `products` 13→62,
+`price_overrides` 6→491, `hs_codes` 17→21, `customs_rates` 68→84, `categories` 6→17. **Os 49
+estão em `draft`** — a activação exige `unit` (ausente no ficheiro e no importador) e o código
+SAP da filial de origem; até lá `sales` e `agent` não vêem nada, por desenho. Três artigos
+diferidos (refs 47/48/49, `option`) por duas barreiras independentes: a validação do importador
+recusa `exw_price < 0` para todos os tipos, mais estrita do que a constraint da BD que isenta
+`option`; e o `INSERT` não escreve `parent_id`, que `products_check` exige. **Paridade completa
+das 245 linhas contra o Excel: zero linhas por explicar** — e um achado de classe (ii), o
+primeiro com dinheiro em cima: o Excel declara o fee interco e não o aplica em 7 artigos de
+origem EUR, pelo que 21 linhas de preço estavam ~20 % abaixo do que a regra manda. **A app
+publica-as certas; o valor defeituoso não foi materializado em lado nenhum** (verificado:
+`interco_margin=0,2` nos 7, zero overrides de `kind='fee'` no catálogo). Detalhe completo:
+`docs/ENGINE-PARITY.md` §9 e a secção "Item 51 — carga do catálogo real" abaixo.
+
+**Etapa anterior: item 44 — decisão em lote de propostas — ✅ FECHADA 2026-09-16 — migração
 0015.** Mecânica apenas (§1 do prompt): a mesma elegibilidade da 0007 (admin, ou
 `branch_manager` da filial afectada), nunca alargada. `tmsi.decide_price_proposal_batch()`
 classifica cada proposta pedida em elegível/excluída (motivo visível, nunca falha o resto do
@@ -178,6 +197,90 @@ já explica a maior parte da pressão de memória medida no diagnóstico anterio
 limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair, e ler o
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
+
+## Item 51 — carga do catálogo real (2026-09-16, registado 2026-09-19)
+
+Registo reconstruído **de produção**, não de memória: `tmsi.import_batches`, `tmsi.audit_log` do
+período e as contagens medidas a 19/09. O que aqui está bate com o que a base diz hoje.
+
+### Os três lotes
+
+| Lote | Tipo | Ficheiro | Quando | Linhas | Escreveu |
+|---|---|---|---|---|---|
+| `c04a21e6-…` | `hs_duty` | `hs-duty-real.csv` | 15/09 21:27 | 12 | Item 39 F4 — já registado nesse item |
+| `d1baa128-…` | `hs_duty` | `tmsi-hs-complemento-2026-09-16.csv` | 16/09 19:34 | 4 | 4 `hs_codes` + 16 `customs_rates` (4 zonas cada) |
+| `ee1db00c-…` | `products` | `tmsi-catalogo-completo-2026-09-16-v5.csv` | 16/09 19:53 | 245 | **49 produtos + 485 overrides = 534 itens** |
+
+As **11 categorias reais** não passaram pelo importador (não tem caminho para categorias): foram
+inseridas directo, pela mesma excepção nomeada que o item 38 usou para configuração — tabela de
+referência, sem preço, fora do workflow da 0007. Ids deliberadamente distintos dos 6 de seed
+(`PUMP` e não `PUMPS`, `FOAMGEN` e não `FOAM_GEN`) para a fronteira seed/real não se apagar.
+
+### Contagens, antes → depois (medidas)
+
+`products` 13→62 · `price_overrides` 6→491 · `hs_codes` 17→21 · `customs_rates` 68→84 ·
+`categories` 6→17 · `import_batches` 1→3. Os 13 produtos antigos ficaram como estavam (12
+`inactive`, 1 `discontinued`) — a separação seed/real do item 40 manteve-se, e o esquema de
+identificadores garante-a: `T-1NNN` com `NNN` = `ref` do Excel, sem colisão com `T-0001`–`T-0010`,
+`T-8515`, `T-9002`, `T-9004`.
+
+### Cinco paragens antes de gravar, todas por defeito real do ficheiro
+
+A carga não correu à primeira. Cinco versões do ficheiro, cada uma depois de uma paragem com achado:
+
+1. **v1→v2:** `;` dentro do campo `notas`, correctamente citado — mas um parser ingénuo desalinha.
+   Ficheiro refeito sem aspas e sem separadores internos. (Foi neste diagnóstico que ocorreu o
+   incidente registado na secção seguinte.)
+2. **v2→v3:** `item_type` trazia o valor inventado `option_or_service`, que o
+   `run_import_products()` rejeita — os válidos são `equipment|spare_part|option|service`.
+3. **v3→v4:** o ficheiro **não tinha `product_id`** — usava o `ref` do Excel, que o próprio
+   `docs/IMPORT.md` diz ser só um índice de comparação. Todas as 245 linhas rejeitadas com
+   `{column: product_id, reason: em falta}`. Daí o esquema `T-1NNN`.
+4. **v4→v5:** `products_sap_code_sa_key` (UNIQUE) rejeitou o lote a meio — `C08889-998` repetido
+   em três escovas. Resolvido **no dado, não na constraint**: sufixos de gama `-L`/`-M`/`-S`.
+   Confirmado que nada ficou escrito: contagens intactas, zero `T-1xxx`, sem lote órfão.
+5. Antes de tudo: **4 códigos HS** do catálogo não existiam em `tmsi.hs_codes` e **10 rótulos de
+   categoria** do Excel não correspondiam a nenhuma das 6 de seed — daí o lote de complemento e as
+   11 categorias novas.
+
+**Nenhuma destas paragens foi contornada com um valor inventado.** Em todas, o ficheiro foi
+corrigido do lado do Pedro e a carga repetida.
+
+### Pré-condições e prova de restauro
+
+Backup próprio tirado antes (`tmsi-pre-catalog-20260916-194153.dump`) e **verificado por restauro
+real** para uma base descartável com o procedimento documentado (`pg_restore -U supabase_admin
+--clean --if-exists`): zero erros, contagens iguais à origem, propriedade confirmada (`auth.*` do
+`supabase_auth_admin`, `tmsi.*` do `postgres`). A base descartável foi largada a seguir.
+
+### Ficheiros-fonte — onde estão, e porque não estão aqui
+
+`~/tmp/tmsi-carga/`, `700`, ficheiros a `600`. **Não entram no git** (contêm preços e custos reais;
+`.gitignore` bloqueia `.csv`). Registados por metadados:
+
+| Ficheiro | Data | Bytes | `sha256` |
+|---|---|---|---|
+| `tmsi-catalogo-completo-2026-09-16-v5.csv` | 16/09 20:48 | 67322 | `1c3f32fd3ffcadf586f16489e39b303ab09fc2078091fc8b851aba4a18d054be` |
+| `tmsi-categorias-2026-09-16.csv` | 16/09 20:30 | 508 | `c7df9fc618bbcb467d7603fcce1561cf33aaccc6f5ac911747654d7646835b92` |
+| `tmsi-hs-complemento-2026-09-16.csv` | 16/09 20:30 | 390 | `1cdfa501e610746de70449ad104c09ddd48764fc22c848468dd10c95c27ef7fc` |
+
+As versões v2–v4 continuam no mesmo directório; a v1 foi `shred`'d quando a v2 a substituiu.
+
+### O que ficou por fazer, e é o que bloqueia a activação
+
+- **`unit`**: nem o ficheiro nem o importador a escrevem; `check_activation_requirements()` exige-a.
+  Bloqueia os 49.
+- **Código SAP da filial de origem**: `sap_code_cn` para os 39 de origem TBM — item 52 mede que 37
+  se derivam da regra já escrita e 2 são excepção.
+- **`T-1020` sem `hs_code`** → 3 âmbitos em `error`.
+- **Três artigos diferidos** (refs 47/48/49) e o `sap_code_us` duplicado do ficheiro — itens 51 e 53.
+
+### Off-site, verificado a 19/09
+
+O pull nocturno do homelab apanha os ficheiros `-window` e **já levou dumps que contêm a carga**:
+`atime` do dump de 16/09 a 17/09 03:08, do de 17/09 a 18/09 03:05, do de 18/09 a 19/09 03:02 (o
+sistema monta em `relatime`; o `wtmp` só tem sessões interactivas do Pedro, logo estas leituras às
+03:0x não são de pessoa). Falta a confirmação do lado do homelab, que daqui não se vê — item 55.
 
 ## Incidente — linha de catálogo real impressa no output da sessão (F0 da carga, 2026-09-16) — ✅ FECHADO
 

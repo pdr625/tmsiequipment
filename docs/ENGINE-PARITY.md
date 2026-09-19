@@ -195,3 +195,84 @@ commitado.
 - `docs/BACKLOG.md`: item 38 fechado (esta análise); item novo 44 registado (§6).
 - `docs/STATE.md`: secção de fecho com o veredicto, as contagens e os números para o item 39.
 - Dossier: delta + `dossier-push.sh`.
+
+---
+
+## 9. Paridade do catálogo completo (2026-09-16/19, item 51)
+
+O §1–§8 acima cobre a **amostra** de 13 artigos. Esta secção cobre o **catálogo real carregado**:
+**245 linhas** (49 artigos × 5 âmbitos), comparadas linha a linha entre `tmsi.compute_price()` e as
+colunas `excel_*` do ficheiro da carga. Método idêntico ao §1; o que muda é a escala e o facto de os
+artigos já estarem em produção, não num ambiente de amostra. Como em todo este documento: contagens,
+referências e percentagens — **nenhum valor real**.
+
+### 9.1 Resultado
+
+| Classe | Linhas | Explicação |
+|---|---|---|
+| Exactas (<0,01 %) | 28 | Linhas em que a moeda de compra é a moeda de lista — sem conversão, sem desvio |
+| Classe (iii), desvio de câmbio (<1 %) | 183 | O mesmo gap 8,26 vs 8,28 já quantificado no §3, agora sobre o catálogo inteiro: ~0,05 % em EUR, ~0,1–0,2 % em USD, ~0,2–0,43 % em GBP |
+| Valor publicado forçado no Excel | 11 | Refs 1, 2 e 42, assinaladas como excepção nas `notas` do próprio ficheiro. A cadeia de custo bate (0–0,43 %); **só a referência diverge** (−8,9 % a −28,5 %), que é exactamente o que a nota diz ter sido forçado à mão |
+| **Defeito do Excel (§9.3)** | **21** | Refs 19, 21, 22, 23, 24, 25 e 43, nas três filiais que não são a sua origem |
+| Arredondamento (§9.2) | 2 | Ref 46, escopos TBM e APAC |
+| **Total** | **245** | |
+
+**Zero linhas por explicar.** Um artigo (`T-1020`) devolve `errors[]` em 3 dos 5 âmbitos —
+`missing customs rate for HS/zone`, por não ter `hs_code` no ficheiro de origem; é falta de dado, não
+divergência de fórmula, e o motor recusa-se a inventar (princípio 5 da 0001).
+
+### 9.2 Tolerância de arredondamento — o que a 0010 declara, e a prova que discrimina
+
+A 0010 declara **dois sentidos diferentes**: o mínimo publicado arredonda **sempre para cima** ao
+passo da moeda, e a referência arredonda **ao mais próximo**, a partir do mínimo **já arredondado**
+(`0010:8-10` e `0010:104-109`; implementação em `compute_price`: `v_min := round_up_to(...)`,
+`v_ref := round_to(v_min * ref_factor, step)`).
+
+Um comparador que aplique o mesmo sentido às duas colunas gera falsos achados — foi o que o §2 deste
+documento já tinha corrigido empiricamente. A prova tem de correr num caso onde os dois sentidos
+**divergem**, senão não prova nada: com passo 10, `10164` dá `10170` para cima e `10160` ao mais
+próximo. O publicado em T-1019/APAC é **10160** — ao mais próximo, como a especificação manda.
+(`10160`, `10165` e `10166` não discriminam: os dois sentidos coincidem.)
+
+Generalização verificada, não assumida: das **98** linhas de moeda CNY, **64** têm mínimo fora da
+dezena. Excluindo as 7 do §9.3 e as 3 de valor forçado, sobram **51**; **42 batem exactamente** com a
+fórmula de arredondamento para cima (dentro de 0,05 pp). As 9 restantes são as linhas de canal dos
+mesmos refs do §9.3 — cuja margem foi **deduzida por inversão** e traz por isso imprecisão própria,
+já assumida quando o ficheiro foi construído — mais 2 linhas do `T-1052`.
+
+### 9.3 O achado com dinheiro em cima: o Excel contradiz-se, o motor está certo
+
+**Regra de negócio, dita pelo Pedro a 2026-09-16:** o fee interco aplica-se **sempre que a filial que
+vende é diferente da filial que compra o artigo**; todo o artigo tem uma filial de origem
+identificada, e o fee aplica-se apenas às restantes.
+
+Nos **7 artigos de origem EUR** (refs 19, 21, 22, 23, 24, 25, 43), o Excel **declara** `0,2` na
+coluna do fee e depois **não o aplica** — converte só a moeda. Nos artigos de origem CNY aplica-o. O
+motor aplica-o sempre que a filial difere da origem, que é a regra. Daí o desvio de **+19,7 %
+(TBM/CNY), +20,0 % (CORP/USD) e +20,0 % (LTD/GBP)**, consistente nos 7 refs e nas 3 filiais — um gap
+único e sistemático, não ruído por artigo.
+
+Que não é um defeito genérico de conversão prova-se por contraste: o `T-1050`, também de compra em
+EUR e também convertido para CNY, fica no desvio normal de classe (iii) (~0,24 %).
+
+Coerência verificada no próprio ficheiro, artigo a artigo: **46 de 46 equipamentos** têm fee 0 em
+exactamente **uma** filial, e é a de origem; os **3 incoerentes são os serviços** (T-1050/51/52), com
+fee 0 em todas — excepção deliberada da regra plana do item 30, não defeito.
+
+**Classificação:** classe (ii) — **erro do Excel, motor correcto**. Não foi o motor que divergiu do
+Excel; foi o Excel que divergia de si próprio, e a paridade é que o revelou. Em consequência, 21
+linhas de preço estão no Excel cerca de 20 % abaixo do que a regra manda, e a app publica-as certas.
+
+### 9.4 O defeito entrou em produção? Não.
+
+Medido a 2026-09-19, sobre as 21 combinações: os 7 artigos têm todos `interco_margin = 0,2000`; os
+únicos overrides nesses âmbitos são `margin` (21) e `transport` (21); e existem **zero overrides de
+`kind='fee'` em todo o catálogo carregado**. Amostra ao vivo em `T-1019`/TBM: `fee > 0` com
+`overrides = {transport, margin}` — a fee é calculada pelo motor, não reproduzida do ficheiro.
+**A app publica o valor correcto; o valor defeituoso do Excel não foi materializado em lado nenhum.**
+
+### 9.5 Ressalva que continua de pé
+
+Enquanto o item 32 (base do direito aduaneiro por zona) não tiver resposta do despachante, estes
+preços são **operacionais, não definitivos** — não devem ser anunciados à equipa como finais. As
+descrições dos 4 códigos HS carregados a 16/09 estão marcadas `PROVISORIA` pela mesma razão.
