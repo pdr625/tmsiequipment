@@ -14,6 +14,27 @@ HTTP autenticado por JWT cunhado). Tudo o que abaixo diz "medido" foi medido hoj
 
 ---
 
+## 0. Errata — quatro afirmações que não sobreviveram à verificação (2026-09-19, mesmo dia)
+
+A sessão seguinte foi mandada desempatar os pontos deste relatório de que o Pedro desconfiava. Fez
+bem: **quatro estavam errados**, e ficam corrigidos aqui em vez de reescritos abaixo, para se
+perceber o que o relatório afirmou e porquê falhou.
+
+| O que este relatório diz | O que se mediu | Onde falhei |
+|---|---|---|
+| **Rate limit ⚠️** «nenhuma variável `GOTRUE_RATE_LIMIT*`» (§3.1) | **Existe e funciona.** `limit_req zone=tmsi_auth burst=5 nodelay` em `location = /auth/v1/token` (`deploy/nginx/tmsiequipment.conf:34`), zona `rate=10r/m`. Provado ao vivo: do 7.º ao 9.º pedido `503`. | Procurei a funcionalidade **onde a imaginei** (variáveis do GoTrue) em vez de onde ela podia estar (nginx). Ausência de prova tratada como prova de ausência. Achado real por baixo: a zona vive fora do repo — item 54 |
+| **Off-site 🟠** «E5-HOMELAB por iniciar» (§3.8) | **Corre, e já levou a carga real.** `atime` dos dumps: 16/09 lido a 17/09 03:08, 17/09 a 18/09 03:05, 18/09 a 19/09 03:02. | Acreditei no `ROADMAP.md`, que nunca foi actualizado, em vez de procurar sinal no sistema de ficheiros |
+| **`sap_code_cn`** «quem fornece os 39?» (§7.2) | **37 dos 39 derivam-se** de uma regra já escrita (`MODEL-GAP-ANALYSIS.md:27`), com valores distintos e zero colisões; só 2 são excepção. | Li a coluna vazia e não fui ver se havia regra de derivação registada — havia, e a auditoria até a cita noutro ponto |
+| **⚠️13** «caminho errado `docs/DEPLOY.md`» | **Zero referências no repo.** O caminho errado só aparecia em prompts. | Registei como incoerência do repo algo que nunca verifiquei estar no repo |
+
+Duas afirmações **confirmaram-se e agravaram-se**: o defeito do Excel (§6 D6) é real e não entrou
+em produção (`ENGINE-PARITY.md` §9.4); e a lacuna de prova da §5.2 era tão séria quanto descrita —
+fechada no mesmo dia (smoke 78→91, execução n.º 3 do protocolo).
+
+O resto do relatório manteve-se de pé à verificação.
+
+---
+
 ## 1. Resumo executivo
 
 A app faz hoje, em produção: autenticação completa com troca obrigatória de password, 8 papéis com
