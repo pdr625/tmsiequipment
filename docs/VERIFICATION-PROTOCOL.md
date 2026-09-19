@@ -1102,6 +1102,91 @@ margem plana/fronteiras — o browser do Pedro (um produto em cada moeda, `/conf
 listagem de canal) continua por confirmar. Item 14 continua por fechar, não é coberto por
 este gate.
 
+### Execução n.º 3 — 2026-09-19 (migrações 0001–0015, fecha a lacuna da 0014/0015)
+
+**Porquê:** o gate deste protocolo (`docs/ROADMAP.md`) manda repeti-lo a cada migração que toque
+RLS, vistas ou privilégios. A **0014** faz `REVOKE`/`GRANT` e cria uma vista, e entrou **depois**
+da execução n.º 2 — que se declara válida para 0001–0013. A **0015** entrou no mesmo dia. Ficaram
+duas migrações em produção fora do gate, uma delas (0014) sem uma única asserção automatizada a
+protegê-la. Achado da auditoria de 19/09 (`docs/STATUS-REPORT-2026-09.md` §5.3, ⚠️3).
+
+**Âmbito:** os 8 papéis da matriz, migrações **0001–0015**. Digest em execução
+`sha256:def7ea31bbd47a636ead6045ef0b584e6989f364216b3e467cba82f47ed8fc00`, revisão `cf98518` —
+**inalterado desde o deploy do item 44**; nenhum ficheiro de `app/**` mudou nesta sessão (por
+desenho: a sessão não fez deploy). Executor: agente (API/BD). Estado de partida: **pós-carga do
+item 51** — 62 produtos, 49 deles catálogo real, **zero `active`**, contas `.test` intocadas.
+
+**Prova automatizada, 78 → 91 asserções**, verde nos três modos de verificação (`login` omisso,
+`login` explícito, `jwt`). Dois blocos novos:
+
+- **BB (0014)** — a fronteira de conteúdo do `audit_log`, medida pelo ângulo em que já falhou:
+  pedir `old_row`/`new_row` à tabela crua com um papel de custos não-admin devolve **403**, que é
+  exactamente o que a primeira versão da migração (um `REVOKE` ao nível da coluna, no-op
+  silencioso contra o `grant` de tabela da 0001) **não** teria dado. Mais o controlo positivo (o
+  conteúdo de `products` continua visível — a máscara é de `profiles`, não um `NULL` geral) e o
+  diferencial do `admin`, para a asserção da máscara não estar a medir uma tabela vazia.
+- **CC** — `sales`, `agent` e `viewer`, os três papéis que nunca tiveram sessão própria. Por
+  injecção de claims (não têm ficheiro de password, e `viewer` não tem sequer conta); `viewer` e
+  `admin` são concedidos **dentro de transacções revertidas**, o que evita criar uma conta admin
+  com login em produção. Como nada está `active`, o bloco activa **um artigo fictício** dentro da
+  transacção que reverte — nunca um real.
+
+**Matriz dos 8 papéis, medida ao vivo a 2026-09-19** (uma transacção revertida; `viewer` medido
+noutra, à parte, porque concedê-lo dentro da mesma contaminava a linha da conta que o recebesse —
+erro cometido à primeira tentativa e apanhado pelo próprio resultado, que mostrava `logistics` a
+ver custos):
+
+| Papel | Produtos visíveis | Com `exw_price` | Conteúdo de auditoria de `profiles` | Linhas de auditoria |
+|---|---|---|---|---|
+| `admin` | 62 | 62 | **14** | 14 |
+| `product_manager` | 62 | 62 | 0 | 0 |
+| `finance` | 62 | 62 | 0 | 14 |
+| `branch_manager` | 57 | 57 | 0 | 14 |
+| `viewer` | 62 | 62 | 0 | 14 |
+| `logistics` | 62 | **0** | 0 | 0 |
+| `sales` | 0 | 0 | 0 | 0 |
+| `agent` | 0 | 0 | 0 | 0 |
+
+Lê-se assim, e bate célula a célula com o schema: `can_read_costs()` é
+`admin ∨ product_manager ∨ finance ∨ branch_manager ∨ viewer` — e são exactamente esses que têm
+`exw_price`. O `logistics` **vê os 62 artigos e nenhum custo**, que é a fronteira 0003/0004 a
+funcionar com dados reais lá dentro. `sales` e `agent` vêem **zero** porque nada está `active` —
+não é a fronteira, é o portão de estado, e distinguir as duas coisas importa: quando os artigos do
+item 51 forem activados, estas duas linhas mudam e a prova tem de ser refeita (ver não-executados).
+O conteúdo de auditoria de `profiles` só aparece ao `admin` — a 0014 faz o que diz.
+
+**Veredicto: sem fuga.** Zero linhas de custo alcançadas por papel sem direito, por nenhum dos
+caminhos medidos (`v_products`, `compute_price`, `audit_log` cru, `v_audit_log`). Zero resíduo
+depois de tudo: 0 produtos `active`, 0 papéis `viewer`, 1 `admin` (o pré-existente, nenhuma conta
+`.test`), contagens de produtos intactas.
+
+**NÃO EXECUTADOS — o que fica para o Pedro, por exigirem browser ou caixa de correio real.**
+Pela ordem em que convém fazê-los:
+
+1. **Export `.xlsx` real, papel com custos** (`AA`/`BB` §4.8) — entrar como `finance.test`, ir a
+   `/prices`, exportar sem filtro de filial. Observar: o ficheiro abre; traz a coluna
+   `Total cost (EUR)` com valores; as linhas de canal (APAC) estão **no fim**, num bloco separado,
+   não ao lado do artigo — é o achado ⚠️ da auditoria sobre a falta de `ORDER BY`.
+2. **Export `.xlsx` real, papel sem custos** — entrar como `logistics.test` e exportar o mesmo.
+   Observar: o cabeçalho **não tem** `Total cost (EUR)` nem `Margin`, e o ficheiro vem **vazio de
+   linhas** (nada está `active`). É o que fecha o item A da F4 pela metade que é verificável hoje;
+   a outra metade só depois da activação.
+3. **Vista de impressão** (`CC` §4.8) — `/prices`, botão de impressão, confirmar que a
+   pré-visualização é legível e não corta colunas.
+4. **Branding no ficheiro exportado** (`KK` §4.8) — confirmar que o logótipo e a cor da
+   configuração aparecem no `.xlsx`. Nunca foi executado, em nenhuma das três execuções.
+5. **Fluxos de email** (`S`/`T` §4.5) — convite e recuperação de password até à caixa de correio.
+   Por cobrir desde a execução n.º 1 (2026-09-05), por causa do gateway corporativo.
+6. **Exibição única da password** (`W`/`X` §4.7) — confirmar que a password temporária aparece uma
+   só vez e não reaparece ao recarregar.
+7. **Metade browser do dashboard** (`V` §4.6) — confirmar os 5 blocos no ecrã.
+
+**Continua por provar, e não é browser:** a fronteira de custo no **export** com um papel sem
+custos e com dados visíveis — impossível hoje, porque nada está `active`; tem de se repetir depois
+da activação dos artigos do item 51.
+
+---
+
 ### Execução n.º 2 — 2026-09-16 (completa, migrações 0001–0013)
 
 **Âmbito:** os 8 papéis da matriz completa, migrações 0001–0013 (primeira execução completa
