@@ -219,6 +219,61 @@ valor original restaurado). Efeitos secundários medidos e **ausentes**: os 37 c
 derivado. O desfazer repõe o valor exacto anterior de cada um dos 37, `Ytghuu` incluído.
 **Valores derivados, sujeitos a revisão humana na fase de produção**, por decisão do Pedro.
 
+**59. 🔴 FUGA DE MARGEM por função `SECURITY DEFINER` sem verificação de papel** — **ACHADO
+2026-09-19**, bloco A da sessão de fronteiras laterais. **Três funções não verificam o papel do
+chamador no corpo** e, sendo `SECURITY DEFINER`, lêem tabelas cuja RLS é `can_read_costs()` e
+devolvem o número à mesma:
+
+| Função | Lê | RLS da tabela | Mede-se |
+|---|---|---|---|
+| `tmsi.branch_margin(p_branch, p_cost_eur, p_date)` | `margin_grids` | `can_read_costs()` | `logistics`, `sales`, `agent` → **HTTP 200 com valor de margem** |
+| `tmsi.override_value(p_product, p_scope_type, p_scope_id, p_kind, p_date)` | `price_overrides` | custos, ou `logistics` só `kind='duty'` | os mesmos três → **200 com valor de margem** (testado contra um override real de `kind='margin'`) |
+| `tmsi.fx_rate(p_currency, p_date)` | `exchange_rates` | `can_read_costs()` | **200 sem credencial nenhuma** — `EXECUTE` é `PUBLIC`, alcança `anon` |
+
+Medido duas vezes, independentemente, pela **API REST real** com JWT cunhado — não por leitura de
+código. Os mesmos papéis que dão **0 linhas** em `margin_grids` e `price_overrides` recebem daqui
+um valor. Um `POST /rest/v1/rpc/branch_margin` basta. **Nenhum valor real foi impresso** em
+nenhuma das medições.
+
+É a mesma classe dos itens 47/48 (fuga lateral): a fronteira foi provada nas tabelas e nas
+vistas, e o caminho por função ficou por exercer. A correcção — verificar `can_read_costs()`
+dentro das três, ou revogar `EXECUTE` a quem não deve — **mexe em funções e privilégios, logo
+arrasta migração e execução formal do protocolo**. Decisão do Pedro, não tomada aqui.
+
+**60. `decide_price_proposal_batch` sem verificação de papel ao topo** — **ACHADO 2026-09-19.**
+Ao contrário de `decide_price_proposal`, que levanta `Forbidden`, a versão em lote não verifica
+o papel do chamador: protege-se só pela classificação de elegibilidade por proposta. **Essa
+classificação é eficaz** — medido com `logistics`, incluindo o caso adversarial de lhe entregar
+os **21 ids** (20 dos quais a RLS lhe esconde): `changes` a zero, 21 excluídos, nenhum campo de
+valor em nenhuma entrada, `decided_count = 0` no caminho de escrita. **Mas cria uma linha vazia
+em `tmsi.decision_batches`**, atribuída a quem chamou, sem ter decidido nada. Não é fuga; é
+integridade e defesa em profundidade. Corrigir mexe na função → migração → decisão do Pedro.
+
+**61. `tmsi.settings` é legível por toda a gente, e contém política de margem** — **ACHADO
+2026-09-19.** A política `config_read` de `settings` é `USING (true)`: qualquer autenticado lê
+as 6 chaves, entre elas `margin_min`, `margin_target` e `margin_good`. Medido: `sales` e `agent`,
+que não lêem mais nenhuma tabela de configuração, lêem esta. Não é margem de um artigo — é a
+**política comercial da empresa** (o mínimo aceitável), e um comercial saber o piso da casa não é
+o mesmo que saber o custo de um artigo. Por isso não o classifico como fuga: classifico-o como
+decisão do Pedro. Se for para fechar, é migração.
+
+**62. As quatro primitivas da fronteira não têm `search_path` pinado** — **ACHADO 2026-09-19.**
+`has_role`, `can_read_costs`, `my_branches` e `my_channels` são `SECURITY DEFINER` **sem**
+`SET search_path`, contra a convenção que a própria 0002 instituiu depois de apanhar esse defeito
+em `audit()`. **Não é explorável hoje** — os corpos qualificam tudo, e `authenticated`/`anon` não
+têm `CREATE` em `public`, `tmsi`, `auth` nem na base, logo não há onde plantar um objecto que
+capture um nome. Dívida de defesa em profundidade, não incidente. Corrigir é migração.
+
+**63. Sete rotas cujo único gate é a RLS por baixo** — **ACHADO 2026-09-19.** `/products/export`
+(a mais séria — é a única rota de export que não ramifica por `can_read_costs()`, ⚠️10),
+`/products`, `/products/[id]`, `/overrides`, `/proposals`, `/branches` e `/`. Nenhuma verifica
+papel; todas dependem da RLS da vista ou tabela por baixo. Funciona hoje, e é a última linha de
+defesa a fazer sozinha o trabalho das duas. Nota relacionada: em `/config`, as 9 consultas
+disparam **incondicionalmente** (`app/src/app/config/page.tsx:104-157`), incluindo
+`margin_grids.margin` e `branch_pricing_params.ref_factor` — inócuo porque a RLS esvazia, mas
+pelo mesmo motivo. As que se resolvem em código de app entram na sessão de correcções; as que
+pedirem migração ficam aqui.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de
