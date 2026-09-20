@@ -485,8 +485,34 @@ def block_proposal_workflow_exchange_rates(token, claims_uuid):
         f"http_{status}",
     )
 
-    status, before_fx = http("POST", f"{REST}/rpc/fx_rate", token=token, body={"p_currency": currency})
-    check("R: fx_rate() reachable before proposing", status == 200, f"http_{status}")
+    # 0016: fx_rate() deixou de ser invocável por sessão de utilizador (é
+    # interna — só o motor lhe chama, como dono). A propriedade que este bloco
+    # prova é a mesma e continua observável, mas pelo caminho que a app usa de
+    # facto: compute_price() devolve `fx_used`, e chama fx_rate() por dentro.
+    # Sondar o motor pela superfície real é, se alguma coisa, mais forte do que
+    # sondar a função interna.
+    fx_pair = psql_rows(
+        "select c.product_id, c.branch_id from tmsi.products p "
+        "cross join lateral tmsi.compute_price(p.id, 'branch', p.primary_branch) c "
+        f"where p.currency = '{currency}' and c.fx_used is not null limit 1;"
+    )
+    if not fx_pair:
+        check("R: motor observável para a moeda escolhida", True, "SKIP — nenhum artigo com fx_used nessa moeda")
+        return
+    fx_product, fx_branch = fx_pair[0]
+
+    def _fx_used():
+        st, rows = http(
+            "POST", f"{REST}/rpc/compute_price", token=token,
+            body={"p_product": fx_product, "p_scope_type": "branch", "p_scope_id": fx_branch},
+        )
+        if st != 200 or not isinstance(rows, list) or not rows:
+            return st, None
+        return st, rows[0].get("fx_used")
+
+    status, before_fx = _fx_used()
+    check("R: o motor devolve fx_used antes de propor (compute_price, não fx_rate — 0016)",
+          status == 200 and before_fx is not None, f"http_{status}")
 
     status, created = http(
         "POST",
@@ -507,11 +533,11 @@ def block_proposal_workflow_exchange_rates(token, claims_uuid):
         return
     proposal_id = created[0]["id"]
 
-    status, pending_fx = http("POST", f"{REST}/rpc/fx_rate", token=token, body={"p_currency": currency})
+    status, pending_fx = _fx_used()
     check(
-        "R: a pending proposal is invisible to fx_rate() — engine unchanged",
-        status == 200 and float(pending_fx) == float(before_fx),
-        f"before={before_fx} pending={pending_fx}",
+        "R: a pending proposal is invisible to the engine — fx_used unchanged",
+        status == 200 and pending_fx is not None and float(pending_fx) == float(before_fx),
+        f"iguais={pending_fx == before_fx}",
     )
 
     status, _decide_body = http(
@@ -1342,6 +1368,68 @@ def block_sell_side_roles(sales_uuid, agent_uuid, logistics_uuid, logistics_emai
     )
 
 
+# ---------------------------------------------------------------------------
+# DD — `anon` como 9.ª identidade permanente (item 64, decisão do Pedro
+# 2026-09-20). Até aqui a suite tinha 8 identidades, todas autenticadas, e foi
+# exactamente por isso que a fuga passou: compute_price() devolvia o breakdown
+# de custo inteiro a quem não apresentava credencial nenhuma, porque as suas
+# guardas começam por `auth.uid() is not null` e tratam "sem sessão" como "de
+# confiança". A 0016 fechou o acesso; este bloco existe para isso não voltar
+# por outro caminho.
+#
+# Lista branca medida, não inventada: sem sessão, `anon` alcança
+# v_current_branding (a página de login e os templates de email precisam dela)
+# e mais nada — `settings` responde mas sem uma única linha, porque a política
+# é TO authenticated. Tudo o resto recusa.
+# ---------------------------------------------------------------------------
+ANON_PODE_LER = {"v_current_branding"}
+ANON_VAZIO = {"settings"}
+ANON_RECUSADO = ["v_products", "v_branch_prices", "v_selling_prices", "v_audit_log",
+                 "products", "price_overrides", "price_proposals", "audit_log",
+                 "profiles", "user_roles", "margin_grids", "exchange_rates"]
+FUNCOES_INTERNAS = [
+    ("branch_margin", {"p_branch": "SA", "p_cost_eur": 1000}),
+    ("override_value", {"p_product": "T-0001", "p_scope_type": "branch",
+                        "p_scope_id": "SA", "p_kind": "margin"}),
+    ("fx_rate", {"p_currency": "CNY"}),
+]
+
+
+def block_anon_boundary(no_cost_token):
+    # 1. O caso que originou o item 64: sem credencial, nada de motor.
+    status, _ = http("POST", f"{REST}/rpc/compute_price", token=None,
+                     body={"p_product": "T-0001", "p_scope_type": "branch", "p_scope_id": "SA"})
+    check("DD: compute_price recusado sem credencial (item 64 — dava o breakdown inteiro)",
+          status in (401, 403), f"http_{status}")
+
+    # 2. As três funções internas da 0016, pelos dois lados da fronteira.
+    for fn, body in FUNCOES_INTERNAS:
+        status, _ = http("POST", f"{REST}/rpc/{fn}", token=None, body=body)
+        check(f"DD: {fn} recusado sem credencial", status in (401, 403), f"http_{status}")
+        status, _ = http("POST", f"{REST}/rpc/{fn}", token=no_cost_token, body=body)
+        check(f"DD: {fn} recusado a um papel sem custos (item 59)", status in (401, 403), f"http_{status}")
+
+    # 3. A lista branca, pelos dois lados: o que pode, e que o resto não pode.
+    for obj in sorted(ANON_PODE_LER):
+        status, rows = http("GET", f"{REST}/{obj}?select=*&limit=1", token=None)
+        check(f"DD: anon lê {obj} (a página de login precisa)",
+              status == 200 and isinstance(rows, list) and len(rows) > 0, f"http_{status}")
+
+    for obj in sorted(ANON_VAZIO):
+        status, rows = http("GET", f"{REST}/{obj}?select=*", token=None)
+        check(f"DD: anon vê {obj} sem uma única linha",
+              status == 200 and isinstance(rows, list) and len(rows) == 0,
+              f"http_{status} linhas={len(rows) if isinstance(rows, list) else '?'}")
+
+    recusados = []
+    for obj in ANON_RECUSADO:
+        status, _ = http("GET", f"{REST}/{obj}?select=*&limit=1", token=None)
+        if status < 400:
+            recusados.append(f"{obj}:http_{status}")
+    check("DD: todo o resto recusa a quem não tem sessão",
+          not recusados, f"abertos={recusados or 'nenhum'}")
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -1488,6 +1576,7 @@ def main():
     block_batch_decision(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
     block_bulk_import(tokens["logistics"], tokens["product_manager"])
     block_audit_content_boundary(tokens["finance"], claims["finance"])
+    block_anon_boundary(tokens["logistics"])
 
     # item 56: the three roles with no session of their own. Looked up by the
     # role they hold rather than by a hardcoded address — an account renamed
