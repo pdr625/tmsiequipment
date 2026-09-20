@@ -48,8 +48,33 @@ activação vai mudar.
 
 O desfazer vem de graça: `import_batch_items` já guarda a linha inteira.
 
-**CSV pronto para o Pedro preencher:** `~/tmp/tmsi-unit/tmsi-unit-2026-09-20.csv` — 49 linhas,
-`product_id;article;item_type;category;unit`, coluna `unit` vazia. Fora do repo, `600`.
+**CSV PREENCHIDO, pronto a importar:** `~/tmp/tmsi-unit/tmsi-unit-2026-09-20-preenchido.csv`
+— 49 linhas, `product_id;article;item_type;category;unit`, **coluna `unit` completa**. Fora do
+repo, `600`. (O vazio original fica ao lado, e o ficheiro-fonte também:
+`tmsi-unit-proposta-2026-09-20.csv`.)
+
+**⚠️ A `unit` vem da coluna `Unit` do PRICE_LIST do Excel** — é de lá que o Pedro a tirou, e é de
+lá que **o importador a deve ler**. Não é um campo a inventar nem a derivar do `item_type`: a
+fonte existe e tem dono.
+
+**Fusão feita e provada a 2026-09-20** (por `product_id`, sem tocar nas outras quatro colunas):
+os 49 casam nos dois sentidos, zero órfãos de cada lado; as outras colunas ficaram byte a byte
+iguais e na mesma ordem; todas as `unit` preenchidas e dentro de `tmsi.units` — **PCS 47 · SET 1 ·
+MONTH 1**; estrutura íntegra (50 linhas, 5 colunas, zero aspas).
+
+**Três coisas que a fusão levantou, e que a 0018 tem de olhar antes de importar:**
+
+1. **Onze linhas trazem `nota` a pedir confirmação** — não são ruído, são perguntas ao Pedro:
+   oito artigos (`T-1031`…`T-1038`) cujo **nome diz "kit" mas o Excel diz `PCS`** (o preço é do
+   kit ou da peça?); `T-1019` marcado `SET`, a confirmar se o peso bruto é o do kit completo; e
+   `T-1025`, **sem unidade nem peso no Excel**, com `PCS` proposto por analogia com o `T-1024`.
+   Importar antes de responder a isto grava uma unidade que ninguém confirmou.
+2. **Duas linhas divergem do Excel cru**, deliberadamente: `T-1025` (Excel vazio → `PCS`, é a
+   analogia acima) e `T-1051` (Excel `PCS` → **`MONTH`**, coerente com ser o artigo "Monthly
+   rate", um serviço de aluguer mensal). As duas são decisões do Pedro, não erros de fusão.
+3. **O `T-1001` já tem `unit = 'PCS'` na base** — escrito à mão numa sessão de browser a 16/09.
+   O importador vai encontrá-lo preenchido: é o caso que testa a **detecção de alterações** (se
+   o valor for o mesmo, tem de aparecer como `unchanged`, não como `to_update`).
 
 ---
 
