@@ -254,7 +254,8 @@ um valor. Um `POST /rest/v1/rpc/branch_margin` basta. **Nenhum valor real foi im
 nenhuma das medições.
 
 É a mesma classe dos itens 47/48 (fuga lateral): a fronteira foi provada nas tabelas e nas
-vistas, e o caminho por função ficou por exercer. A correcção — verificar `can_read_costs()`
+vistas, e o caminho por função ficou por exercer. **Exposição medida e fechada — ver item 64:
+nenhum terceiro tocou na API REST do TMSI em todo o período coberto pelos logs.** A correcção — verificar `can_read_costs()`
 dentro das três, ou revogar `EXECUTE` a quem não deve — **mexe em funções e privilégios, logo
 arrasta migração e execução formal do protocolo**. Decisão do Pedro, não tomada aqui.
 
@@ -316,6 +317,30 @@ voltar por outro caminho — e a 0017 varre o mesmo padrão em todas as funçõe
 **`anon` passa a 9.ª identidade permanente** do `scripts/smoke.py` e da matriz do
 `docs/VERIFICATION-PROTOCOL.md`, por decisão do Pedro (2026-09-20).
 
+**✅ EXPOSIÇÃO — FRENTE FECHADA 2026-09-20.** A janela existiu **com dados reais**, de 16/09
+(carga do catálogo) a 20/09 13:13 (aplicação da 0016). **Não foi explorada.** Medição corrida
+pelo Pedro com sudo, 20/09 entre 19:48 e 19:55:
+
+| Verificação | Resultado |
+|---|---|
+| Pedidos a `/rest/v1/rpc/*`, por IP · dia · função · status | **Só dois IPs**: `185.200.244.100` (o próprio VPS — smoke, provas de paridade, sessões de agente; inclui os 403/401 de 20/09 em `fx_rate`/`branch_margin`/`override_value`, que são as asserções negativas novas) e `172.20.40.5` (o container `tmsi-app` a falar com o PostgREST pela rede docker — é por isso que os IPs do browser não aparecem por estes caminhos) |
+| A mesma consulta **excluindo esses dois IPs** | **VAZIO.** Zero chamadas de terceiros a `compute_price`, `branch_margin`, `override_value`, `fx_rate` ou a qualquer outro RPC |
+| Alargado a **todo** o `/rest/v1/` (tabelas e vistas, não só RPC — relevante porque `settings` tinha política aberta antes da 0016), mesmos IPs excluídos | **VAZIO** |
+| Validação do método: top 15 de IPs de **todo** o `access.log` | Mostra IPs externos reais, com milhares de pedidos cada. Logo o nginx **regista a origem verdadeira** — a ausência de terceiros em `/rest/v1/` é **medição**, não artefacto de proxy ou de NAT |
+
+**Fonte:** `access_log` único, `/var/log/nginx/access.log` (confirmado: `grep -rh access_log` em
+`sites-enabled` e `nginx.conf` devolve só essa linha — o vhost não tem log próprio), partilhado
+pelas apps do VPS. Retenção 06/09→20/09, que **cobre toda a janela de dados reais expostos**.
+03–05/09 não tem logs, mas nessa altura só existiam dados fictícios.
+
+**Limite da prova, a repetir sempre que esta conclusão for citada:** só vale para o que o
+`access.log` do nginx regista e para a retenção de 14 dias; **o PostgREST não regista pedidos bem
+sucedidos** (`PGRST_LOG_LEVEL` por omissão é `error`), logo não é fonte alternativa nem
+corroboração. Ver item 66.
+
+**Script re-executável:** `scripts/exposicao-rest.sh`, referenciado no protocolo como passo a
+correr depois de qualquer achado de fronteira.
+
 ~~**65. O default-deny da 0016 não existe — `ALTER DEFAULT PRIVILEGES ... IN SCHEMA` não
 retira o `PUBLIC`**~~ ✅ **diagnosticado e contornado 2026-09-20.** Achado ao verificar a 0017
 depois de aplicada: `tmsi.is_trusted_db_session()` nasceu com `PUBLIC` no `EXECUTE`, apesar de a
@@ -351,6 +376,28 @@ tem a asserção equivalente, pelo que uma regressão parte também a suite.
 
 **Estado:** `is_trusted_db_session()` corrigida com `revoke` explícito (no ficheiro da 0017);
 varrimento confirma **zero** funções de `tmsi` com `PUBLIC` ou `anon`.
+
+**66. Retenção do `access.log` é de 14 dias, e é a única fonte forense** — **REGISTADO
+2026-09-20**, achado ao fechar a exposição do item 64. O `logrotate` do nginx está em
+`daily`/`rotate 14`, e o `access.log` é a **única** fonte capaz de responder a "alguém explorou
+isto?" — o PostgREST não regista pedidos bem sucedidos (`PGRST_LOG_LEVEL` por omissão é `error`)
+e não há mais nada à frente. Catorze dias significa que **um achado de fronteira com mais de duas
+semanas já não é investigável**: foi exactamente por pouco que a janela de 16→20/09 ficou coberta,
+e o período 03–05/09 já está perdido (sem consequência, só havia dados fictícios).
+
+**Proposta, medida:** passar a `rotate 90`. Custo em disco, calculado a partir dos ficheiros
+rodados reais — média de **90 KB/dia** comprimido (mínimo 46, máximo 125): hoje 1,14 MB em 13
+ficheiros; a 90 dias, **~7,9 MB** (pior caso ~11 MB). **Acrescento de ~7 MB** num disco com 13 GB
+livres. O `delaycompress` mantém um único ficheiro não comprimido (~2 MB), inalterado.
+
+Comando exacto, para o Pedro correr:
+```
+sudo sed -i 's/^\(\s*\)rotate 14$/\1rotate 90/' /etc/logrotate.d/nginx
+sudo logrotate -d /etc/logrotate.d/nginx 2>&1 | head -20   # ensaio, não roda nada
+```
+O `-d` é ensaio (debug): mostra o que faria sem mexer em ficheiro nenhum. Confirmar que diz
+`rotate 90` e que não acusa erro de sintaxe. A alteração só produz efeito na rotação seguinte;
+os ficheiros já apagados não voltam.
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
