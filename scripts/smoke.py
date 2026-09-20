@@ -1421,6 +1421,21 @@ def block_anon_boundary(no_cost_token):
               status == 200 and isinstance(rows, list) and len(rows) == 0,
               f"http_{status} linhas={len(rows) if isinstance(rows, list) else '?'}")
 
+    # item 65: o default-deny da 0016 não vale para funções criadas pelo
+    # supabase_admin — o ALTER DEFAULT PRIVILEGES dele não suprime o PUBLIC, e
+    # a primeira função a estrear esse caminho (is_trusted_db_session, 0017)
+    # nasceu aberta. Esta asserção é o que torna a regra verificável em vez de
+    # lembrada: qualquer função de tmsi que volte a ter PUBLIC parte o smoke.
+    com_public = psql_rows(
+        "select coalesce(string_agg(p.proname, ', ' order by p.proname), '') "
+        "from pg_proc p join pg_namespace n on n.oid = p.pronamespace "
+        "where n.nspname = 'tmsi' "
+        "  and (p.proacl is null or array_to_string(p.proacl, ' ') like '=X/%');"
+    )
+    abertas = com_public[0][0] if com_public and com_public[0] else ""
+    check("DD: nenhuma função de tmsi tem EXECUTE a PUBLIC (item 65)",
+          abertas == "", f"abertas={abertas or 'nenhuma'}")
+
     recusados = []
     for obj in ANON_RECUSADO:
         status, _ = http("GET", f"{REST}/{obj}?select=*&limit=1", token=None)

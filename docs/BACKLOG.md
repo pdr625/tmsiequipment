@@ -316,6 +316,27 @@ voltar por outro caminho — e a 0017 varre o mesmo padrão em todas as funçõe
 **`anon` passa a 9.ª identidade permanente** do `scripts/smoke.py` e da matriz do
 `docs/VERIFICATION-PROTOCOL.md`, por decisão do Pedro (2026-09-20).
 
+**65. O default-deny da 0016 não vale para funções criadas pelo `supabase_admin`** —
+**ACHADO 2026-09-20**, ao verificar a 0017 depois de aplicada. A 0016 escreveu
+`alter default privileges for role supabase_admin in schema tmsi revoke execute on functions
+from public` e o cabeçalho dela promete que "uma função nova no schema fica fechada até alguém a
+pôr na lista". **É falso.** Medido: o comando **não cria entrada nenhuma** em `pg_default_acl`;
+e mesmo forçando a entrada a existir (com um `grant` antes), uma função criada pelo
+`supabase_admin` nasce na mesma com `=X/supabase_admin` — PUBLIC com `EXECUTE`. Só as defaults
+do papel `postgres` fazem efeito nesta instância, e é por isso que o `compute_price` (criado por
+ele) não tem PUBLIC.
+
+Apanhado na primeira função a estrear o caminho: `tmsi.is_trusted_db_session()` (0017) nasceu
+com PUBLIC. **Corrigido de imediato** com `revoke execute ... from public` explícito, que passou
+a estar no ficheiro da 0017; varrimento confirmou **zero** outras funções de `tmsi` com PUBLIC.
+Sem consequência de fuga — a função devolve um booleano sobre a própria sessão de quem chama —
+mas a regra que a 0016 dizia ter instituído não existia.
+
+**Regra operacional, até isto ter solução melhor:** toda a migração que criar uma função em
+`tmsi` **revoga o PUBLIC à mão**, na mesma migração. Não confiar no default. A asserção nova do
+smoke (bloco DD) falha se alguma função de `tmsi` voltar a ter PUBLIC, o que torna a regra
+verificável em vez de lembrada.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de

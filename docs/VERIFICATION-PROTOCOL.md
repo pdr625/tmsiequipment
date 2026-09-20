@@ -1102,6 +1102,85 @@ margem plana/fronteiras — o browser do Pedro (um produto em cada moeda, `/conf
 listagem de canal) continua por confirmar. Item 14 continua por fechar, não é coberto por
 este gate.
 
+### Execução n.º 4 — 2026-09-20 (migrações 0001–0017, com `anon` na matriz)
+
+**Porquê:** as migrações **0016** (fronteira de execução das funções) e **0017** (guardas do
+`compute_price` deixam de falhar abertas) tocam privilégios e funções — o gate manda repetir. E a
+matriz ganhou uma **9.ª identidade**: o `anon`. Item 64.
+
+**Âmbito:** 9 identidades, migrações 0001–0017. Digest em execução
+`sha256:1a8cca52914e81e76e0366276a4ae3e40a23a1403998f3bb99be2bd014492fa8`, revisão `482bb4f`
+(inalterado — as duas migrações são de BD, não houve deploy de app). Estado de partida: 62
+produtos, 49 reais, **zero `active`**.
+
+**Matriz, medida ao vivo (`tmsi.v_products`):**
+
+| Identidade | Produtos visíveis | Com `exw_price` |
+|---|---|---|
+| `admin` · `finance` · `product_manager` | 62 | 62 |
+| `branch_manager` | 57 | 57 |
+| `logistics` | 62 | **0** |
+| `sales` · `agent` | 0 | 0 |
+| **`anon`** | **RECUSADO** | — |
+
+O `anon` é agora uma linha da matriz, e recusa à entrada. `sales`/`agent` a zero é o portão de
+estado (nada está `active`), não a fronteira — distinção que importa: quando os artigos reais
+forem activados, estas duas linhas mudam e a matriz tem de ser remedida.
+
+**Prova automatizada: 91 → 102 asserções**, verde no modo `jwt`. O modo `login` falha desde
+2026-09-19 por a password do `logistics.test` ter sido mudada numa verificação de browser — não é
+regressão, e o `jwt` cobre a suite inteira. Bloco **DD** novo (`anon`): as quatro funções
+recusadas sem credencial, lista branca medida (`v_current_branding` legível, `settings` a zero
+linhas, todo o resto recusado) e a asserção do item 65 (nenhuma função de `tmsi` com `EXECUTE` a
+`PUBLIC`).
+
+**Achado da própria execução, na migração que a motivou.** Ao verificar a 0017 depois de aplicada:
+`tmsi.is_trusted_db_session()` nasceu com **`PUBLIC` no `EXECUTE`**, porque o
+`alter default privileges for role supabase_admin ... revoke ... from public` da 0016 **não
+funciona** — medido, não deduzido. Corrigido de imediato com um `revoke` explícito (que passou a
+estar no ficheiro da 0017), varrimento confirmou zero outras funções afectadas, e a asserção nova
+do smoke torna a regra verificável. Item 65. É a quarta vez nesta cadeia de sessões que a
+verificação apanha um defeito **na própria coisa que estava a verificar**.
+
+---
+
+### §4.15 — a guarda do `compute_price` aguenta sozinha? (passo novo, item 64)
+
+**Script:** `scripts/prova-guarda-anon.sql`. Re-executável, nada comitado.
+
+**Porque é passo de protocolo e não asserção de smoke:** com a 0016 por baixo, o `anon` não tem
+`EXECUTE` no `compute_price`, logo um pedido HTTP leva **401 antes de chegar ao motor**. O smoke
+prova essa camada — e é a que protege em produção — mas não consegue, por construção, exercer a
+guarda que está por trás dela. A única forma é conceder `EXECUTE` ao `anon` dentro de uma
+transacção que se reverte.
+
+**Porque usa `SET SESSION AUTHORIZATION` e não `set role anon`:** o critério da 0017 ancora-se no
+`session_user`, e um `set role anon` num psql mantém `session_user = postgres` — a emulação daria
+"passou" onde o `anon` real seria negado.
+
+**Resultado, 2026-09-20 (contra a 0017 aplicada):**
+
+| Caso | draft/SA | activo/SA | activo/APAC |
+|---|---|---|---|
+| (A) `anon` real, sem claims | 0 | **0** | **0** |
+| (B) `anon` real, claims `role=anon` | — | **0** | **0** |
+| (C) `sales` autenticado | 0 | 1 linha, custo **0** | — |
+| (D) `sales` emulado por psql | 0 | 1 linha, custo **0** | — |
+| (C2) `agent` autenticado | — | — | 1 linha, custo **0** |
+| (D2) `agent` emulado por psql | — | — | 1 linha, custo **0** |
+| (E) sessão directa sem claims | — | 1 linha, custo **1** | — |
+
+(A)/(B) dão **zero linhas**, não uma linha mascarada: a guarda do `see_sell` dispara primeiro,
+porque o `anon` não tem papel nenhum. (C)=(D) e (C2)=(D2) é o que prova que a emulação por psql
+não mente. (E) mantém acesso pleno, logo o smoke A/B e as provas de motor continuam a valer.
+
+**Erro de método cometido e corrigido neste passo:** a primeira versão interrogava o `sales` (de
+SA) sobre a filial do artigo (TBM) e dava 0 linhas — que é o comportamento correcto e não prova
+nada. "0 = 0" não diz que a guarda funciona; diz que se escolheu mal o alvo. Cada papel passou a
+ser medido no seu próprio âmbito, com artigos fictícios activados para haver linhas que contar.
+
+---
+
 ### Execução n.º 3 — 2026-09-19 (migrações 0001–0015, fecha a lacuna da 0014/0015)
 
 **Porquê:** o gate deste protocolo (`docs/ROADMAP.md`) manda repeti-lo a cada migração que toque
