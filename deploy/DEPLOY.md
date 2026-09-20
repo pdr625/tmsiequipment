@@ -15,6 +15,22 @@ Everything below is checked against the real running production, not assumed.
   straight to the app and to the individual Supabase pieces — **there is no Kong, no API
   gateway**. `auth` (GoTrue) and `rest` (PostgREST) are reached directly by nginx location
   blocks, not through a gateway.
+- **⚠️ O vhost sozinho não arranca — precisa do ficheiro da zona de rate limit** (item 54,
+  corrigido 2026-09-19). `deploy/nginx/tmsiequipment.conf` traz
+  `limit_req zone=tmsi_auth burst=5 nodelay` em `location = /auth/v1/token`, mas a zona
+  correspondente é declarada no contexto `http`, noutro ficheiro:
+  `deploy/nginx/tmsi-rate-limits.conf` → **instalar em `/etc/nginx/conf.d/`**. Sem ele o nginx
+  recusa arrancar (`unknown limit_req zone "tmsi_auth"`), e até 2026-09-19 esse ficheiro **não
+  estava no repo** — um restauro só a partir do repo deixava o servidor em baixo. Passo de
+  instalação, numa restauração de raiz:
+  ```bash
+  sudo cp deploy/nginx/tmsi-rate-limits.conf /etc/nginx/conf.d/
+  sudo cp deploy/nginx/tmsiequipment.conf /etc/nginx/sites-available/
+  sudo ln -sf /etc/nginx/sites-available/tmsiequipment.conf /etc/nginx/sites-enabled/
+  sudo nginx -t && sudo systemctl reload nginx
+  ```
+  **Provado a 2026-09-19**, num directório temporário e sem tocar na configuração viva: o mesmo
+  `location` sem o ficheiro da zona dá `test failed`; com ele, `test is successful`.
 - **Repo lives at `~/atelier-vps/tmsiequipment`** on the VPS (`pedro@vm7509`), a plain `git
   clone` — not `/opt/tmsiequipment`.
 - **The Supabase stack is this repo's own `deploy/supabase/docker-compose.yml`**, not a copy

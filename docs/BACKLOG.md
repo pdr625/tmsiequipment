@@ -172,8 +172,26 @@ explicitamente no `deploy/DEPLOY.md` como passo manual de restauro.
 A 19/09 confirmou-se, pelo padrão de `atime` dos dumps, que o pull nocturno do homelab corre e
 apanha os ficheiros `-window` (16/09 lido a 17/09 03:08, 17/09 lido a 18/09 03:05, 18/09 lido
 a 19/09 03:02) — mas isso é inferência de uma sessão, não um sinal contínuo. Se o pull parar,
-nada nesta infra dá por isso. Uma métrica de "idade da última cópia off-site" fecharia a
-lacuna; o trabalho é do lado do homelab, não deste repo.
+nada nesta infra dá por isso.
+
+**Desenho proposto (2026-09-19, só desenho — nada tocado no homelab):** há duas formas, e a
+diferença entre elas é *quem consegue mentir*.
+
+1. **Medir no VPS, pelo `atime`** — `vps-stats.sh` publica `tmsi_offsite_pull_age_h`, calculado
+   como `now() - max(atime)` dos `~/backups/tmsi/*.dump`. **Prós:** zero código no homelab, zero
+   credenciais novas, e o VPS já produz o `status.json`. **Contra:** mede *que alguém leu o
+   ficheiro*, não que a cópia chegou nem que presta — e um `noatime` futuro no `/` cega a métrica
+   sem aviso. É um sinal de liveness, não de integridade.
+2. **Medir no homelab, e publicar de lá** — o próprio `tmsi-offsite-pull.sh` escreve, no fim de
+   cada corrida bem sucedida, um carimbo com a data e o resultado de um `pg_restore -l` ao
+   ficheiro que acabou de puxar; o tile do homelab lê esse carimbo. **Prós:** mede o que
+   interessa — cópia presente **e** legível no destino. **Contra:** precisa de trabalho do lado do
+   homelab, que é outro projecto e outra sessão.
+
+**Recomendação:** as duas, por ordem — (1) agora, porque é barato e apanha o caso "o pull parou";
+(2) quando houver sessão de homelab, porque é a única que apanha "o pull corre e traz lixo". O
+limiar de alarme sai da cadência: em modo janela (diário), qualquer idade acima de ~30 h é
+anomalia; em modo semanal, acima de ~8 dias.
 
 **56. Cobertura de prova em falta: 0014 sem smoke, e 4 dos 8 papéis sem sessão automatizada** —
 **REGISTADO 2026-09-19**, achado da auditoria (§5.2 do `docs/STATUS-REPORT-2026-09.md`). A 0014
