@@ -1136,6 +1136,67 @@ com `awk`.
 
 ---
 
+### Execução n.º 5 — 2026-09-20 (migrações 0001–0019, **sobre dados reais activos**)
+
+**A primeira execução com o catálogo real visível aos papéis comerciais.** Até aqui, `sales` e
+`agent` davam zero em tudo — e isso era o portão de estado, não a fronteira. A distinção deixou
+de ser teórica: **46 artigos reais estão `active`**.
+
+**Âmbito:** 9 identidades, migrações **0001–0019**. Digest `1a8cca52…`, revisão `482bb4f`
+(0018 e 0019 são de BD; não houve deploy de app). Estado: 62 produtos — 46 `active`, 3 `draft`
+(`T-1002`, `T-1020`, `T-1025`), 13 fictícios.
+
+| Identidade | Produtos | Com coluna de custo | Linhas de preço | Âmbitos |
+|---|---|---|---|---|
+| `admin` · `finance` · `product_manager` | 62 | 62 | 283 | todos |
+| `branch_manager` (CORP) | 57 | 57 | 57 | CORP |
+| `logistics` | 62 | **0** | 184 | CORP, LTD, SA, TBM — **sem APAC** |
+| **`sales` (SA)** | **46** | **0** | 46 | **SA** |
+| **`agent` (APAC)** | **46** | **0** | 92 | **APAC, TBM** |
+| `anon` | **RECUSADO** | — | — | — |
+
+**Célula nova e permanente na matriz: «o `sales` da filial de origem vê o artigo» (0019).**
+Antes da 0019 o `sales.sa` via 3 dos 6 activos — só os de origem TBM. Agora vê os 46, dos quais
+**9 são de origem SA e não estão no seu `sold_in`**: eram exactamente os invisíveis. Asserção
+`EE` do smoke, que escolhe o alvo por essa propriedade (activo + origem na filial do vendedor +
+**não** em `sold_in`) e não por identificador fixo.
+
+**Contagem prevista antes de activar, e medida depois — batem:** calculado de
+`sold_in`/`primary_branch` que o `sales.sa` veria **46** (37 por `sold_in` + 9 por origem);
+medido **46**.
+
+**Invariantes verificadas:**
+- `price_versions` **67 → 67** — activar não abre versão de preço.
+- **0 em `review`** — o trigger `open_review_on_exw_change` não disparou (não se tocou em EXW).
+- **Papéis de custos com `md5` idêntico** ao de antes da activação (`586c1e50` / `25325afc`), e o
+  `branch_manager` também. Como esse `md5` cobre **as 283 linhas, de todos os estados**, a sua
+  identidade prova que **nenhum preço mudou em lado nenhum** — e daí decorre que as linhas que o
+  `logistics` já via (24) continuam iguais dentro das 184 que agora vê.
+- **Zero colunas de custo** para `sales`, `agent` e `logistics`.
+
+**Smoke: 102 → 104**, verde nos três modos, com a asserção `EE` nova.
+
+**§4.15 re-executado sobre dados activos:** `anon` continua a receber **0 linhas** em draft,
+activo/SA e activo/APAC; `sales` e `agent` idênticos pelo caminho real e pela emulação.
+
+**NÃO EXECUTADOS — para o Pedro, por ordem, agora que há linhas que ver:**
+
+1. **Export como `sales.test`** (novo, e o mais importante) — `/prices`, exportar. Observar: **46
+   linhas**, **sem** coluna `Total cost (EUR)` nem `Margin`, só filial **SA**, e que lá estão
+   artigos cuja origem é SA (os 9 que antes não apareciam).
+2. **Export como `logistics.test`** — **sem** colunas de custo, com linhas das quatro filiais e
+   **nenhuma** de APAC.
+3. **Export como `finance.test`** — com custos, 283 linhas, e as de canal **no fim** em bloco
+   (o achado da ordenação, ⚠️11, já corrigido — confirmar que agora vêm ao lado do artigo).
+4. **`Alert` nos três serviços** — no ficheiro do `finance`, confirmar as 15 linhas `critical` de
+   `T-1050`/`T-1051`/`T-1052`. É o item 67, e é decisão do Pedro.
+5. **Vista de impressão** (`CC`) — `/prices`, botão de imprimir.
+6. **Branding no `.xlsx`** (`KK`) — nunca executado em nenhuma das cinco execuções.
+7. **Fluxos de email** (`S`/`T`) — por cobrir desde 2026-09-05.
+8. **Exibição única da password** (`W`/`X`) e **metade browser do dashboard** (`V`).
+
+---
+
 ### Execução n.º 4 — 2026-09-20 (migrações 0001–0017, com `anon` na matriz)
 
 **Porquê:** as migrações **0016** (fronteira de execução das funções) e **0017** (guardas do
