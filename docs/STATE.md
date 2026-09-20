@@ -198,6 +198,52 @@ limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
 
+## Migração 0016 — fronteira de execução das funções (2026-09-20)
+
+**Aplicada** às 13:13, depois de dump imediatamente antes
+(`tmsi-pre-0016-20260920-131308.dump`) e de ensaio completo em transacção revertida.
+
+**O que fechou.** Três funções `SECURITY DEFINER` sem verificação de papel devolviam valores de
+margem a quem não lê custos (item 59), e — achado no teste adversarial — **`compute_price`
+devolvia o breakdown de custo inteiro a quem não apresentava credencial nenhuma** (item 64). A
+correcção não foi gatear por dentro (partiria os preços de `sales`/`agent`, porque dentro de uma
+definer o JWT é o do chamador) mas **revogar `EXECUTE`** às funções internas, deixando o motor
+chamá-las como dono.
+
+**Medição depois de aplicar:**
+
+| | logistics | sales | agent | anon | finance |
+|---|---|---|---|---|---|
+| `branch_margin` | 403 | 403 | 403 | 401 | 403 |
+| `override_value` | 403 | 403 | 403 | 401 | 403 |
+| `fx_rate` | 403 | 403 | 403 | 401 | 403 |
+| `compute_price` | vazio | vazio | vazio | **401** | **conteúdo** |
+
+**Impressão digital dos preços idêntica antes e depois** (`dd46265…`) — a revogação não tocou no
+motor. O ensaio prévio (9 identidades × 31 objectos × 2 fases) já o tinha previsto: 205 ok / 43
+erros em ambas as fases, e exactamente **três diferenças, todas pretendidas** — `settings` de 6
+para 3 linhas ao `logistics`, `sales` e `agent` (item 61).
+
+**A lição da 0011, repetida e apanhada a tempo.** As funções de `tmsi` têm **dois donos**:
+`postgres` (20, e **não é superuser**) e `supabase_admin` (3). `compute_price` é do `postgres` e
+chama `round_up_to`, do `supabase_admin` — numa definer o `EXECUTE` das chamadas internas é
+verificado contra o **dono**, e o `postgres` só lá chegava via `PUBLIC`. Um `REVOKE` seco teria
+partido o cálculo de preços para toda a gente. Daí o `GRANT EXECUTE … TO postgres` explícito e um
+`ALTER DEFAULT PRIVILEGES` **para cada um dos dois donos**.
+
+**Smoke: 91 → 101, verde nos três modos.** Duas asserções do bloco R partiram ao aplicar — e não
+eram regressão: o próprio smoke usava `fx_rate()` como sonda, a função que a 0016 fechou de
+propósito. A sonda passou a observar a mesma propriedade por `compute_price()`, que é a superfície
+real da app. Bloco **DD** novo: `anon` como **9.ª identidade permanente**, com lista branca medida
+(`v_current_branding` legível, `settings` a zero linhas, todo o resto recusado) e as quatro
+funções recusadas sem credencial.
+
+**Reposições no `T-1012`**, todas com transacção, autoria real e desfazer preparado antes:
+`sap_code_uk` (era `Ghtvj`, valor de teste) a `NULL`; `gross_weight_kg` e `origin_country` aos
+valores da carga, lidos do `audit_log`. Impressão digital dos preços inalterada nas três escritas.
+Nota de método: `origin_country` era **NULL** na carga, e o `\gset` do psql não define variável
+para valores nulos — a reposição teve de usar `quote_nullable()`, senão escrevia o literal errado.
+
 ## Correcções laterais e deploy (2026-09-20)
 
 **Deploy:** revisão `482bb4f`, digest `sha256:1a8cca52914e81e76e0366276a4ae3e40a23a1403998f3bb99be2bd014492fa8`,
