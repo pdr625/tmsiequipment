@@ -198,6 +198,36 @@ limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
 
+## Correcções laterais e deploy (2026-09-20)
+
+**Deploy:** revisão `482bb4f`, digest `sha256:1a8cca52914e81e76e0366276a4ae3e40a23a1403998f3bb99be2bd014492fa8`,
+`tmsi-app` healthy, `/api/health` 200. Entraram três correcções de aplicação e duas de nginx:
+
+- **⚠️9** — `/audit` passou a ler `tmsi.v_audit_log`, como `/products/[id]` já lia. Funcionava só
+  porque o `select` coincidia com as 6 colunas re-concedidas pela 0014; uma coluna a mais furava
+  a fronteira sem aviso. Um só caminho de leitura.
+- **⚠️10** — `/products/export` deixou de **inferir** o direito a custos a partir dos dados
+  («veio algum `exw_price` não-nulo?») e passou a perguntar `can_read_costs()`, como
+  `/prices/export` já fazia. A RLS de `v_products` continua por baixo, como segunda camada.
+- **⚠️11** — `/prices/export` ganhou `ORDER BY` por artigo e âmbito. Sem ele, `v_branch_prices`
+  (que é um `UNION ALL`) punha as 54 linhas de canal num bloco no fim do ficheiro, a ~150 linhas
+  do artigo a que pertencem — quem lia o bloco de um artigo via 4 âmbitos e concluía que faltava
+  o 5.º. O rótulo `Scope` passou a dizer «All branches and channels» quando o ficheiro traz
+  canais, em vez de prometer só filiais.
+- **Item 54** — a `limit_req_zone` do rate limit vivia só em `/etc/nginx/conf.d/` no host: o
+  vhost versionado referenciava uma zona que o repo não tinha, logo um restauro só a partir do
+  repo deixava o nginx **sem arrancar**. Ficheiro versionado em `deploy/nginx/`, passo de
+  instalação no `deploy/DEPLOY.md`, e provado num directório temporário sem tocar na configuração
+  viva: sem o ficheiro da zona `test failed`, com ele `test is successful`.
+- **`X-Content-Type-Options: nosniff`** acrescentado ao vhost versionado — o único dos cabeçalhos
+  habituais que faltava. **Ainda não está vivo:** instalar o vhost precisa de sudo, é passo do Pedro.
+
+**Smoke: 91/91 no modo `jwt`, depois do deploy.** Os dois modos de `login` **falharam**, e não por
+causa do deploy: `auth.users.updated_at` do `logistics.test` é de 2026-09-19 23:09 — a password foi
+mudada na verificação do browser dessa noite e o ficheiro de credenciais em `~/tmp/tmsi-sudo/`
+ficou desactualizado. Diagnóstico por medição (`invalid_credentials`, não rate limit; conta e papel
+intactos, provado pelo modo `jwt` passar inteiro). Repor o ficheiro é passo do Pedro.
+
 ## Item 58 — `sap_code_cn` dos 37 artigos de origem TBM (2026-09-19, noite)
 
 **Autorização:** do Pedro, nessa noite, com a ressalva de que **todos os dados serão revistos por
