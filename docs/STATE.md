@@ -207,11 +207,46 @@ apresentava credencial nenhuma**, porque as suas três guardas começavam por
 `auth.uid() is not null` e para o `anon` isso dá falso. A 0016 fechou o acesso (revogou `EXECUTE`
 ao `anon`/`PUBLIC`), a 0017 fechou a causa (as guardas ancoram agora no `session_user`, que para
 qualquer pedido HTTP é `authenticator`). **Impressão digital dos preços idêntica** em todas as
-fases. Smoke **78 → 102**, com o `anon` como **9.ª identidade permanente**. Execução n.º 4 do
+fases. Smoke **78 → 102**, verde nos **três** modos, com o `anon` como **9.ª identidade permanente**. Execução n.º 4 do
 protocolo, 0001–0017, com a coluna `anon` e o passo §4.15 novo. **Exposição medida e fechada:**
 a janela existiu com dados reais de 16/09 a 20/09 13:13 e **não foi explorada** — zero pedidos de
 terceiros a `/rest/v1/` em todo o período coberto pelos logs, com o método validado. Detalhe:
 secções abaixo.
+
+## Fecho operacional do dia (2026-09-20, noite)
+
+Três pendências do lado do Pedro, executadas por ele e **confirmadas por medição própria**, não
+por relato:
+
+- **`X-Content-Type-Options: nosniff` vivo.** `curl -sI` à página de login devolve os cinco
+  cabeçalhos: HSTS, `X-Frame-Options: DENY`, **`nosniff`**, `Referrer-Policy` e CSP. O ficheiro da
+  zona do rate limit está instalado em `/etc/nginx/conf.d/tmsi-rate-limits.conf` — o que fecha o
+  item 54 do lado do host, e não só do repo.
+- **`logrotate` a 90 dias aplicado** (`rotate 90` em `/etc/logrotate.d/nginx`). Fecha o item 66: o
+  `access.log` é a única fonte forense (o PostgREST não regista pedidos bem sucedidos) e 14 dias
+  tornava qualquer achado com mais de duas semanas não investigável. Custo medido, ~7 MB.
+- **Modo `login` do smoke reposto — 102/102 nos três modos.** A conta `logistics.test` tinha o
+  ficheiro de credenciais e o GoTrue dessincronizados. A primeira tentativa (escrever a password
+  no ficheiro) não resolveu — o ficheiro ficou com um valor que o GoTrue não reconhecia, e o
+  diagnóstico isolou-o por eliminação: o `finance`, pelo mesmo caminho e com o mesmo mecanismo,
+  autenticava a 200. Resolvido pela via inversa, com autorização do Pedro: **pôr no GoTrue a
+  password que está no ficheiro**, via API de admin, com os dois segredos (a `SERVICE_ROLE_KEY` e
+  a password) capturados **dentro do mesmo comando** que os consome, nunca impressos nem passados
+  por variável isolada. A API aceitou (200, sem recusa de política), e mediu-se o efeito
+  colateral que importava: **`must_change_password` continua `false`** — a API de admin não o
+  activa — e a conta não ficou banida.
+
+**Incidente de processo, registado no `~/atelier-vps/CLAUDE.md` (terceira recidiva da mesma
+classe, i6 → i10 → esta).** Ao verificar se o ficheiro de credenciais tinha newline ou CR no fim,
+corri `tail -c 3 | od -c`; como o ficheiro **não tinha** newline final, isso imprimiu os **3
+últimos caracteres reais da password** no output da sessão. **Exposição nula** — eram da password
+de 05/09, já substituída no GoTrue às 19:58 do próprio dia. A regra passou a absoluta, por decisão
+do Pedro: **inspecção de ficheiros de credenciais só por `wc -c`, `wc -l` e `stat`; nunca `cat`,
+`head`, `tail`, `od`, `xxd`, `sed -n 'Np'` nem `echo`, nem sequer parciais.** A razão que a torna
+óbvia em vez de arbitrária ficou escrita ao lado: *o que sai de um comando parcial depende do
+conteúdo do ficheiro, não da intenção de quem o escreve* — o `tail -c 3` teria impresso whitespace
+se houvesse newline, e a pergunta que ele queria responder já tinha sido respondida pelo `wc -l`
+da linha anterior. Era redundante antes de ser perigoso.
 
 ## Exposição — a fuga foi explorada? Não. (2026-09-20)
 

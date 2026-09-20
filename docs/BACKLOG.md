@@ -377,8 +377,9 @@ tem a asserção equivalente, pelo que uma regressão parte também a suite.
 **Estado:** `is_trusted_db_session()` corrigida com `revoke` explícito (no ficheiro da 0017);
 varrimento confirma **zero** funções de `tmsi` com `PUBLIC` ou `anon`.
 
-**66. Retenção do `access.log` é de 14 dias, e é a única fonte forense** — **REGISTADO
-2026-09-20**, achado ao fechar a exposição do item 64. O `logrotate` do nginx está em
+~~**66. Retenção do `access.log` é de 14 dias**~~ ✅ **fechado 2026-09-20 — `rotate 90` aplicado
+pelo Pedro e confirmado por medição** (`grep rotate /etc/logrotate.d/nginx` → `rotate 90`). Texto
+original do achado, para contexto: — **REGISTADO 2026-09-20**, achado ao fechar a exposição do item 64. O `logrotate` do nginx está em
 `daily`/`rotate 14`, e o `access.log` é a **única** fonte capaz de responder a "alguém explorou
 isto?" — o PostgREST não regista pedidos bem sucedidos (`PGRST_LOG_LEVEL` por omissão é `error`)
 e não há mais nada à frente. Catorze dias significa que **um achado de fronteira com mais de duas
