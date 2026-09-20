@@ -292,6 +292,30 @@ disparam **incondicionalmente** (`app/src/app/config/page.tsx:104-157`), incluin
 pelo mesmo motivo. As que se resolvem em código de app entram na sessão de correcções; as que
 pedirem migração ficam aqui.
 
+**64. 🔴 `compute_price` devolve o breakdown de custo a quem não tem sessão** —
+**ACHADO 2026-09-20**, teste adversarial da condição 3. Pior do que o item 59, e por mecanismo
+diferente: `POST /rest/v1/rpc/compute_price` **sem `Authorization` nenhum** devolve **200 com as
+20 colunas**, breakdown de custo inteiro incluído (`exw_local`, `fee`, `interco`, `transport`,
+`duty`, `total_cost`, `total_cost_eur`, `margin`, `list_coef`, `fx_used`, `duty_rate`,
+`min_price`, `ref_price`) — sobre um artigo **real em `draft`**, o mesmo que um `sales`
+autenticado não vê. Os identificadores são sequenciais (`T-1001`…`T-1052`), logo enumeráveis;
+não se enumerou, por razões óbvias.
+
+**Causa:** as duas guardas do `compute_price` estão escritas como *«autenticado mas sem direito
+a custos»* — `if auth.uid() is not null and not see_costs and p.status <> 'active' then return`
+e `if auth.uid() is not null and not see_costs then` (o ramo que anula as 11 colunas). Para o
+`anon`, `auth.uid()` é **NULL**, as duas condições dão falso, e **nem o portão de estado nem a
+máscara disparam**. A guarda **falha aberta**.
+
+**Porque só agora:** as 8 identidades da matriz do protocolo são todas autenticadas. O caso «sem
+credencial» nunca foi uma identidade de teste — era o buraco entre duas linhas.
+
+**Fechado no sintoma pela 0016** (revoga `EXECUTE` a `anon`/`PUBLIC`; `compute_price` passa a ser
+concedida só a `authenticated`). **A guarda em si fica para a 0017**, para a falha-aberta não
+voltar por outro caminho — e a 0017 varre o mesmo padrão em todas as funções, políticas e vistas.
+**`anon` passa a 9.ª identidade permanente** do `scripts/smoke.py` e da matriz do
+`docs/VERIFICATION-PROTOCOL.md`, por decisão do Pedro (2026-09-20).
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de

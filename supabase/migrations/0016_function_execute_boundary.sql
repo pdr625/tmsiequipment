@@ -79,6 +79,41 @@
 
 --
 -- ============================================================================
+-- 🔴 A FUGA MAIOR, ACHADA NO TESTE ADVERSARIAL — e a lição que fica
+-- ============================================================================
+-- O que motivou esta migração foi margem a chegar a logistics/sales/agent. O
+-- teste adversarial das funções abertas (2026-09-20) achou pior, e por um
+-- mecanismo diferente:
+--
+--   POST /rest/v1/rpc/compute_price   — SEM Authorization nenhum
+--   -> 200, 20 colunas, breakdown de custo INTEIRO de um artigo real em draft:
+--      exw_local, fee, interco, transport, duty, total_cost, total_cost_eur,
+--      margin, list_coef, fx_used, duty_rate, min_price, ref_price
+--
+-- O mesmo artigo que um `sales` AUTENTICADO não vê (recebe vazio, como deve).
+--
+-- A causa está nas duas guardas do compute_price, ambas escritas como
+-- "autenticado MAS sem direito a custos":
+--
+--   if auth.uid() is not null and not see_costs and p.status <> 'active' then return;
+--   if auth.uid() is not null and not see_costs then   -- ramo que anula 11 colunas
+--
+-- Para o `anon`, auth.uid() é NULL, logo as duas condições dão falso: **nem o
+-- portão de estado nem a máscara disparam**. A guarda falha ABERTA. A fronteira
+-- inteira assumia que existe sessão — e ninguém tinha testado o caso de não
+-- haver nenhuma, porque as 8 identidades da matriz são todas autenticadas.
+--
+-- LIÇÃO, para não se repetir: uma condição de segurança que começa por
+-- `auth.uid() is not null` está a tratar "sem sessão" como "de confiança".
+-- O caso sem credencial tem de ser uma identidade de teste de primeira classe,
+-- não o buraco entre duas linhas. O `anon` passa a 9.ª identidade permanente
+-- do smoke e da matriz do protocolo (decisão do Pedro, 2026-09-20).
+--
+-- Esta migração FECHA o sintoma (revoga EXECUTE a anon/PUBLIC; compute_price
+-- passa a ser concedida só a `authenticated`). NÃO corrige a guarda em si —
+-- isso é a 0017, para que a falha-aberta não volte por outro caminho.
+--
+-- ============================================================================
 -- DOIS DONOS — a lição da 0011, medida outra vez e desta vez antes de aplicar
 -- ============================================================================
 -- As funções de tmsi têm DOIS donos:
