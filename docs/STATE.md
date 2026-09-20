@@ -198,6 +198,59 @@ limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
 
+**Etapa actual: fronteiras laterais fechadas — migrações 0016 e 0017 aplicadas 2026-09-20.**
+Duas fugas medidas e fechadas, ambas de classe "a fronteira estava provada nas tabelas e nas
+vistas, e o caminho por função nunca foi exercido": **item 59** (três funções `SECURITY DEFINER`
+sem verificação de papel devolviam margem a quem não lê custos) e **item 64**, achado no teste
+adversarial e mais grave — **`compute_price` devolvia o breakdown de custo inteiro a quem não
+apresentava credencial nenhuma**, porque as suas três guardas começavam por
+`auth.uid() is not null` e para o `anon` isso dá falso. A 0016 fechou o acesso (revogou `EXECUTE`
+ao `anon`/`PUBLIC`), a 0017 fechou a causa (as guardas ancoram agora no `session_user`, que para
+qualquer pedido HTTP é `authenticator`). **Impressão digital dos preços idêntica** em todas as
+fases. Smoke **78 → 102**, com o `anon` como **9.ª identidade permanente**. Execução n.º 4 do
+protocolo, 0001–0017, com a coluna `anon` e o passo §4.15 novo. Detalhe: secções abaixo.
+
+## Migração 0017 — as guardas do compute_price deixam de falhar abertas (2026-09-20)
+
+Aplicada às 17:48, com dump antes (`tmsi-pre-0017-20260920-174844.dump`) e ensaio em transacção
+revertida.
+
+**`tmsi.is_trusted_db_session()`** — `SECURITY INVOKER` (só lê `session_user` e GUCs; uma definer
+de superuser alcançável do motor seria superfície sem contrapartida), `STABLE`, `search_path`
+pinado, **nunca lança excepção** (claims ausentes, vazias ou malformadas devolvem "API", nunca
+erro — `auth.uid()` está dentro do bloco protegido porque também ela faz cast de `jsonb`), grant
+só ao `postgres`. As três guardas lêem uma **variável local avaliada uma vez por chamada**: o
+bloco `exception` abre subtransacção e a função corre **por linha** nas vistas.
+
+**Critério, e porque não é `current_role`.** Medido dentro de uma definer do `postgres` — é lá
+que a decisão é tomada, e lá os sinais são outros: `current_role` e `current_user` são **o dono
+em todos os contextos**, logo um critério baseado neles desligava as guardas para toda a gente
+(erro que cometi e que o Pedro apanhou antes de eu escrever a migração). Os contextos (1) *psql
+sem claims* e (3) *anon sem claims* são **indistinguíveis** por `uid`/claims — o que os separa é
+o `session_user`, e esse foi medido a sério: `pg_stat_activity` mostra o PostgREST ligado como
+**`authenticator`**.
+
+**Prova da guarda sozinha, sem a 0016 por baixo** (`scripts/prova-guarda-anon.sql`, agora §4.15
+do protocolo): `GRANT EXECUTE` ao `anon` dentro de transacção revertida, `SET SESSION
+AUTHORIZATION authenticator`. `anon` → **0 linhas** em todos os casos (e 0, não uma linha
+mascarada: a guarda do `see_sell` dispara primeiro, porque o `anon` não tem papel nenhum).
+`sales` e `agent` dão o mesmo pelo caminho real e pela emulação psql — é essa igualdade que prova
+que a emulação não mente. Sessão directa mantém acesso pleno, logo o smoke A/B continua a valer.
+Impressão digital **por papel** idêntica, com fictícios activados para `sales` (6), `agent` (6) e
+`logistics` (20) terem linhas — "0 = 0" não provaria nada.
+
+**Achado na própria migração, e um diagnóstico meu corrigido pelo Pedro.** Ao verificar a 0017
+depois de aplicada, `is_trusted_db_session()` tinha nascido com `PUBLIC` no `EXECUTE`. Concluí
+que "só as defaults do `postgres` funcionam" — **errado**: inferi-o de o `compute_price` não ter
+`PUBLIC`, quando não tem porque a própria 0016 lho revogou à mão. O mecanismo real, medido depois
+de o Pedro o apontar: `ALTER DEFAULT PRIVILEGES … IN SCHEMA … REVOKE … FROM PUBLIC` é **no-op
+para qualquer dono**, porque o `EXECUTE` a `PUBLIC` vem do **built-in global** do PostgreSQL e uma
+entrada com âmbito de schema só sabe **acrescentar**. Teste que decide: função criada em `tmsi`
+pelo `postgres` — o dono que *tem* entrada por schema — nasce na mesma com `=X/postgres`.
+Item 65, e convenção nova em `CLAUDE.md`: toda a migração que crie funções termina com `REVOKE`
+explícito **e** um bloco `DO` que a faz falhar antes do `COMMIT`. A 0017 já a tem, e re-correr o
+ficheiro inteiro passa — idempotente, guarda verde, impressão digital intacta.
+
 ## Migração 0016 — fronteira de execução das funções (2026-09-20)
 
 **Aplicada** às 13:13, depois de dump imediatamente antes

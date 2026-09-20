@@ -140,6 +140,42 @@
 --    definidos só para o postgres.
 --    => há um ALTER DEFAULT PRIVILEGES para CADA um dos dois donos.
 
+-- ============================================================================
+-- ⚠️ CORRECÇÃO DATADA (2026-09-20, depois de aplicada) — o default-deny desta
+-- migração NÃO EXISTE, e a afirmação abaixo de que "uma função nova no schema
+-- fica fechada até alguém a pôr aqui" é FALSA.
+-- ============================================================================
+-- `ALTER DEFAULT PRIVILEGES ... IN SCHEMA tmsi REVOKE EXECUTE ON FUNCTIONS
+-- FROM PUBLIC` é um **no-op para qualquer dono**. Os privilégios por omissão
+-- de uma função nova são: o built-in do PostgreSQL (que dá EXECUTE a PUBLIC e
+-- é GLOBAL, não vive em pg_default_acl) **mais** o que as entradas de
+-- pg_default_acl ACRESCENTAM. Uma entrada com âmbito de schema só sabe
+-- acrescentar; não consegue retirar o que o built-in global concede.
+--
+-- Medido em transacção revertida (2026-09-20), e é o teste que decide:
+--   create function tmsi.sonda() ... as postgres
+--   -> ACL: =X/postgres postgres=X/postgres authenticated=X/postgres ...
+--      ou seja, PUBLIC com EXECUTE, apesar de existir a entrada
+--      `postgres|tmsi|f` e de esta migração ter revogado "por omissão".
+--
+-- O diagnóstico inicial do item 65 — "só as defaults do postgres funcionam" —
+-- estava ERRADO: o compute_price não tem PUBLIC porque o `revoke execute on
+-- all functions in schema tmsi from public` da secção 1 lho tirou à mão, não
+-- porque alguma default o tenha impedido.
+--
+-- O que FUNCIONARIA é um ALTER DEFAULT PRIVILEGES **sem** IN SCHEMA (global).
+-- Não se faz: apanharia as funções que o supabase_admin cria noutros schemas
+-- (extensions, graphql, realtime...) e partiria a instância.
+--
+-- Consequência, agora convenção escrita em CLAUDE.md: toda a migração que crie
+-- ou recrie funções termina com REVOKE explícito e com um bloco DO que levanta
+-- excepção se sobrar alguma função de tmsi com EXECUTE a PUBLIC ou anon — a
+-- migração falha ANTES do COMMIT. É verificável, ao contrário de uma regra
+-- que se tem de lembrar.
+--
+-- Os dois comandos ficam na migração, inertes mas honestos: não fazem mal, e
+-- apagá-los esconderia a lição.
+
 begin;
 
 -- ---------------------------------------------------------------------------
@@ -161,8 +197,10 @@ grant execute on all functions in schema tmsi to postgres;
 -- e já tinha acesso pleno antes desta migração.
 grant execute on all functions in schema tmsi to service_role;
 
--- Grupo A, reaberto um a um. A lista é explícita por desenho: uma função nova
--- no schema fica fechada até alguém a pôr aqui.
+-- Grupo A, reaberto um a um. (A frase original — "uma função nova no schema
+-- fica fechada até alguém a pôr aqui" — era falsa: ver a correcção datada no
+-- cabeçalho. A lista explícita continua a ser o desenho certo; o que não
+-- existe é o fecho automático do que vier a seguir.)
 grant execute on function tmsi.has_role(tmsi.role_code)            to authenticated;
 grant execute on function tmsi.can_read_costs()                    to authenticated;
 grant execute on function tmsi.can_read_operational()              to authenticated;

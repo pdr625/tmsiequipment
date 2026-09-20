@@ -316,26 +316,41 @@ voltar por outro caminho — e a 0017 varre o mesmo padrão em todas as funçõe
 **`anon` passa a 9.ª identidade permanente** do `scripts/smoke.py` e da matriz do
 `docs/VERIFICATION-PROTOCOL.md`, por decisão do Pedro (2026-09-20).
 
-**65. O default-deny da 0016 não vale para funções criadas pelo `supabase_admin`** —
-**ACHADO 2026-09-20**, ao verificar a 0017 depois de aplicada. A 0016 escreveu
-`alter default privileges for role supabase_admin in schema tmsi revoke execute on functions
-from public` e o cabeçalho dela promete que "uma função nova no schema fica fechada até alguém a
-pôr na lista". **É falso.** Medido: o comando **não cria entrada nenhuma** em `pg_default_acl`;
-e mesmo forçando a entrada a existir (com um `grant` antes), uma função criada pelo
-`supabase_admin` nasce na mesma com `=X/supabase_admin` — PUBLIC com `EXECUTE`. Só as defaults
-do papel `postgres` fazem efeito nesta instância, e é por isso que o `compute_price` (criado por
-ele) não tem PUBLIC.
+~~**65. O default-deny da 0016 não existe — `ALTER DEFAULT PRIVILEGES ... IN SCHEMA` não
+retira o `PUBLIC`**~~ ✅ **diagnosticado e contornado 2026-09-20.** Achado ao verificar a 0017
+depois de aplicada: `tmsi.is_trusted_db_session()` nasceu com `PUBLIC` no `EXECUTE`, apesar de a
+0016 dizer ter instituído um default-deny.
 
-Apanhado na primeira função a estrear o caminho: `tmsi.is_trusted_db_session()` (0017) nasceu
-com PUBLIC. **Corrigido de imediato** com `revoke execute ... from public` explícito, que passou
-a estar no ficheiro da 0017; varrimento confirmou **zero** outras funções de `tmsi` com PUBLIC.
-Sem consequência de fuga — a função devolve um booleano sobre a própria sessão de quem chama —
-mas a regra que a 0016 dizia ter instituído não existia.
+**Mecanismo real** (medido em transacção revertida, e corrige um primeiro diagnóstico errado —
+ver abaixo): os privilégios por omissão de uma função nova são o **built-in do PostgreSQL**, que
+concede `EXECUTE` a `PUBLIC` e é **global** (não vive em `pg_default_acl`), **mais** o que as
+entradas de `pg_default_acl` **acrescentam**. Uma entrada com âmbito de schema só sabe
+acrescentar — **não consegue retirar** o que o built-in global concede. Logo
+`ALTER DEFAULT PRIVILEGES ... IN SCHEMA tmsi REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC` é **no-op
+para qualquer dono**, e a 0016 usou `IN SCHEMA` nos dois comandos que escreveu.
 
-**Regra operacional, até isto ter solução melhor:** toda a migração que criar uma função em
-`tmsi` **revoga o PUBLIC à mão**, na mesma migração. Não confiar no default. A asserção nova do
-smoke (bloco DD) falha se alguma função de `tmsi` voltar a ter PUBLIC, o que torna a regra
-verificável em vez de lembrada.
+**Teste que decide:** criar uma função em `tmsi` **como `postgres`** — o dono que *tem* entrada
+por schema (`postgres|tmsi|f`) — e ver a ACL com que nasce:
+`=X/postgres postgres=X/postgres authenticated=X/postgres service_role=X/postgres`. O `=X/` é
+`PUBLIC`. Nasce aberta na mesma.
+
+**Primeiro diagnóstico, errado, registado por honestidade:** escrevi que "só as defaults do
+`postgres` fazem efeito nesta instância", inferindo-o de o `compute_price` não ter `PUBLIC`. Não
+tem porque o `revoke execute on all functions in schema tmsi from public` da própria 0016 lho
+tirou à mão — nada a ver com defaults. Inferi de um efeito que eu próprio tinha causado.
+
+**O que funcionaria e não se faz:** um `ALTER DEFAULT PRIVILEGES` **sem** `IN SCHEMA` (global)
+para o `supabase_admin` apanharia as funções que ele cria noutros schemas (`extensions`,
+`graphql`, `realtime`, `public`) e partiria a instância. Decisão do Pedro, 2026-09-20: não fazer.
+
+**Contorno, agora convenção escrita em `CLAUDE.md`:** toda a migração que crie ou recrie funções
+termina com `REVOKE` explícito **e** com um bloco `DO` que levanta excepção se sobrar alguma
+função de `tmsi` com `EXECUTE` a `PUBLIC` ou a `anon` — **a migração falha antes do `COMMIT`**.
+Verificável, ao contrário de uma regra que se tem de lembrar. O `scripts/smoke.py` (bloco DD)
+tem a asserção equivalente, pelo que uma regressão parte também a suite.
+
+**Estado:** `is_trusted_db_session()` corrigida com `revoke` explícito (no ficheiro da 0017);
+varrimento confirma **zero** funções de `tmsi` com `PUBLIC` ou `anon`.
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,

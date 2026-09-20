@@ -39,6 +39,10 @@ Entregue **e** com prova re-executável (smoke, protocolo executado, ou mediçã
 | Fronteira de conteúdo do `audit_log` (0014) | Smoke bloco BB desde 19/09 — incluindo o ângulo do no-op que a 1.ª versão teve |
 | `sales`, `agent`, `viewer` | Smoke bloco CC desde 19/09 |
 | Matriz dos 8 papéis sobre 0001–0015 | Execução n.º 3 do protocolo, 19/09 |
+| **Fronteira de execução das funções (0016)** | Item 59 fechado; as três internas recusam a todos; impressão digital intacta |
+| **Guardas do `compute_price` fecham (0017)** | Item 64 fechado; prova §4.15 — a guarda aguenta **sozinha**, sem a 0016 por baixo |
+| **`anon` como 9.ª identidade** | Smoke bloco DD + coluna na matriz; execução n.º 4, migrações 0001–0017 |
+| **Nenhuma função de `tmsi` com `EXECUTE` a `PUBLIC`** | Item 65; guarda na migração **e** asserção de smoke |
 
 ---
 
@@ -69,8 +73,8 @@ Ordem proposta — cada passo desbloqueia o seguinte.
 |---|---|---|---|---|
 | 1 | ~~**Registar a carga**~~ | — | ✅ **feito 2026-09-19** — `STATE.md` item 51, `BACKLOG` 51–57, `ENGINE-PARITY` §9, `DEPLOY.md` corrigido, quatro commits | Enquanto não existia registo, qualquer decisão seguinte assentava em memória |
 | 2 | ~~**Repor o gate de produção**~~ | 1 | ✅ **feito 2026-09-19** — execução n.º 3 (0001–0015), smoke 78→**91** verde nos três modos, matriz dos 8 papéis medida, sem fuga | A activação é o momento em que `sales`/`agent` vêem dados reais pela primeira vez. A prova tem de vir **antes**, não depois |
-| 3 | **Decidir a `unit`** dos 49 artigos | Pedro | Os 49 têm `unit` não-nula | Bloqueia a activação de **todos** — nenhum outro trabalho a contorna |
-| 4 | **`sap_code_cn`: derivar os 37, decidir os 2** | Pedro | Os 39 de origem TBM têm `sap_code_cn` único | Medido a 19/09: a regra já escrita (`MODEL-GAP-ANALYSIS.md:27`) resolve **37 dos 39** por derivação (`S` + `sap_code_sa`), com 37 valores distintos e zero colisões. Só `T-1002` e `T-1020` são excepção, por não terem `sap_code_sa` de origem. Deixou de ser «obter 39 códigos» e passou a ser «derivar 37 e decidir 2» |
+| 3 | **Decidir a `unit`** dos 49 artigos | Pedro + **migração 0018** | Os 49 têm `unit` não-nula | **É agora o único bloqueio da activação.** O importador não sabe escrever `unit` — é a 0018. CSV pronto em `~/tmp/tmsi-unit/`; ver `docs/HANDOVER.md` |
+| 4 | ~~**`sap_code_cn`**~~ | — | ✅ **feito 2026-09-19** — 37 por derivação, transacção única, desfazer provado, impressão digital intacta. Excepções `T-1002` e `T-1020` | Medido a 19/09: a regra já escrita (`MODEL-GAP-ANALYSIS.md:27`) resolve **37 dos 39** por derivação (`S` + `sap_code_sa`), com 37 valores distintos e zero colisões. Só `T-1002` e `T-1020` são excepção, por não terem `sap_code_sa` de origem. Deixou de ser «obter 39 códigos» e passou a ser «derivar 37 e decidir 2» |
 | 5 | **Completar o `hs_code` do `T-1020`** | Pedro | `compute_price` sem `errors[]` em todo o catálogo | Hoje 3 dos 5 âmbitos deste artigo devolvem `missing customs rate for HS/zone` |
 | 6 | **Decidir o `sap_code_us` duplicado** (`NC01728-998`) | Pedro | Ou o ficheiro corrigido, ou a constraint revista com fundamento escrito | Deixou de ser «correcção barata». Os três artigos (`T-1021`, `T-1023`, `T-1042`) são todos `equipment`, nenhum é acessório de outro, e o terceiro difere em categoria **e** em filial de origem — não é o padrão de um código de kit. São duas leituras opostas: **dado errado**, ou **constraint errada** porque a CORP usa mesmo um código para três artigos. Não chegou à base (o importador não escreve `sap_code_us`), logo não há pressa — mas a 2.ª importação vai exercê-la |
 | 7 | **Activar** os artigos completos | 3, 4, 5 | ≥1 artigo `active`; `sales`/`agent` vêem preço | É o primeiro momento em que a app serve para o que foi feita |
@@ -85,10 +89,9 @@ Ordem proposta — cada passo desbloqueia o seguinte.
 | # | O quê | Depende de | Critério de «feito» |
 |---|---|---|---|
 | 1 | ~~Execução n.º 3 do protocolo (0014/0015)~~ | — | ✅ **feito 2026-09-19** — deixou de depender da activação: fez-se sobre os artigos fictícios, que é o que o gate sempre pediu (provas fictícias validam o mecanismo) |
-| 2 | **Re-execução do protocolo com dados reais activos** | §3 passo 7 | Matriz dos 8 papéis refeita com ≥1 artigo real `active`; em particular as linhas de `sales` e `agent`, hoje a zero por falta de artigos activos, e a fronteira de custo no export (§3 passo 8) |
-| 3 | **⚠️9 — `/audit` lê a tabela crua, `/products/[id]` lê a vista** | — | As duas rotas lêem `tmsi.v_audit_log`. Funciona hoje só porque `/audit` selecciona exactamente as 6 colunas re-concedidas pela 0014: qualquer coluna acrescentada ao `select` fura a fronteira sem aviso. Precisa de deploy |
-| 4 | **⚠️10 — `/products/export` sem gate de papel próprio** | — | A rota ramifica por `can_read_costs()` como `/prices/export` já faz, em vez de depender só da RLS de `v_products`. Precisa de deploy |
-| 5 | `ORDER BY` no export + rótulo `Scope` coerente com canais | — | Linhas de canal ao lado do artigo; rótulo descreve o conteúdo. Precisa de deploy |
+| 2 | **Execução n.º 5 do protocolo, com dados reais activos** | §3 passo 7 | Matriz dos 8 papéis refeita com ≥1 artigo real `active`; em particular as linhas de `sales` e `agent`, hoje a zero por falta de artigos activos, e a fronteira de custo no export (§3 passo 8) |
+| 3 | ~~⚠️9, ⚠️10, ⚠️11~~ | — | ✅ **feitos 2026-09-20**, revisão `482bb4f`: `/audit` lê a vista, `/products/export` pergunta `can_read_costs()`, export ordenado e rótulo `Scope` honesto |
+| 4 | **Instalar o vhost** (`nosniff` + zona do rate limit) | Pedro (sudo) | Cabeçalho vivo; `nginx -t` passa só com o que está no repo |
 | 6 | Fechar as lacunas da §2 que o Pedro considerar bloqueantes | — | Cada item da §2 com prova ou decisão registada |
 | 7 | Decidir o `Alert` dos serviços de margem plana | Pedro | Regra isenta `service`/`option`, ou a coluna sai do ficheiro que circula |
 | 8 | Desactivar as contas `.test` | Pedro | Contas desactivadas, `TEST-ACCOUNTS.md` actualizado |

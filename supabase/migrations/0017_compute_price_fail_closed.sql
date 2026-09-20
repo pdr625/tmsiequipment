@@ -333,6 +333,34 @@ begin
          when v_margin < coalesce(tgt_m, 0.25) then 'warning' else 'ok' end,
     ov, err, p_scope_type;
 end $function$;
+-- ---------------------------------------------------------------------------
+-- 3. A guarda da convenção (CLAUDE.md, item 65).
+--
+-- `alter default privileges ... in schema ... revoke ... from public` é no-op:
+-- o EXECUTE a PUBLIC vem do built-in GLOBAL do PostgreSQL, e uma entrada com
+-- âmbito de schema só sabe acrescentar, nunca retirar. Logo cada função nova
+-- nasce aberta e tem de ser fechada à mão — e isto falha a migração ANTES do
+-- COMMIT se alguma ficou por fechar.
+--
+-- aclexplode com grantee = 0 (o PUBLIC) em vez de comparar texto: uma ACL nula
+-- significa built-in, ou seja PUBLIC, e essa não aparece em comparação de
+-- strings nenhuma.
+-- ---------------------------------------------------------------------------
+do $$
+declare v_abertas text;
+begin
+  select string_agg(p.proname, ', ' order by p.proname) into v_abertas
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'tmsi'
+    and (p.proacl is null
+         or exists (select 1 from aclexplode(p.proacl) a
+                    where a.privilege_type = 'EXECUTE'
+                      and (a.grantee = 0 or a.grantee = 'anon'::regrole)));
+  if v_abertas is not null then
+    raise exception 'Funções de tmsi com EXECUTE a PUBLIC/anon: %', v_abertas;
+  end if;
+end $$;
+
 commit;
 
 
