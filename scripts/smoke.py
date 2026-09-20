@@ -1445,6 +1445,48 @@ def block_anon_boundary(no_cost_token):
           not recusados, f"abertos={recusados or 'nenhum'}")
 
 
+def block_origin_branch_sells(sales_uuid):
+    """EE — 0019: a filial de origem também vende.
+
+    Até 2026-09-20 `products_visible()` dava ao `sales` só `sold_in &&
+    my_branches()`, e `sold_in` EXCLUI a origem por construção do importador —
+    logo um comercial de SA não via os artigos que a SA produz. Descoberto ao
+    activar os primeiros 6 artigos reais, não por leitura de código: as
+    cláusulas de `sales`/`agent` exigem `status='active'` e estiveram mortas
+    desde 2026-09-04.
+
+    A asserção usa um artigo activo cuja filial de ORIGEM é a do vendedor e que
+    NÃO o tem em `sold_in` — é o caso exacto que regrediria."""
+    alvo = psql_rows(
+        "select p.id from tmsi.products p "
+        "join tmsi.user_roles r on r.role = 'sales' and r.branch_id = p.primary_branch "
+        "where p.status = 'active' and not (r.branch_id = any(p.sold_in)) "
+        "limit 1;"
+    )
+    if not alvo:
+        check("EE: origem vende", True, "SKIP — nenhum artigo activo com origem na filial do sales")
+        return
+    pid = alvo[0][0]
+
+    visivel = psql_rows(
+        f"select count(*) from tmsi.v_products where id = '{pid}';", claims_uuid=sales_uuid
+    )
+    check(
+        "EE: sales vê um artigo activo cuja filial de origem é a sua (0019)",
+        bool(visivel) and visivel[0][0] == "1",
+        f"artigo={pid} linhas={visivel[0][0] if visivel else '?'}",
+    )
+
+    sem_custo = psql_rows(
+        f"select count(exw_price) from tmsi.v_products where id = '{pid}';", claims_uuid=sales_uuid
+    )
+    check(
+        "EE: e vê-o sem coluna de custo",
+        bool(sem_custo) and sem_custo[0][0] == "0",
+        f"com_custo={sem_custo[0][0] if sem_custo else '?'}",
+    )
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -1612,6 +1654,11 @@ def main():
         )
     else:
         check("CC: sell-side roles", True, "SKIP — no sales/agent account found in tmsi.user_roles")
+
+    # 0019: a filial de origem também vende. Depende do lookup acima, por isso
+    # vem a seguir — não antes, como na primeira versão desta chamada.
+    if sell_side.get("sales"):
+        block_origin_branch_sells(sell_side["sales"])
 
     delete_smoke_fixture_product()
 

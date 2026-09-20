@@ -400,6 +400,31 @@ O `-d` é ensaio (debug): mostra o que faria sem mexer em ficheiro nenhum. Confi
 `rotate 90` e que não acusa erro de sintaxe. A alteração só produz efeito na rotação seguinte;
 os ficheiros já apagados não voltam.
 
+**67. Regra do `Alert` para serviços de margem plana — decisão do Pedro** — **REGISTADO
+2026-09-20**, ao activar os três CONDATLINK. As **15 linhas** de `T-1050`/`T-1051`/`T-1052`
+aparecem com `alert = 'critical'`, e **desde hoje isso é visível no export** — antes não era,
+porque nada estava `active`.
+
+**Não é um defeito do motor.** O `compute_price` classifica `critical` quando
+`margin < settings.margin_min` (0,15), e estes três têm **margem 0 por decisão** — é a regra
+plana do item 30, que o Pedro confirmou a 2026-09-10: opções e serviços não têm margem própria,
+ela está no preço do artigo-pai. O alerta está a dizer a verdade sobre um número que foi
+escolhido.
+
+**O problema é de leitura, não de cálculo:** uma lista de preços que circula fora da empresa
+mostra `critical` em todas as linhas de serviço, e quem a lê não sabe que é intencional.
+
+**Três saídas, e a escolha é do Pedro:**
+1. A regra de alerta **isenta** `item_type` em (`service`, `option`) — o motor deixa de marcar o
+   que foi decidido ser assim. Migração, toca `compute_price`.
+2. A coluna `Alert` **sai** do ficheiro que circula, e fica só no ecrã interno. Alteração de app,
+   sem migração.
+3. **Fica como está**, e documenta-se no rodapé do export o que `critical` significa para um
+   serviço.
+
+Sem urgência operacional — não afecta preço nenhum. Mas afecta a primeira impressão de quem
+receber o ficheiro, e por isso não deve chegar à apresentação à equipa por decidir.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de

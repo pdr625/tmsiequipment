@@ -147,6 +147,25 @@ lá está, não o que se julga que lá está.
 
 ---
 
+## Uma migração que alarga visibilidade não pode ter a impressão digital igual
+
+A verificação habitual — *md5 de `v_branch_prices` idêntico antes e depois* — **inverte-se**
+quando a migração alarga quem vê o quê. As vistas de preço são `security_invoker = true`: a RLS
+da `tmsi.products` corre por baixo e decide que artigos chegam sequer à vista. Alargar a
+`products_visible` amplia esse conjunto, logo o md5 **tem** de mudar para os papéis alargados.
+Se não mudasse, a migração não tinha feito nada.
+
+**A invariante correcta:**
+
+1. Papéis **não** alargados: contagens e md5 **idênticos**.
+2. Papéis alargados: as linhas que já viam **continuam lá, com os mesmos valores** — zero
+   desaparecidas, zero com valor diferente. As novas são só acréscimo.
+
+Nascido na 0019 (2026-09-20), onde a condição de paragem escrita à partida — "se o md5 mudar,
+pára" — teria feito rejeitar uma migração correcta.
+
+---
+
 ## "0 = 0" não prova nada
 
 Uma asserção que compara zero com zero passa por razões erradas: papel sem linhas, alvo mal
