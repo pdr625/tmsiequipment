@@ -19,6 +19,7 @@ type BranchPriceRow = {
   min_price: number | null;
   ref_price: number | null;
   alert: string | null;
+  scope_type: string | null;
 };
 
 type SellingPriceRow = {
@@ -29,7 +30,16 @@ type SellingPriceRow = {
   min_price: number | null;
   ref_price: number | null;
   lead_time_days: number | null;
+  scope_type: string | null;
 };
+
+// ⚠️11: "All branches" é o que o filtro diz, não o que o ficheiro traz — sem
+// filtro, v_branch_prices inclui também as linhas de canal. O rótulo passa a
+// descrever o conteúdo, decidido a partir dos escopos realmente presentes.
+function scopeLabel(branch: string | null, rows: { scope_type?: string | null }[]) {
+  if (branch) return branch;
+  return rows.some((r) => r.scope_type === 'channel') ? 'All branches and channels' : 'All branches';
+}
 
 function respond(buffer: Uint8Array, filename: string) {
   // `as unknown as BodyInit`: see products/export/route.ts's identical comment —
@@ -83,7 +93,13 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .schema('tmsi')
       .from('v_branch_prices')
-      .select('product_id, branch_id, currency, total_cost_eur, margin, min_price, ref_price, alert');
+      .select('product_id, branch_id, scope_type, currency, total_cost_eur, margin, min_price, ref_price, alert')
+      // ⚠️11: sem ORDER BY, v_branch_prices (UNION ALL) devolvia as linhas de
+      // canal num bloco no fim do ficheiro, a ~150 linhas do artigo a que
+      // pertencem — quem lê o bloco de um artigo via 4 âmbitos e concluía que
+      // o 5.º não existia. Ordenar por artigo põe cada âmbito ao lado do seu.
+      .order('product_id')
+      .order('branch_id');
     if (branch) {
       query = query.eq('branch_id', branch);
     }
@@ -96,7 +112,7 @@ export async function GET(request: NextRequest) {
     const buffer = await buildXlsx({
       sheetTitle: 'Price list',
       reportTitle: `${branding.displayName} — Price list`,
-      scope: branch ?? 'All branches',
+      scope: scopeLabel(branch, rows),
       currency: currencies.join(', ') || '—',
       generatedBy: user.email ?? user.id,
       generatedAt,
@@ -123,7 +139,9 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .schema('tmsi')
     .from('v_selling_prices')
-    .select('product_id, name, branch_id, currency, min_price, ref_price, lead_time_days');
+    .select('product_id, name, branch_id, scope_type, currency, min_price, ref_price, lead_time_days')
+      .order('product_id')
+      .order('branch_id');
   if (branch) {
     query = query.eq('branch_id', branch);
   }
@@ -136,7 +154,7 @@ export async function GET(request: NextRequest) {
   const buffer = await buildXlsx({
     sheetTitle: 'Price list',
     reportTitle: `${branding.displayName} — Price list`,
-    scope: branch ?? 'All branches',
+    scope: scopeLabel(branch, rows),
     currency: currencies.join(', ') || '—',
     generatedBy: user.email ?? user.id,
     generatedAt,

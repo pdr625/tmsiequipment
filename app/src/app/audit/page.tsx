@@ -60,7 +60,11 @@ export default async function AuditPage({
 
   const supabase = await createSupabaseServerClient();
 
-  let query = supabase.schema('tmsi').from('audit_log').select('id, at, actor, table_name, row_pk, action');
+  // ⚠️9 (auditoria 2026-09-19): este ecrã lia a tabela crua enquanto
+  // /products/[id] já lia a vista da 0014. Funcionava só porque o `select`
+  // aqui coincide com as 6 colunas que a 0014 re-concedeu — uma coluna a mais
+  // no select furava a fronteira sem aviso. Um só caminho de leitura.
+  let query = supabase.schema('tmsi').from('v_audit_log').select('id, at, actor, table_name, row_pk, action');
   if (table) query = query.eq('table_name', table);
   if (actor) query = query.eq('actor', actor);
   if (from) query = query.gte('at', from);

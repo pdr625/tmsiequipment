@@ -46,7 +46,16 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  const seesCosts = products?.some((p) => p.exw_price !== null) ?? false;
+  // ⚠️10 (auditoria 2026-09-19): esta era a única rota de export sem gate de
+  // papel próprio — inferia o direito a custos a partir dos dados que a vista
+  // devolvia ("veio algum exw_price não-nulo?"). Funciona, mas faz a RLS
+  // trabalhar sozinha: um catálogo em que todas as linhas visíveis tivessem
+  // exw_price nulo por outra razão (nenhuma hoje, mas nada o impede) passaria
+  // a esconder a coluna a um papel com direito a ela, e o inverso deixaria de
+  // ter segunda barreira. Passa a perguntar explicitamente, como /prices/export
+  // (route.ts:76) já fazia; a RLS de v_products continua por baixo.
+  const { data: canReadCosts } = await supabase.schema('tmsi').rpc('can_read_costs');
+  const seesCosts = canReadCosts === true;
   const generatedAt = new Date();
   const currencies = seesCosts
     ? [...new Set(products.map((p) => p.currency).filter((c): c is string => c !== null))].sort()
