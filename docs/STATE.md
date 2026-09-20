@@ -208,7 +208,49 @@ apresentava credencial nenhuma**, porque as suas três guardas começavam por
 ao `anon`/`PUBLIC`), a 0017 fechou a causa (as guardas ancoram agora no `session_user`, que para
 qualquer pedido HTTP é `authenticator`). **Impressão digital dos preços idêntica** em todas as
 fases. Smoke **78 → 102**, com o `anon` como **9.ª identidade permanente**. Execução n.º 4 do
-protocolo, 0001–0017, com a coluna `anon` e o passo §4.15 novo. Detalhe: secções abaixo.
+protocolo, 0001–0017, com a coluna `anon` e o passo §4.15 novo. **Exposição medida e fechada:**
+a janela existiu com dados reais de 16/09 a 20/09 13:13 e **não foi explorada** — zero pedidos de
+terceiros a `/rest/v1/` em todo o período coberto pelos logs, com o método validado. Detalhe:
+secções abaixo.
+
+## Exposição — a fuga foi explorada? Não. (2026-09-20)
+
+**Frente fechada.** A janela existiu **com dados reais**: de 16/09 (carga do catálogo) a 20/09
+13:13 (aplicação da 0016). Medição corrida pelo Pedro com sudo, entre 19:48 e 19:55.
+
+**Fonte:** `access_log` único, `/var/log/nginx/access.log` — confirmado, não assumido
+(`grep -rh access_log` em `sites-enabled` e `nginx.conf` devolve só essa linha; o vhost do TMSI
+não tem log próprio). É partilhado pelas apps do VPS e é a **única** fonte forense.
+
+**Resultado:** pedidos a `/rest/v1/rpc/*` vêm de **dois IPs, ambos internos** — `185.200.244.100`
+(o próprio VPS: smoke, provas de paridade, sessões de agente; inclui os 403/401 de 20/09 nas três
+funções, que são as asserções negativas novas) e `172.20.40.5` (o container `tmsi-app` a falar com
+o PostgREST pela rede docker, e é por isso que os IPs do browser do Pedro não aparecem por estes
+caminhos). A mesma consulta **excluindo esses dois** dá **vazio**. Alargada a **todo** o
+`/rest/v1/` — tabelas e vistas, não só RPC, porque `settings` tinha política aberta antes da 0016
+— dá **vazio** também.
+
+**Validação do método, que é o que torna o vazio significativo:** o top de IPs de *todo* o
+`access.log` mostra IPs externos reais com milhares de pedidos cada. Se só aparecessem endereços
+internos, o nginx não estaria a registar a origem verdadeira (proxy ou NAT à frente) e a ausência
+de terceiros não provaria nada. **É medição, não artefacto.**
+
+**Limite da prova, a citar sempre junto da conclusão:** só vale para o que o `access.log` regista
+e para a retenção de 14 dias; **o PostgREST não regista pedidos bem sucedidos**
+(`PGRST_LOG_LEVEL` por omissão é `error`), logo não corrobora nem contradiz. 03–05/09 não tem
+logs — sem consequência, nessa altura só havia dados fictícios.
+
+**Script, e os dois defeitos do primeiro.** O original (`~/tmp/tmsi-sap/exposicao.sh`) agregava
+caminhos e datas com `grep -o` sobre **todas** as linhas e emparelhava-as com `paste - -`: as duas
+listas não têm o mesmo comprimento, logo os pares saíam **desalinhados**. E **não mostrava o
+código de resposta**, que é o que distingue uma porta batida de uma fuga servida. Substituído por
+`scripts/exposicao-rest.sh`, versionado, com os campos todos tirados da mesma linha por `awk` —
+e referenciado no protocolo como **§4.16**, passo a correr **depois de qualquer achado de
+fronteira**.
+
+**Item 66 aberto:** 14 dias de retenção é curto para a única fonte forense. Proposta medida ao
+Pedro — `rotate 90`, ~7 MB de acrescento (média real de 90 KB/dia comprimido) num disco com 13 GB
+livres.
 
 ## Migração 0017 — as guardas do compute_price deixam de falhar abertas (2026-09-20)
 
