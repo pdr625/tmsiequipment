@@ -242,6 +242,24 @@ What does **not** survive on its own: the app pointing at the right hostname (§
 GHCR pull credential existing anywhere but this one VPS (§9, and the escrow in §6) — without
 those two, data survival alone doesn't get the service back up.
 
+## 5b. Ficheiros do host a recuperar em qualquer restauro (não são segredos)
+
+Além dos segredos (§6), há ficheiros **fora deste repo** sem os quais um host reconstruído fica
+funcional mas cego às regras com que foi operado. Recuperá-los não é urgente para pôr o serviço
+de pé — é urgente para não repetir os erros que essas regras registam.
+
+| Ficheiro | Onde vive | Cópia | Porquê |
+|---|---|---|---|
+| `~/atelier-vps/CLAUDE.md` | **só no disco do host** | `dossier/audits/2026-09-20-vps-claude-md.md` (fotografia datada) | Regras operacionais do agente neste VPS: disciplina de segredos (três incidentes reais registados, com o mecanismo de cada um), invariantes de rede e de Docker, sudo sem TTY, metodologia de sessão. Um host novo sem isto não sabe, por exemplo, que `127.0.0.1` nunca é destino de proxy aqui, nem porque é que um ficheiro de credenciais só se inspecciona por `wc`/`stat`. |
+| `/etc/nginx/conf.d/tmsi-rate-limits.conf` | host | `deploy/nginx/tmsi-rate-limits.conf` (versionado desde 2026-09-20) | O vhost referencia a zona `tmsi_auth`; sem este ficheiro o nginx **recusa arrancar** (item 54) |
+
+**O `CLAUDE.md` não está na raiz do dossier por desenho**, não por esquecimento: o
+`dossier-push.sh` tem lista branca (`VPS.md`, `audits/*-vps*.md`, appends ao `CHANGELOG.md`) e
+este host não a contorna. Daí a fotografia em `audits/`. **É fotografia, não original** — em
+conflito, manda o ficheiro no host; e quem o alterar empurra cópia nova datada antes de fechar a
+sessão. Alargar a lista branca para aceitar o ficheiro a sério é **decisão em aberto**, para uma
+sessão do projecto do VPS.
+
 ## 6. Secrets escrow
 
 Today, `deploy/supabase/.env` and the GHCR pull PAT (§9) exist **only on this VPS**. A real
