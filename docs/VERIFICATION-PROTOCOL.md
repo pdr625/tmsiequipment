@@ -1102,6 +1102,40 @@ margem plana/fronteiras — o browser do Pedro (um produto em cada moeda, `/conf
 listagem de canal) continua por confirmar. Item 14 continua por fechar, não é coberto por
 este gate.
 
+### §4.16 — exposição: alguém entrou enquanto esteve aberto? (passo novo, itens 59/64)
+
+**Script:** `scripts/exposicao-rest.sh`. Só leitura, re-executável, precisa de sudo
+(`/var/log/nginx` é `root:adm 0640`).
+
+**Quando correr: depois de QUALQUER achado de fronteira.** Descobrir uma porta aberta é metade do
+trabalho; a outra metade é saber se alguém lá entrou enquanto esteve aberta. Um achado fechado sem
+esta pergunta respondida fica com a parte que interessa ao Pedro por responder.
+
+**O que o script mostra**, por esta ordem: a verificação de que o `access_log` é único (se um
+vhost tiver log próprio, a análise está a olhar para o sítio errado); os pedidos a `/rest/v1/`
+agregados por **IP · dia · caminho · status**; a mesma coisa **excluindo os IPs conhecidos**
+(que entram por ambiente ou argumento, nunca escritos no repo); e o **top de IPs de todo o log**
+como validação do método. Termina com o limite da prova, para ser citado junto de qualquer
+conclusão.
+
+**Porque é que a validação do método não é opcional:** se o top de IPs só mostrasse endereços
+internos, o nginx não estaria a registar a origem real (proxy ou NAT à frente) e a ausência de
+terceiros não provaria nada. Tem de haver IPs externos reais nessa lista para o vazio ser
+medição.
+
+**Dois defeitos da primeira versão deste script, corrigidos e registados** (2026-09-20): (1) a
+agregação por função/dia fazia `grep -o` de caminhos e de datas em **todas** as linhas e
+emparelhava-as com `paste - -` — as duas listas não têm o mesmo comprimento, logo os pares saíam
+**desalinhados**, com datas de umas linhas coladas a caminhos de outras; (2) **não mostrava o
+código de resposta**, que é o que distingue uma porta batida (401/403) de uma fuga servida (200).
+Ambos vinham de tratar o log como texto em vez de campos; a versão nova tira tudo da mesma linha,
+com `awk`.
+
+**Primeira execução, 2026-09-20:** ver `docs/BACKLOG.md` item 64 — zero pedidos de terceiros a
+`/rest/v1/` em todo o período coberto pelos logs.
+
+---
+
 ### Execução n.º 4 — 2026-09-20 (migrações 0001–0017, com `anon` na matriz)
 
 **Porquê:** as migrações **0016** (fronteira de execução das funções) e **0017** (guardas do
