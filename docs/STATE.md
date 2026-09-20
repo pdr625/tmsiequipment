@@ -3,7 +3,100 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 51 — carga do catálogo real — 🟠 CARREGADO 2026-09-16, POR ACTIVAR —
+**Etapa actual: catálogo real ACTIVO — 46 dos 49 artigos, 2026-09-20 — migrações 0018 e 0019.**
+O último bloqueio da activação era a `unit`, e caiu: a **0018** ensinou o importador a lê-la (a
+fonte é a coluna `Unit` do `PRICE_LIST`, nunca derivada do `item_type`), o ficheiro **v6** levou-a
+aos 49 artigos, e 46 passaram a guarda de activação. Ficam em `draft` os três previstos —
+`T-1002` e `T-1020` sem código SAP da filial de origem, `T-1025` sem peso no Excel; nenhum peso
+foi inventado. Ao activar os primeiros 6, mediu-se que o `sales.sa` via só 3 — os de origem TBM —
+porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por construção**. A
+**0019** alinhou-a com o que `v_branch_prices` já fazia: **a origem também vende**. `price_versions`
+67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
+mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
+activos. Detalhe: secções abaixo.
+
+## Migrações 0018 e 0019, e a activação do catálogo (2026-09-20)
+
+### 0018 — o importador aprende a `unit`
+
+Sete alterações em **duas** funções (estavam previstas seis numa), corpos gerados de produção.
+Em `run_import_products`: a `unit` na consistência entre linhas do mesmo artigo, validação contra
+`tmsi.units`, no `new_row`, **na detecção de alterações**, no `INSERT` e no `UPDATE`.
+
+**A semântica que decide duas delas:** `unit` ausente ou vazia significa **«não tocar»**, nunca
+«pôr NULL» — a mesma regra que a 0013 já aplicava ao `in_margin`. Protege um caso concreto:
+correr outra vez o ficheiro da carga v5, que não tem a coluna, apagaria a unidade dos 49.
+
+**A sétima não estava prevista, e é o achado:** `undo_import_batch` **não repunha a `unit`**. O
+`old_row` guarda a linha inteira, mas o `UPDATE` de reversão tem lista explícita de colunas — uma
+coluna nova não entra lá sozinha. A minha própria nota no `HANDOVER` dizia que «o desfazer vem de
+graça»; **vinha, e não chegava**. Apanhado pela prova (e) da migração, não por leitura.
+
+Provas (a)–(e) todas verdes; ensaio das 9 identidades sem uma única diferença.
+
+### O ficheiro v6, e porque o CSV de unidades não servia
+
+Medido contra a função viva: uma linha só com `product_id;article;item_type;category;unit` é
+rejeitada com `{"column": "purchase_currency", "reason": "em falta"}`. **O importador exige a
+forma completa do artigo** — e é contrato, não defeito: o `sold_in` é derivado dos âmbitos que o
+ficheiro traz, logo um ficheiro parcial reescreveria `sold_in` a partir de informação incompleta.
+
+Daí **`tmsi-catalogo-completo-2026-09-16-v6.csv` = v5 + coluna `unit`**, fundida por
+`product_id`. Diff do v6 contra o v5, fora dessa coluna: **zero**.
+`sha256 5377a0c9444764cd9b242f958c6303160ee2b0a4913989ed61c0dd471f2e43be`, 260 linhas, 28
+colunas, fora do repo, `600`. **O v6 passa a ser o ficheiro-fonte do catálogo.**
+
+**Importação:** 49 `to_update`, 0 rejeitadas, 0 `to_insert`; 485 overrides `unchanged`. Por
+artigo, **48 mudavam só a `unit`**; o `T-1001` mudava só o `sold_in` — porque a `unit` dele já
+era `PCS` e porque a edição manual de 16/09 lhe tinha acrescentado a própria origem ao `sold_in`.
+A previsão passou de 48/1 para **49/0** por essa razão, e o Pedro aceitou a reversão (foi teste
+no browser, não decisão de catálogo). Lote `6815b2a4-…`, autoria real, `price_versions` 67→67,
+impressão digital intacta.
+
+**Idempotência provada em dados reais:** o mesmo v6 outra vez dá **49 `unchanged`, 0 `to_update`**.
+
+### 0019 — a filial de origem também vende
+
+Ao activar os primeiros 6 (3 de origem SA, 3 de origem TBM), o `sales.sa` via **três** — os de
+TBM. Os da sua própria filial ficavam invisíveis, porque `products_visible()` dava ao `sales` só
+`sold_in && my_branches()`, e `sold_in` exclui a origem. `v_branch_prices` já somava a origem à
+parte (`OR b.id = p.primary_branch`): eram duas definições a discordar desde a 0003, e as
+cláusulas de `sales`/`agent` estavam **mortas desde 2026-09-04** por exigirem `status='active'`.
+A primeira activação acendeu-as.
+
+Razão de negócio, do Pedro: **o Excel tem folha de venda para a filial de origem** e o motor da
+0009 já lhe dá cadeia própria. A edição do `T-1001` a 16/09 foi o sintoma disto.
+
+**Regra nova, escrita no `CLAUDE.md`:** uma migração que **alarga visibilidade** não pode ter a
+impressão digital igual — as vistas são `security_invoker`, logo o `md5` dos papéis alargados
+**tem** de crescer. A invariante correcta é *«o que já se via continua igual; os outros papéis
+idênticos»*. A condição de paragem escrita à partida ("se o md5 mudar, pára") teria feito
+**rejeitar uma migração correcta**. Medido: `sales` 3 linhas que já via → 0 desaparecidas, 0 com
+valor diferente, +3; `agent` idem com 6; `admin`/`finance`/`logistics` idênticos.
+
+Um erro meu apanhado pelo ensaio: escrevi `p_primary_branch = any(<subconsulta>)`, que o Postgres
+lê como *sublink* e rebenta com `operator does not exist: text = text[]`. Reescrito com o operador
+`&&` que as cláusulas já usavam.
+
+### Activação, em dois tempos
+
+Primeiro lote (Foam generators + Brush systems, 6 artigos), medição, paragem. Depois os 37
+restantes por categoria e, **à parte e por último**, os três CONDATLINK — cujas **15 linhas
+aparecem como `critical`** no export, agora visível. Não é defeito do motor (margem 0 é a regra
+plana do item 30), é um problema de leitura para quem receber o ficheiro: **item 67, decisão do
+Pedro**.
+
+Tudo pelo caminho do `product_manager`, o mesmo que `/products/[id]` usa (política
+`products_write_pm` + trigger de activação), com autoria real.
+
+**Higiene:** varrimento dos 49 em `name`, `description`, `sap_code_*` e `origin_country` por
+espaços duplos, iniciais ou finais — só os três já conhecidos (`T-1044/45/46`, herdados do v5),
+só no `name`. Normalizados por transacção com desfazer preparado antes.
+
+**Estado final:** 46 `active` · 3 `draft` · 0 `review` · `price_versions` 67 · smoke 104/104 ·
+execução n.º 5 registada.
+
+**Etapa anterior: item 51 — carga do catálogo real — 🟠 CARREGADO 2026-09-16, POR ACTIVAR —
 registado 2026-09-19.** 49 dos 52 artigos entraram num único lote do importador do item 39
 (`import_batches ee1db00c-…`, 245 linhas, 16/09 19:53): **49 produtos `T-1001`–`T-1052` + 485
 `price_overrides`**, 534 itens, zero rejeições, tudo-ou-nada respeitado. Antes dele, 4 códigos
@@ -198,7 +291,7 @@ limpa exige escrever o medidor, agendá-lo para depois da sessão terminar, sair
 resultado numa sessão seguinte — nunca medir a partir da mesma sessão que decide se vale a
 pena medir.
 
-**Etapa actual: fronteiras laterais fechadas — migrações 0016 e 0017 aplicadas 2026-09-20.**
+**Etapa anterior: fronteiras laterais fechadas — migrações 0016 e 0017, 2026-09-20.**
 Duas fugas medidas e fechadas, ambas de classe "a fronteira estava provada nas tabelas e nas
 vistas, e o caminho por função nunca foi exercido": **item 59** (três funções `SECURITY DEFINER`
 sem verificação de papel devolviam margem a quem não lê custos) e **item 64**, achado no teste

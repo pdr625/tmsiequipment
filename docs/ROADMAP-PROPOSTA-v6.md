@@ -60,7 +60,7 @@ Existe e funcionou uma vez; **não tem prova que sobreviva a uma regressão**.
 | Dashboard | Metade browser NÃO EXECUTADA (passo V) | Passo V executado e registado |
 | Convites, ban/unban | Sem asserções | Asserção ou passo de protocolo executado |
 | ~~Papéis `sales`, `agent`, `viewer`, `admin`~~ | **Resolvido 19/09** — blocos CC e BB, sem criar conta nenhuma (claims injection e concessões em transacção revertida) | ✅ |
-| Fronteira de custo no **export**, papel sem custos | Estruturalmente defendida em duas camadas, mas **nunca exercida com linhas visíveis** — hoje é impossível, nada está `active` | Um `.xlsx` real de um papel sem custos, com artigos activos, sem coluna nem valor de custo |
+| Fronteira de custo no **export**, papel sem custos | **Agora é exercível** — há 46 artigos `active`. Continua por fazer, e é o primeiro da lista de browser | Um `.xlsx` real como `sales.test` e como `logistics.test`, sem coluna nem valor de custo |
 
 ---
 
@@ -73,11 +73,11 @@ Ordem proposta — cada passo desbloqueia o seguinte.
 |---|---|---|---|---|
 | 1 | ~~**Registar a carga**~~ | — | ✅ **feito 2026-09-19** — `STATE.md` item 51, `BACKLOG` 51–57, `ENGINE-PARITY` §9, `DEPLOY.md` corrigido, quatro commits | Enquanto não existia registo, qualquer decisão seguinte assentava em memória |
 | 2 | ~~**Repor o gate de produção**~~ | 1 | ✅ **feito 2026-09-19** — execução n.º 3 (0001–0015), smoke 78→**91** verde nos três modos, matriz dos 8 papéis medida, sem fuga | A activação é o momento em que `sales`/`agent` vêem dados reais pela primeira vez. A prova tem de vir **antes**, não depois |
-| 3 | **Decidir a `unit`** dos 49 artigos | Pedro + **migração 0018** | Os 49 têm `unit` não-nula | **É agora o único bloqueio da activação.** O importador não sabe escrever `unit` — é a 0018. CSV pronto em `~/tmp/tmsi-unit/`; ver `docs/HANDOVER.md` |
+| 3 | ~~**`unit` dos 49**~~ | — | ✅ **feito 2026-09-20** — 0018 + ficheiro v6; 49/49 com `unit` (PCS 47 · SET 1 · MONTH 1). **Fonte: a coluna `Unit` do `PRICE_LIST`**, lida pelo importador, nunca derivada |
 | 4 | ~~**`sap_code_cn`**~~ | — | ✅ **feito 2026-09-19** — 37 por derivação, transacção única, desfazer provado, impressão digital intacta. Excepções `T-1002` e `T-1020` | Medido a 19/09: a regra já escrita (`MODEL-GAP-ANALYSIS.md:27`) resolve **37 dos 39** por derivação (`S` + `sap_code_sa`), com 37 valores distintos e zero colisões. Só `T-1002` e `T-1020` são excepção, por não terem `sap_code_sa` de origem. Deixou de ser «obter 39 códigos» e passou a ser «derivar 37 e decidir 2» |
-| 5 | **Completar o `hs_code` do `T-1020`** | Pedro | `compute_price` sem `errors[]` em todo o catálogo | Hoje 3 dos 5 âmbitos deste artigo devolvem `missing customs rate for HS/zone` |
+| 5 | **Completar o `hs_code` do `T-1020`** (e o SAP de origem dele e do `T-1002`; o peso do `T-1025`) | Pedro | `compute_price` sem `errors[]` em todo o catálogo | Hoje 3 dos 5 âmbitos deste artigo devolvem `missing customs rate for HS/zone` |
 | 6 | **Decidir o `sap_code_us` duplicado** (`NC01728-998`) | Pedro | Ou o ficheiro corrigido, ou a constraint revista com fundamento escrito | Deixou de ser «correcção barata». Os três artigos (`T-1021`, `T-1023`, `T-1042`) são todos `equipment`, nenhum é acessório de outro, e o terceiro difere em categoria **e** em filial de origem — não é o padrão de um código de kit. São duas leituras opostas: **dado errado**, ou **constraint errada** porque a CORP usa mesmo um código para três artigos. Não chegou à base (o importador não escreve `sap_code_us`), logo não há pressa — mas a 2.ª importação vai exercê-la |
-| 7 | **Activar** os artigos completos | 3, 4, 5 | ≥1 artigo `active`; `sales`/`agent` vêem preço | É o primeiro momento em que a app serve para o que foi feita |
+| 7 | ~~**Activar**~~ | — | ✅ **feito 2026-09-20** — **46 `active`**, 3 `draft` (`T-1002`, `T-1020`, `T-1025`). `sales` vê 46, `agent` 46, ambos sem custo. Obrigou a 0019 (a origem também vende) |
 | 8 | **Exercer a fronteira de custo no export** com `logistics`/`sales`/`agent` | 7 | Ficheiro real de um papel sem custos, com linhas visíveis, sem coluna nem valor de custo | Só é exercível depois de existir algo `active` — é a única parte do gate que a execução n.º 3 não conseguiu fechar |
 | 9 | **Carregar as 3 refs diferidas** (47/48/49) | Pedro (artigo-pai + filial primária) | 52 artigos carregados | Fica por último por serem 3 e por precisarem de decisão, não de trabalho. Quem lá mexer trata **duas** barreiras: o importador recusa `exw_price < 0` para todos os tipos, e não escreve `parent_id` |
 | 10 | **Resposta do despachante** sobre a base do direito por zona (item 32) | Externa | Item 32 fechado | **Até lá os preços são operacionais, não definitivos** — não anunciar à equipa como finais |
@@ -89,7 +89,8 @@ Ordem proposta — cada passo desbloqueia o seguinte.
 | # | O quê | Depende de | Critério de «feito» |
 |---|---|---|---|
 | 1 | ~~Execução n.º 3 do protocolo (0014/0015)~~ | — | ✅ **feito 2026-09-19** — deixou de depender da activação: fez-se sobre os artigos fictícios, que é o que o gate sempre pediu (provas fictícias validam o mecanismo) |
-| 2 | **Execução n.º 5 do protocolo, com dados reais activos** | §3 passo 7 | Matriz dos 8 papéis refeita com ≥1 artigo real `active`; em particular as linhas de `sales` e `agent`, hoje a zero por falta de artigos activos, e a fronteira de custo no export (§3 passo 8) |
+| 2 | ~~Execução n.º 5, com dados reais activos~~ | — | ✅ **feita 2026-09-20**, 0001–0019, 9 identidades. Falta só o que exige browser |
+| 2b | **Item 67 — regra do `Alert` nos serviços** | Pedro | Matriz dos 8 papéis refeita com ≥1 artigo real `active`; em particular as linhas de `sales` e `agent`, hoje a zero por falta de artigos activos, e a fronteira de custo no export (§3 passo 8) |
 | 3 | ~~⚠️9, ⚠️10, ⚠️11~~ | — | ✅ **feitos 2026-09-20**, revisão `482bb4f`: `/audit` lê a vista, `/products/export` pergunta `can_read_costs()`, export ordenado e rótulo `Scope` honesto |
 | 4 | **Instalar o vhost** (`nosniff` + zona do rate limit) | Pedro (sudo) | Cabeçalho vivo; `nginx -t` passa só com o que está no repo |
 | 6 | Fechar as lacunas da §2 que o Pedro considerar bloqueantes | — | Cada item da §2 com prova ou decisão registada |
