@@ -30,15 +30,31 @@ type SellingPriceRow = {
   min_price: number | null;
   ref_price: number | null;
   lead_time_days: number | null;
-  scope_type: string | null;
 };
 
 // ⚠️11: "All branches" é o que o filtro diz, não o que o ficheiro traz — sem
-// filtro, v_branch_prices inclui também as linhas de canal. O rótulo passa a
-// descrever o conteúdo, decidido a partir dos escopos realmente presentes.
-function scopeLabel(branch: string | null, rows: { scope_type?: string | null }[]) {
+// filtro, ambas as vistas incluem também as linhas de canal. O rótulo passa a
+// descrever o conteúdo.
+//
+// item 68 (2026-09-23): a primeira versão decidia isto por `scope_type`, que
+// existe em `v_branch_prices` mas **NÃO** em `v_selling_prices` — o ramo dos
+// papéis sem custos pedia uma coluna inexistente e a rota inteira devolvia
+// `column v_selling_prices.scope_type does not exist`. O sinal passa a ser o
+// mesmo que o ecrã /prices já usa: uma linha é de canal quando o seu
+// `branch_id` é o id de um canal. Serve as duas vistas sem depender de uma
+// coluna que só uma delas projecta.
+function scopeLabel(branch: string | null, temLinhasDeCanal: boolean) {
   if (branch) return branch;
-  return rows.some((r) => r.scope_type === 'channel') ? 'All branches and channels' : 'All branches';
+  return temLinhasDeCanal ? 'All branches and channels' : 'All branches';
+}
+
+// Os canais que o utilizador vê — a RLS de `tmsi.channels` já limita ao que
+// lhe pertence, e é a mesma leitura que o ecrã /prices faz.
+async function channelIds(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+): Promise<Set<string>> {
+  const { data } = await supabase.schema('tmsi').from('channels').select('id');
+  return new Set((data ?? []).map((c: { id: string }) => c.id));
 }
 
 function respond(buffer: Uint8Array, filename: string) {
@@ -112,7 +128,7 @@ export async function GET(request: NextRequest) {
     const buffer = await buildXlsx({
       sheetTitle: 'Price list',
       reportTitle: `${branding.displayName} — Price list`,
-      scope: scopeLabel(branch, rows),
+      scope: scopeLabel(branch, rows.some((r) => r.scope_type === 'channel')),
       currency: currencies.join(', ') || '—',
       generatedBy: user.email ?? user.id,
       generatedAt,
@@ -139,9 +155,9 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .schema('tmsi')
     .from('v_selling_prices')
-    .select('product_id, name, branch_id, scope_type, currency, min_price, ref_price, lead_time_days')
-      .order('product_id')
-      .order('branch_id');
+    .select('product_id, name, branch_id, currency, min_price, ref_price, lead_time_days')
+    .order('product_id')
+    .order('branch_id');
   if (branch) {
     query = query.eq('branch_id', branch);
   }
@@ -150,11 +166,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
+  const canais = await channelIds(supabase);
   const currencies = [...new Set(rows.map((r) => r.currency))].sort();
   const buffer = await buildXlsx({
     sheetTitle: 'Price list',
     reportTitle: `${branding.displayName} — Price list`,
-    scope: scopeLabel(branch, rows),
+    scope: scopeLabel(branch, rows.some((r) => canais.has(r.branch_id))),
     currency: currencies.join(', ') || '—',
     generatedBy: user.email ?? user.id,
     generatedAt,

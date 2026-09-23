@@ -425,6 +425,50 @@ mostra `critical` em todas as linhas de serviço, e quem a lê não sabe que é 
 Sem urgência operacional — não afecta preço nenhum. Mas afecta a primeira impressão de quem
 receber o ficheiro, e por isso não deve chegar à apresentação à equipa por decidir.
 
+**68. Regressão em produção: o export de `/prices` pedia uma coluna que a vista não tem** —
+**APANHADO PELO PEDRO no browser, 2026-09-23**, dois dias depois de activar o catálogo. O export
+como `sales.test` devolvia `{"error":"column v_selling_prices.scope_type does not exist"}`; o
+ecrã e a vista de impressão estavam correctos.
+
+**Causa, confirmada e não deduzida.** A correcção do ⚠️11 (bloco C de 2026-09-20) acrescentou
+`scope_type` ao `select` **dos dois ramos** da rota, para o rótulo do âmbito passar a descrever o
+conteúdo do ficheiro. Mas as duas vistas não têm as mesmas colunas:
+
+| | tem `scope_type`? |
+|---|---|
+| `tmsi.v_branch_prices` (ramo dos papéis **com** custos) | **sim** |
+| `tmsi.v_selling_prices` (ramo dos papéis **sem** custos) | **não** — projecta 11 colunas e essa não está lá, apesar de ler de `v_branch_prices` |
+
+Logo o ramo `finance`/`admin` funcionava e o ramo `sales`/`agent`/`logistics` rebentava por
+inteiro. O ficheiro não saía de todo — não era degradação, era falha.
+
+**Porque escapou a tudo o que existia:** o ecrã `/prices` e a vista de impressão escolhem a vista
+pela mesma condição mas **não pedem `scope_type`**; o TypeScript não conhece o schema (o tipo
+`SellingPriceRow` até declarava o campo, o que é uma mentira que o compilador aceita); e
+**nenhuma asserção atravessava a rota de export** — a fronteira de custo no export está marcada
+como "por re-provar" desde sempre, e até 2026-09-20 nem era exercível, porque não havia artigos
+`active`. A activação tornou-a exercível e a regressão apareceu no mesmo dia.
+
+**Correcção (sem migração).** A rota deixa de depender de uma coluna que só uma das vistas tem. O
+sinal de "há linhas de canal" passa a ser o mesmo que o ecrã `/prices` já usa: uma linha é de
+canal quando o seu `branch_id` é o id de um canal (`tmsi.channels`, cuja RLS já limita ao que o
+utilizador vê). O ramo com custos continua a usar `scope_type`, que lá existe.
+
+**Prevenção — bloco `FF` do smoke, duas asserções:**
+1. **Contrato estático:** extrai do código os pares `.from('X').select('a,b,c')` e confirma cada
+   coluna contra `information_schema`. Cobre **252 colunas em 28 objectos** — a app inteira, não
+   só o export. **Provado a falhar** com o defeito reintroduzido, apontando
+   `route.ts:157 v_selling_prices.scope_type`.
+2. **Travessia real:** emite exactamente o `select` de cada ramo contra o PostgREST, com papel
+   real (`finance` para o ramo com custos, `logistics` para o sem), e exige `200`. É onde o
+   defeito se manifestava — o erro vinha do PostgREST, não do compilador.
+
+**O que estas duas não cobrem, e continua a ser passo de browser:** o invólucro Next.js — cookies
+de sessão, geração do `.xlsx`, cabeçalhos de download. A regra do projecto
+(`~/atelier-vps/CLAUDE.md` §4, escrita depois de duas tentativas abandonadas) manda que provas por
+sessão de browser fiquem para o Pedro. **Decisão em aberto:** se vale a pena um teste de
+integração com sessão real — hoje não existe, e é por isso que esta regressão chegou a produção.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de

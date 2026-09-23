@@ -1487,6 +1487,124 @@ def block_origin_branch_sells(sales_uuid):
     )
 
 
+def block_select_contract(tokens):
+    """FF — toda a coluna que a app pede existe no objecto de onde a pede.
+
+    item 68 (2026-09-23): o export de `/prices` pedia `scope_type` a
+    `v_selling_prices`, coluna que só existe em `v_branch_prices`. O ramo dos
+    papéis COM custos funcionava; o ramo dos papéis SEM custos devolvia
+    `column v_selling_prices.scope_type does not exist` e o ficheiro não saía.
+
+    Escapou a tudo: o ecrã e a vista de impressão usam a outra vista, o
+    typecheck não conhece o schema, e nenhuma asserção atravessava a rota. Foi
+    o Pedro que o apanhou no browser.
+
+    Esta asserção é estática + BD: extrai os pares `.from('X').select('a,b,c')`
+    do código e confirma cada coluna contra `information_schema`. Não precisa
+    de sessão HTTP, cobre os ~65 pontos de chamada da app inteira (não só o
+    export), e teria apanhado este defeito no minuto em que foi escrito."""
+    import re as _re
+    import pathlib as _pathlib
+
+    raiz = _pathlib.Path(__file__).resolve().parent.parent / "app" / "src"
+    if not raiz.is_dir():
+        check("FF: contrato select-vs-schema", True, "SKIP — app/src ausente")
+        return
+
+    # `.from('x')` seguido de `.select('...')`, tolerando comentários pelo meio
+    padrao = _re.compile(r"\.from\(\s*'([a-z_]+)'\s*\)\s*(?://[^\n]*\n\s*)*\.select\(\s*'([^']+)'", _re.S)
+
+    def topo(cols):
+        """Divide por vírgulas de topo — um embed `produtos(nome,id)` é UM item."""
+        fora, prof, actual = [], 0, ""
+        for ch in cols:
+            if ch == "(":
+                prof += 1
+            elif ch == ")":
+                prof -= 1
+            if ch == "," and prof == 0:
+                fora.append(actual.strip()); actual = ""
+            else:
+                actual += ch
+        if actual.strip():
+            fora.append(actual.strip())
+        return fora
+
+    objectos = {}
+    for f in raiz.rglob("*.ts*"):
+        texto = f.read_text()
+        for m in padrao.finditer(texto):
+            obj, cols = m.group(1), m.group(2)
+            linha = texto[: m.start()].count("\n") + 1
+            for c in topo(cols):
+                if "(" in c or c == "*" or c.startswith("count"):
+                    continue          # embed PostgREST ou agregado: não é coluna
+                nome = c.split(":")[-1].split("!")[0].split("->")[0].strip()
+                if nome:
+                    objectos.setdefault(obj, set()).add((nome, f.name, linha))
+
+    if not objectos:
+        check("FF: contrato select-vs-schema", False, "extracção não encontrou nenhum par from/select")
+        return
+
+    reais = {}
+    for linha in psql_rows(
+        "select table_name, column_name from information_schema.columns "
+        "where table_schema = 'tmsi';"
+    ):
+        reais.setdefault(linha[0], set()).add(linha[1])
+
+    faltam = []
+    total = 0
+    for obj, pedidas in sorted(objectos.items()):
+        if obj not in reais:
+            continue              # não é de tmsi (auth, storage, …)
+        for nome, ficheiro, linha in sorted(pedidas):
+            total += 1
+            if nome not in reais[obj]:
+                faltam.append(f"{ficheiro}:{linha} {obj}.{nome}")
+
+    check(
+        "FF: toda a coluna pedida pela app existe no objecto (item 68)",
+        not faltam,
+        f"{total} colunas verificadas em {len(objectos)} objectos"
+        + (f" · EM FALTA: {', '.join(faltam)}" if faltam else ""),
+    )
+
+    # A verificação acima é estática. Esta atravessa o caminho de dados real,
+    # com papel real: emite EXACTAMENTE o `select` que cada ramo do export
+    # emite, contra o PostgREST, e exige 200. Foi onde o defeito se manifestou
+    # (o erro vinha do PostgREST, não do TypeScript).
+    #
+    # Não usa cookies: a regra do projecto (~/atelier-vps/CLAUDE.md §4, escrita
+    # depois de duas tentativas abandonadas) manda que provas por sessão de
+    # browser fiquem para o Pedro. Um Bearer exercita a mesma consulta e a
+    # mesma RLS; o que fica de fora é o invólucro Next.js (cookies, geração do
+    # .xlsx), e esse continua a ser passo de browser no protocolo.
+    rotas = [
+        ("v_branch_prices", "finance", "ramo COM custos"),
+        ("v_selling_prices", "logistics", "ramo SEM custos"),
+    ]
+    for vista, papel, etiqueta in rotas:
+        cols = sorted({c for c, _f, _l in objectos.get(vista, set())})
+        tok = tokens.get(papel)
+        if not cols or not tok:
+            check(f"FF: export {etiqueta} — consulta real", True,
+                  f"SKIP — sem colunas extraídas ou sem token de {papel}")
+            continue
+        status, corpo = http(
+            "GET",
+            f"{BASE}/rest/v1/{vista}?select={','.join(cols)}&limit=1",
+            token=tok,
+        )
+        check(
+            f"FF: o select do export ({etiqueta}) é aceite pelo PostgREST",
+            status == 200,
+            f"{vista} como {papel}: http_{status}"
+            + ("" if status == 200 else f" — {str(corpo)[:120]}"),
+        )
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -1659,6 +1777,8 @@ def main():
     # vem a seguir — não antes, como na primeira versão desta chamada.
     if sell_side.get("sales"):
         block_origin_branch_sells(sell_side["sales"])
+
+    block_select_contract(tokens)
 
     delete_smoke_fixture_product()
 
