@@ -178,6 +178,27 @@ sobre a TBM, dava 0 linhas, e isso não dizia nada sobre a guarda.
 
 ---
 
+## Antes de escrever um ficheiro, olhar para o que lá está — e a guarda que o verifica
+
+`cat > ficheiro` e `Write` **substituem**. Um ficheiro de documentação que se julga novo pode ter
+cem linhas de levantamento que ninguém vai dar por falta durante semanas.
+
+Aconteceu a 2026-09-23 com `docs/TEST-ACCOUNTS.md`: escrito de raiz a assumir que não existia,
+105 linhas apagadas num commit. **A regra de olhar primeiro já existia neste ficheiro e não
+chegou** — uma regra que depende de alguém se lembrar dela falha exactamente no momento em que se
+está concentrado noutra coisa.
+
+**A verificação mecânica:** `scripts/hooks/commit-msg`, activo por
+`git config core.hooksPath scripts/hooks`, recusa um commit que faça um ficheiro de `docs/` perder
+mais de **50%** das linhas, a menos que a mensagem traga a palavra `rewrite`. O bloco `GG` do
+smoke confirma que está instalado **e que de facto recusa** — exercita-o num repositório
+descartável, porque um hook presente mas partido passaria numa asserção que só verificasse a sua
+existência.
+
+Uma redução legítima escreve `rewrite` na mensagem e explica porquê; fica no histórico a dizê-lo.
+
+---
+
 ## Provas: contagens e identificadores, nunca valores
 
 Nada de preços, custos ou margens reais em output, logs, relatórios ou commits. Para comparar

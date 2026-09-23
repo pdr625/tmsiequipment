@@ -1611,6 +1611,69 @@ def block_select_contract(tokens):
         )
 
 
+def block_docs_guard():
+    """GG — a guarda que impede um documento de ser apagado por descuido.
+
+    2026-09-23: `docs/TEST-ACCOUNTS.md` foi escrito com `cat >` a assumir que
+    não existia. Existia, com 105 linhas, e o commit apagou-as. O CLAUDE.md já
+    mandava ler antes de escrever — a regra escrita não chegou.
+
+    Duas asserções: que o hook está instalado neste clone, e que ele de facto
+    recusa. A segunda importa mais: um hook instalado e partido não protege
+    nada, e o ficheiro que ele guarda é precisamente o tipo de coisa que só se
+    descobre em falta muito depois."""
+    import subprocess as _sp
+    import pathlib as _pathlib
+    import tempfile as _tempfile
+    import os as _os
+
+    repo = _pathlib.Path(__file__).resolve().parent.parent
+    hook = repo / "scripts" / "hooks" / "commit-msg"
+
+    caminho = _sp.run(
+        ["git", "-C", str(repo), "config", "core.hooksPath"],
+        capture_output=True, text=True,
+    ).stdout.strip()
+    check(
+        "GG: a guarda de docs/ está instalada neste clone",
+        caminho == "scripts/hooks" and hook.is_file() and _os.access(hook, _os.X_OK),
+        f"core.hooksPath={caminho or '(não definido)'} · ficheiro={'sim' if hook.is_file() else 'NÃO'}"
+        + (" · executável" if hook.is_file() and _os.access(hook, _os.X_OK) else " · SEM +x"),
+    )
+    if not hook.is_file():
+        return
+
+    # Exercita o hook a sério, num repositório descartável: um docs/ de 100
+    # linhas cortado para 10. Sem isto seria "0 = 0" — um hook presente mas
+    # partido passaria na asserção acima.
+    with _tempfile.TemporaryDirectory() as tmp:
+        def git(*a, **kw):
+            return _sp.run(["git", "-C", tmp, *a], capture_output=True, text=True, **kw)
+
+        git("init", "-q")
+        git("config", "user.email", "smoke@example.test")
+        git("config", "user.name", "smoke")
+        (_pathlib.Path(tmp) / "docs").mkdir()
+        alvo = _pathlib.Path(tmp) / "docs" / "d.md"
+        alvo.write_text("\n".join(f"linha {i}" for i in range(100)) + "\n")
+        git("add", "-A"); git("commit", "-q", "-m", "base")
+        alvo.write_text("\n".join(f"linha {i}" for i in range(10)) + "\n")
+        git("add", "-A")
+
+        msg = _pathlib.Path(tmp) / "msg"
+        msg.write_text("corte sem aviso\n")
+        recusa = _sp.run([str(hook), str(msg)], cwd=tmp, capture_output=True, text=True)
+        msg.write_text("rewrite: corte deliberado\n")
+        aceita = _sp.run([str(hook), str(msg)], cwd=tmp, capture_output=True, text=True)
+
+    check(
+        "GG: a guarda recusa -90% e aceita com 'rewrite'",
+        recusa.returncode != 0 and aceita.returncode == 0,
+        f"sem rewrite: saída {recusa.returncode} (esperado != 0) · "
+        f"com rewrite: saída {aceita.returncode} (esperado 0)",
+    )
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -1785,6 +1848,7 @@ def main():
         block_origin_branch_sells(sell_side["sales"])
 
     block_select_contract(tokens)
+    block_docs_guard()
 
     delete_smoke_fixture_product()
 

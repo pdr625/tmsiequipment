@@ -210,6 +210,14 @@ admin e estas três sem papel — são de teste e ficam como estão **até à fa
 em que a limpeza se faz de uma vez. Sem papel não vêem nada (verificado: toda a leitura passa por
 `has_role()`), logo não há urgência. Texto original do achado, para contexto:
 
+**Decisão do Pedro, 2026-09-23, sobre as três contas sem papel:** ficam **exactamente como
+estão** — nem removidas, nem desactivadas, nem com a password uniformizada. São
+`pedro_alexandre625@hotmail.com`, `pedro.dacosta@condat.fr` (banida até 2126) e
+`pedroalexandre625+verifiteste@gmail.com`. **Não são contas `.test`:** são endereços reais, um
+deles corporativo. A uniformização de passwords de 2026-09-23 aplicou-se às seis `@example.test` e
+**parou aqui de propósito** — a justificação dessa decisão ("são fictícias, só o Pedro acede") não
+se estende a identidades reais.
+
 **57. Três contas reais sem papel atribuído** — **REGISTADO 2026-09-19**, achado da auditoria
 (C4). Além da conta `admin` do Pedro, existem em `tmsi.profiles` **três contas reais sem
 nenhuma linha em `tmsi.user_roles`**: um endereço pessoal alternativo, um endereço corporativo
@@ -425,8 +433,11 @@ mostra `critical` em todas as linhas de serviço, e quem a lê não sabe que é 
 Sem urgência operacional — não afecta preço nenhum. Mas afecta a primeira impressão de quem
 receber o ficheiro, e por isso não deve chegar à apresentação à equipa por decidir.
 
-**68. Regressão em produção: o export de `/prices` pedia uma coluna que a vista não tem** —
-**APANHADO PELO PEDRO no browser, 2026-09-23**, dois dias depois de activar o catálogo. O export
+~~**68. Regressão em produção: o export de `/prices` pedia uma coluna que a vista não tem**~~
+✅ **FECHADO 2026-09-23** — corrigido, deploy feito (revisão `24c8a70`, digest `83c4a4f7…`) e
+**confirmado pelo Pedro no browser**: o export como `sales.sa` abre, 46 linhas, só SA, sem colunas
+de custo, com os artigos de origem SA. A causa raiz fica registada abaixo, e as duas asserções do
+bloco `FF` ficam permanentes. Texto original do achado: — **APANHADO PELO PEDRO no browser, 2026-09-23**, dois dias depois de activar o catálogo. O export
 como `sales.test` devolvia `{"error":"column v_selling_prices.scope_type does not exist"}`; o
 ecrã e a vista de impressão estavam correctos.
 

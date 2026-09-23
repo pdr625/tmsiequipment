@@ -64,7 +64,18 @@ Existe e funcionou uma vez; **não tem prova que sobreviva a uma regressão**.
 
 ---
 
-## 3. Caminho até os dados reais serem utilizáveis
+## 3. Caminho até os dados reais serem utilizáveis — ✅ **FECHADA POR INTEIRO, 2026-09-23**
+
+**Os dados reais são utilizáveis.** 46 artigos `active`, visíveis aos papéis comerciais, com a
+fronteira de custo provada no export por um ficheiro real gerado pelo Pedro como `sales.sa`. Os 3
+que ficam em `draft` (`T-1002`, `T-1020`, `T-1025`) faltam-lhes dados de origem — código SAP,
+`hs_code`, peso — e nenhum foi inventado para os fazer passar.
+
+O que resta desta secção são **decisões e dados do Pedro**, não construção: os três `draft`, o
+`sap_code_us` duplicado (item 53), a regra do `Alert` (item 67) e a base do direito aduaneiro por
+zona (item 32, externo — **até lá os preços são operacionais, não definitivos**).
+
+*Tabela original, com o estado de cada passo:*
 
 Os dados **já estão carregados** (49 artigos). O que falta é torná-los visíveis e fidedignos.
 Ordem proposta — cada passo desbloqueia o seguinte.
@@ -78,7 +89,7 @@ Ordem proposta — cada passo desbloqueia o seguinte.
 | 5 | **Completar o `hs_code` do `T-1020`** (e o SAP de origem dele e do `T-1002`; o peso do `T-1025`) | Pedro | `compute_price` sem `errors[]` em todo o catálogo | Hoje 3 dos 5 âmbitos deste artigo devolvem `missing customs rate for HS/zone` |
 | 6 | **Decidir o `sap_code_us` duplicado** (`NC01728-998`) | Pedro | Ou o ficheiro corrigido, ou a constraint revista com fundamento escrito | Deixou de ser «correcção barata». Os três artigos (`T-1021`, `T-1023`, `T-1042`) são todos `equipment`, nenhum é acessório de outro, e o terceiro difere em categoria **e** em filial de origem — não é o padrão de um código de kit. São duas leituras opostas: **dado errado**, ou **constraint errada** porque a CORP usa mesmo um código para três artigos. Não chegou à base (o importador não escreve `sap_code_us`), logo não há pressa — mas a 2.ª importação vai exercê-la |
 | 7 | ~~**Activar**~~ | — | ✅ **feito 2026-09-20** — **46 `active`**, 3 `draft` (`T-1002`, `T-1020`, `T-1025`). `sales` vê 46, `agent` 46, ambos sem custo. Obrigou a 0019 (a origem também vende) |
-| 8 | **Exercer a fronteira de custo no export** com `logistics`/`sales`/`agent` | 7 | Ficheiro real de um papel sem custos, com linhas visíveis, sem coluna nem valor de custo | Só é exercível depois de existir algo `active` — é a única parte do gate que a execução n.º 3 não conseguiu fechar |
+| 8 | ~~**Exercer a fronteira de custo no export**~~ | — | ✅ **feito 2026-09-23** — ficheiro real gerado pelo Pedro como `sales.sa`: 46 linhas, só SA, sem colunas de custo. Obrigou à correcção do item 68 pelo caminho |
 | 9 | **Carregar as 3 refs diferidas** (47/48/49) | Pedro (artigo-pai + filial primária) | 52 artigos carregados | Fica por último por serem 3 e por precisarem de decisão, não de trabalho. Quem lá mexer trata **duas** barreiras: o importador recusa `exw_price < 0` para todos os tipos, e não escreve `parent_id` |
 | 10 | **Resposta do despachante** sobre a base do direito por zona (item 32) | Externa | Item 32 fechado | **Até lá os preços são operacionais, não definitivos** — não anunciar à equipa como finais |
 

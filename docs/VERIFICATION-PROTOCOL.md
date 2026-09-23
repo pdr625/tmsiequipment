@@ -1181,9 +1181,14 @@ activo/SA e activo/APAC; `sales` e `agent` idênticos pelo caminho real e pela e
 
 **NÃO EXECUTADOS — para o Pedro, por ordem, agora que há linhas que ver:**
 
-1. **Export como `sales.test`** (novo, e o mais importante) — `/prices`, exportar. Observar: **46
-   linhas**, **sem** coluna `Total cost (EUR)` nem `Margin`, só filial **SA**, e que lá estão
-   artigos cuja origem é SA (os 9 que antes não apareciam).
+1. ~~Export como `sales.test`~~ — ✅ **EXECUTADO pelo Pedro, 2026-09-23.** O ficheiro abre e
+   está correcto: **46 linhas**, **só filial SA**, **sem** colunas de custo, e **com** os artigos
+   cuja origem é SA. É a prova que faltava desde sempre — a fronteira de custo no export, exercida
+   com linhas visíveis, o que só passou a ser possível depois da activação de 2026-09-20.
+
+   **Não abriu à primeira:** a primeira tentativa, no mesmo dia, devolveu
+   `column v_selling_prices.scope_type does not exist` (item 68). O passo só ficou dado depois da
+   correcção e do deploy da revisão `24c8a70`.
 2. **Export como `logistics.test`** — **sem** colunas de custo, com linhas das quatro filiais e
    **nenhuma** de APAC.
 3. **Export como `finance.test`** — com custos, 283 linhas, e as de canal **no fim** em bloco

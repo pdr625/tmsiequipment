@@ -3,7 +3,13 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: catálogo real ACTIVO — 46 dos 49 artigos, 2026-09-20 — migrações 0018 e 0019.**
+**Etapa actual: catálogo real activo e PROVADO ponta a ponta — 2026-09-23.** O export de um papel
+sem custos foi gerado e verificado no browser (46 linhas, só SA, sem custos) — a fronteira de custo
+no export deixou de ser "estruturalmente defendida" e passou a ter um ficheiro que o demonstra. Com
+isso, a §3 do roadmap v6 fecha por inteiro: **os dados reais são utilizáveis.** O que resta são
+decisões e dados do Pedro, não construção.
+
+**Etapa anterior: catálogo real ACTIVO — 46 dos 49 artigos, 2026-09-20 — migrações 0018 e 0019.**
 O último bloqueio da activação era a `unit`, e caiu: a **0018** ensinou o importador a lê-la (a
 fonte é a coluna `Unit` do `PRICE_LIST`, nunca derivada do `item_type`), o ficheiro **v6** levou-a
 aos 49 artigos, e 46 passaram a guarda de activação. Ficam em `draft` os três previstos —
@@ -14,6 +20,67 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## A regressão do export, e um ficheiro que apaguei (2026-09-23)
+
+### A regressão (item 68) — e porque só apareceu agora
+
+**O Pedro apanhou-a no browser**, dois dias depois de activar o catálogo: o export de `/prices`
+como `sales.sa` devolvia `column v_selling_prices.scope_type does not exist`. Ecrã e vista de
+impressão estavam correctos.
+
+**A causa.** A correcção do ⚠️11 (20/09) acrescentou `scope_type` ao `select` **dos dois ramos**
+da rota. Mas `v_selling_prices` lê de `v_branch_prices` e **não projecta essa coluna** — logo o
+ramo dos papéis com custos funcionava e o dos papéis sem custos falhava por inteiro.
+
+**Escapou a três camadas**, e vale a pena guardar quais: o ecrã e a vista de impressão escolhem a
+vista pela mesma condição mas **não pedem** `scope_type`; o TypeScript não conhece o schema — o
+tipo `SellingPriceRow` até **declarava** o campo, uma mentira que o compilador aceita de bom
+grado; e nenhuma asserção atravessava a rota. A fronteira de custo no export estava marcada como
+"por re-provar" desde sempre e **até 20/09 nem era exercível**, porque não havia artigos `active`.
+Activar tornou-a exercível e a regressão apareceu no mesmo dia.
+
+**Corrigido sem migração:** o sinal de "há linhas de canal" passa a ser o que o ecrã `/prices` já
+usa — uma linha é de canal quando o `branch_id` é o id de um canal. Deploy da revisão `24c8a70`
+(digest `83c4a4f7…`), e **confirmado pelo Pedro no browser a 23/09**: 46 linhas, só SA, sem
+colunas de custo, com os artigos de origem SA presentes. É a prova que faltava desde o início do
+projecto, e fecha a §3 do roadmap v6 por inteiro.
+
+**Prevenção, bloco `FF` do smoke:** um contrato estático que confirma **252 colunas em 28
+objectos** (extrai do código os pares `.from/.select` e confronta-os com `information_schema`) —
+provado a falhar com o defeito reintroduzido — e uma travessia real que emite o `select` de cada
+ramo contra o PostgREST com papel real e exige 200.
+
+### O ficheiro que apaguei (incidente de método)
+
+No mesmo dia, ao criar `docs/TEST-ACCOUNTS.md`, escrevi-o com `cat >` **a assumir que não
+existia**. Existia: **105 linhas** com o levantamento de 19/09 sobre o que se perde ao desactivar
+as contas `.test`. O commit apagou-as. Reposto no commit seguinte, por baixo da secção nova.
+
+**A regra já existia** — o `CLAUDE.md` do repo manda olhar para o alvo antes de escrever — **e não
+chegou.** Uma regra que depende de alguém se lembrar dela falha exactamente no momento em que se
+está concentrado noutra coisa. Daí a verificação mecânica, por decisão do Pedro:
+
+- **`scripts/hooks/commit-msg`**, versionado e activo por `git config core.hooksPath scripts/hooks`:
+  recusa um commit que faça um ficheiro de `docs/` perder **mais de 50%** das linhas, a menos que a
+  mensagem traga a palavra `rewrite`. É `commit-msg` e não `pre-commit` porque a regra depende da
+  mensagem, e no `pre-commit` ela ainda não existe.
+- **Bloco `GG` do smoke**, com duas asserções: que o hook está instalado neste clone, e que **de
+  facto recusa** — exercitando-o num repositório descartável com um corte de −90%. Sem a segunda,
+  um hook presente mas partido passaria na primeira, e um documento apagado só se descobre muito
+  depois.
+
+Medido antes de o dar por feito: recusa `-83%` num caso real, deixa passar com `rewrite`.
+
+### Contas de teste uniformizadas
+
+As seis `@example.test` passaram a partilhar uma password (decisão do Pedro), porque a deriva
+entre o GoTrue e os ficheiros de credenciais causou **dois falsos alarmes de regressão em três
+dias** — `logistics.test` a 20/09, `finance.test` a 22/09. `sales.sa` e `agent.apac` ganharam
+ficheiro e entraram no `TEST_USERS`: os modos de login deixam de depender de injecção de claims
+para os dois papéis que vêem o catálogo real. **As três contas sem papel ficaram de fora e ficam
+como estão** — não são `.test`, são endereços reais, um corporativo. Detalhe e limite da decisão
+em `docs/TEST-ACCOUNTS.md`.
 
 ## Migrações 0018 e 0019, e a activação do catálogo (2026-09-20)
 
