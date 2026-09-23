@@ -156,7 +156,10 @@ export async function GET(request: NextRequest) {
     }
     const meta = new Map<string, { name: string; category_id: string | null; status: string }>(
       ((catalogo ?? []) as { id: string; name: string; category_id: string | null; status: string }[])
-        .map((p) => [p.id, { name: p.name, category_id: p.category_id, status: p.status }]),
+        .map((p): [string, { name: string; category_id: string | null; status: string }] => [
+          p.id,
+          { name: p.name, category_id: p.category_id, status: p.status },
+        ]),
     );
     // Ordem de apresentação: categoria -> código -> âmbito (ordem comercial
     // das filiais, canais no fim). O ORDER BY do PostgREST já garante

@@ -13,12 +13,6 @@ import { PrintButton } from './print-button';
 type Branch = { id: string; name: string };
 type Channel = { id: string; name: string };
 
-// Which view a user gets (full costs vs selling-price-only) is a security
-// decision, not a UI one — the page asks Postgres (tmsi.can_read_costs(),
-// the same predicate compute_price() itself uses) rather than
-// re-implementing the role check here. Whatever it answers, RLS on the
-// underlying tables still scopes which *rows* come back — this is a
-// convenience choice of view, not the actual access control.
 type MetaProduto = { id: string; name: string; category_id: string | null; status: string };
 
 // A forma que as duas vistas têm em comum, mais o que cada uma acrescenta. O
@@ -50,12 +44,12 @@ export default async function PricesPage({
   const { branch, status: statusFiltro } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
-// Which view a user gets (full costs vs selling-price-only) is a security
-// decision, not a UI one — the page asks Postgres (tmsi.can_read_costs(),
-// the same predicate compute_price() itself uses) rather than
-// re-implementing the role check here. Whatever it answers, RLS on the
-// underlying tables still scopes which *rows* come back — this is a
-// convenience choice of view, not the actual access control.
+  // Which view a user gets (full costs vs selling-price-only) is a security
+  // decision, not a UI one — the page asks Postgres (tmsi.can_read_costs(),
+  // the same predicate compute_price() itself uses) rather than
+  // re-implementing the role check here. Whatever it answers, RLS on the
+  // underlying tables still scopes which *rows* come back — this is a
+  // convenience choice of view, not the actual access control.
   //
   // `can_read_costs` decide QUAL vista se lê, logo é o único await que tem
   // mesmo de vir antes dos outros. Até 2026-09-23 os seis awaits desta página
@@ -63,27 +57,43 @@ export default async function PricesPage({
   // sequencial numa página de 0,91 s, com a consulta de preços a valer só
   // 0,165 s. O resto vai agora em paralelo.
   const { data: canReadCosts } = await supabase.schema('tmsi').rpc('can_read_costs');
-  const viewName = canReadCosts ? 'v_branch_prices' : 'v_selling_prices';
 
   // item 72: só as colunas que o ecrã mostra. `select('*')` trazia ~20 colunas
   // por linha — em "All branches" são 283 linhas × 20 valores serializados
   // pelo PostgREST para o ecrã usar oito. Não muda o custo de cálculo (esse é
   // o item 69, resolvido pela 0020); muda o que atravessa a rede.
-  const COLUNAS_CUSTO = 'product_id, branch_id, scope_type, currency, total_cost_eur, margin, min_price, ref_price, alert';
-  const COLUNAS_VENDA = 'product_id, name, category_id, status, branch_id, currency, min_price, ref_price, lead_time_days';
-
-  // A lista de colunas é escolhida em tempo de execução, logo o postgrest-js
-  // não consegue derivar o tipo do resultado a partir dela (deriva-o da
-  // string literal do `.select()`). O tipo é declarado aqui, uma vez, e a
-  // promessa é tipada à mão — sem isto a inferência colapsa num union que
-  // depois falha em cada uso.
-  const precos = (() => {
-    let q = supabase.schema('tmsi').from(viewName).select(canReadCosts ? COLUNAS_CUSTO : COLUNAS_VENDA);
-    if (branch) {
-      q = q.eq('branch_id', branch);
-    }
-    return q as unknown as PromiseLike<{ data: LinhaPreco[] | null; error: { message: string } | null }>;
-  })();
+  //
+  // ⚠️ AS DUAS CONSULTAS SÃO SEPARADAS, E TÊM DE SER. O postgrest-js deriva o
+  // tipo do resultado da **string literal** do `.select()`, por tipo
+  // condicional. Uma lista de colunas escolhida em tempo de execução (um
+  // ternário, uma variável) dá-lhe um `Query` que é um union de duas strings
+  // e ele tenta analisá-las às duas — foi o que partiu a compilação a
+  // 2026-09-23. Com `.from()` a receber também um nome de vista variável, o
+  // construtor já vinha como union e a reatribuição do `.eq()` fechava o
+  // problema. Dois ramos, cada um com a sua string literal, e a conversão
+  // feita UMA vez no fim: nada aqui depende de inferência.
+  const precos: PromiseLike<{ data: LinhaPreco[] | null; error: { message: string } | null }> =
+    canReadCosts
+      ? (() => {
+          const q = supabase
+            .schema('tmsi')
+            .from('v_branch_prices')
+            .select('product_id, branch_id, scope_type, currency, total_cost_eur, margin, min_price, ref_price, alert');
+          return (branch ? q.eq('branch_id', branch) : q) as unknown as PromiseLike<{
+            data: LinhaPreco[] | null;
+            error: { message: string } | null;
+          }>;
+        })()
+      : (() => {
+          const q = supabase
+            .schema('tmsi')
+            .from('v_selling_prices')
+            .select('product_id, name, category_id, status, branch_id, currency, min_price, ref_price, lead_time_days');
+          return (branch ? q.eq('branch_id', branch) : q) as unknown as PromiseLike<{
+            data: LinhaPreco[] | null;
+            error: { message: string } | null;
+          }>;
+        })();
 
   // A vista de custos não traz nome, categoria nem estado — só `product_id`.
   // Para o papel de custos vai-se buscá-los a `v_products` numa leitura à
@@ -127,7 +137,7 @@ export default async function PricesPage({
   const geradoPor = userRes ?? '—';
 
   const meta = new Map<string, MetaProduto>(
-    (catalogoRes.data ?? []).map((p) => [p.id, p]),
+    (catalogoRes.data ?? []).map((p): [string, MetaProduto] => [p.id, p]),
   );
 
   // Ordem de apresentação: categoria -> código -> âmbito. O âmbito não é
