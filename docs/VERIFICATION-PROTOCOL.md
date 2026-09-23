@@ -1191,8 +1191,25 @@ activo/SA e activo/APAC; `sales` e `agent` idênticos pelo caminho real e pela e
    correcção e do deploy da revisão `24c8a70`.
 2. **Export como `logistics.test`** — **sem** colunas de custo, com linhas das quatro filiais e
    **nenhuma** de APAC.
-3. **Export como `finance.test`** — com custos, 283 linhas, e as de canal **no fim** em bloco
-   (o achado da ordenação, ⚠️11, já corrigido — confirmar que agora vêm ao lado do artigo).
+3. **Export como `finance.test`** — ⚠️ **PARCIALMENTE EXECUTADO, 2026-09-23.**
+
+   ✅ **Confirmado pelo Pedro:** o ecrã `/prices` e o export abrem, **os custos estão presentes**,
+   e as **filiais vêm agrupadas por artigo** — é a metade da correcção do ⚠️11 que dizia respeito
+   à ordenação (`.order('product_id').order('branch_id')`), e estava por provar desde 2026-09-20.
+
+   ⏳ **Por confirmar: as linhas de canal.** Nem no rótulo `Scope` do "All branches", nem no
+   conteúdo do `.xlsx`. É a outra metade do ⚠️11 — o rótulo deve dizer **"All branches and
+   channels"** quando o ficheiro traz canais, e as linhas `APAC` devem aparecer junto do artigo a
+   que pertencem, não em bloco no fim.
+
+   **O lado dos dados já está medido** (2026-09-23), o que estreita o que falta ver no browser:
+   o `finance` vê **283 linhas — 229 de filial** (CORP, LTD, SA, TBM) **e 54 de canal** (APAC).
+   Logo o ficheiro "All branches" **tem** linhas de canal, e o rótulo **tem** de as mencionar. Se
+   disser apenas "All branches", é defeito; se as linhas `APAC` vierem todas no fim, a ordenação
+   não está a aplicar-se ao caso de canal.
+
+   *(Nota: o ramo do `finance` usa `v_branch_prices`, que tem `scope_type` — não foi afectado pelo
+   item 68, que só partia o ramo dos papéis sem custos.)*
 4. **`Alert` nos três serviços** — no ficheiro do `finance`, confirmar as 15 linhas `critical` de
    `T-1050`/`T-1051`/`T-1052`. É o item 67, e é decisão do Pedro.
 5. **Vista de impressão** (`CC`) — `/prices`, botão de imprimir.
