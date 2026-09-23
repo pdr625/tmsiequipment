@@ -31,6 +31,27 @@ Everything below is checked against the real running production, not assumed.
   ```
   **Provado a 2026-09-19**, num directório temporário e sem tocar na configuração viva: o mesmo
   `location` sem o ficheiro da zona dá `test failed`; com ele, `test is successful`.
+- **Timing instrumentation for `/prices` latency diagnosis (2026-09-23).** O vhost tem
+  `access_log /var/log/tmsi/tmsi-timing.log tmsi_timing;`, cujo `log_format` (com
+  `$request_time`/`$upstream_response_time`/`$upstream_connect_time`) vive em
+  `deploy/nginx/tmsi-timing-format.conf` → **instalar em `/etc/nginx/conf.d/`**. Sem ele o
+  nginx recusa arrancar (mesmo mecanismo do item 54 acima: zona/format referenciados antes de
+  declarados). O ficheiro fica em `/var/log/tmsi/`, não em `/var/log/nginx/`, **de propósito**:
+  o `/etc/logrotate.d/nginx` do sistema (`/var/log/nginx/*.log`, `create 0640 www-data adm`)
+  apanharia o ficheiro pelo glob mas reporia o grupo para `adm` a cada rotação diária,
+  desfazendo em silêncio o acesso de leitura do `pedro` sem precisar de estar no grupo `adm`
+  (que também dá leitura aos outros 7 vhosts do host). Um directório próprio com um stanza de
+  logrotate próprio (`deploy/logrotate/tmsi-timing`) evita as duas coisas. Passos de
+  instalação, numa restauração de raiz:
+  ```bash
+  sudo cp deploy/nginx/tmsi-timing-format.conf /etc/nginx/conf.d/
+  sudo mkdir -p /var/log/tmsi
+  sudo chown root:pedro /var/log/tmsi
+  sudo chmod 750 /var/log/tmsi
+  sudo install -o www-data -g pedro -m 640 /dev/null /var/log/tmsi/tmsi-timing.log
+  sudo cp deploy/logrotate/tmsi-timing /etc/logrotate.d/tmsi-timing
+  sudo nginx -t && sudo systemctl reload nginx
+  ```
 - **Repo lives at `~/atelier-vps/tmsiequipment`** on the VPS (`pedro@vm7509`), a plain `git
   clone` — not `/opt/tmsiequipment`.
 - **The Supabase stack is this repo's own `deploy/supabase/docker-compose.yml`**, not a copy
@@ -267,6 +288,8 @@ de pé — é urgente para não repetir os erros que essas regras registam.
 |---|---|---|---|
 | `~/atelier-vps/CLAUDE.md` | **só no disco do host** | `dossier/audits/2026-09-20-vps-claude-md.md` (fotografia datada) | Regras operacionais do agente neste VPS: disciplina de segredos (três incidentes reais registados, com o mecanismo de cada um), invariantes de rede e de Docker, sudo sem TTY, metodologia de sessão. Um host novo sem isto não sabe, por exemplo, que `127.0.0.1` nunca é destino de proxy aqui, nem porque é que um ficheiro de credenciais só se inspecciona por `wc`/`stat`. |
 | `/etc/nginx/conf.d/tmsi-rate-limits.conf` | host | `deploy/nginx/tmsi-rate-limits.conf` (versionado desde 2026-09-20) | O vhost referencia a zona `tmsi_auth`; sem este ficheiro o nginx **recusa arrancar** (item 54) |
+| `/etc/nginx/conf.d/tmsi-timing-format.conf` | host | `deploy/nginx/tmsi-timing-format.conf` (versionado desde 2026-09-23) | O vhost referencia o `log_format tmsi_timing`; sem este ficheiro o nginx recusa arrancar |
+| `/etc/logrotate.d/tmsi-timing` + `/var/log/tmsi/` (dir `root:pedro 750`) | host | `deploy/logrotate/tmsi-timing` (versionado desde 2026-09-23) | Sem o stanza próprio, o `tmsi-timing.log` fica sem rotação (cresce sem limite) e, se for movido para `/var/log/nginx/`, o stanza do sistema repõe o grupo `adm` a cada rotação e tira o acesso de leitura ao `pedro` |
 
 **O `CLAUDE.md` não está na raiz do dossier por desenho**, não por esquecimento: o
 `dossier-push.sh` tem lista branca (`VPS.md`, `audits/*-vps*.md`, appends ao `CHANGELOG.md`) e

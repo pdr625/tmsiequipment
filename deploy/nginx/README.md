@@ -3,6 +3,10 @@
 Copyright © 2026 Pedro Alexandre. Proprietary — see LICENSE.
 
 `tmsiequipment.conf` in this directory is a snapshot of the real vhost.
+`tmsi-timing-format.conf` (2026-09-23) is the `log_format tmsi_timing` used by the vhost's
+`access_log` line — installs to `/etc/nginx/conf.d/`, same pattern as `tmsi-rate-limits.conf`.
+See `deploy/logrotate/tmsi-timing` for the log's own rotation and `deploy/DEPLOY.md` §0 for
+install steps and why it lives in `/var/log/tmsi/`, not `/var/log/nginx/`.
 
 **The operating copy is the VPS's own:**
 `/etc/nginx/sites-available/tmsiequipment.conf` (symlinked from `sites-enabled/`).
