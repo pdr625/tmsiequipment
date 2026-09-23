@@ -47,6 +47,32 @@ awk '$1 > "2026-09-23T<hora do clique>"' /var/log/tmsi/tmsi-timing.log | grep 17
 
 ---
 
+## ⚠️ ESTADO EM ABERTO AO FECHAR A SESSÃO (2026-09-23)
+
+**O código está no git e NÃO está em produção.** Commits `0c8bff6` (lote de apresentação) e
+`b189984` (fixar a inferência de tipos) empurrados; **a CI não publicou imagem para nenhum dos
+dois**. Verificado: as tags `sha-0c8bff6` e `sha-b189984` não existem no GHCR ao fim de ~20
+minutos.
+
+**A produção não foi tocada e está sã:** contentor `healthy` na revisão `24c8a70`
+(digest `83c4a4f7…`), `/api/health` 200, smoke **118/118**. O que está no ecrã hoje é o código
+anterior ao lote de apresentação.
+
+**Não consegui ler o porquê.** O VPS não tem `gh` instalado, e o PAT que aqui existe tem apenas
+`read:packages` — não dá para ler os *logs* das Actions. **Primeiro passo da sessão seguinte:**
+abrir o separador Actions do repositório e ver o erro.
+
+**A hipótese mais provável, e o que já se fez contra ela:** o `/prices` passou a escolher a lista
+de colunas em tempo de execução, e o `postgrest-js` deriva o tipo do resultado da **string
+literal** do `.select()` — com um ternário a inferência colapsa. O commit `b189984` declara os
+tipos à mão (`LinhaPreco`, `MetaProduto`) exactamente para remover essa superfície. **Se a CI
+falhou nos dois, o erro pode ser outro e o log é a única forma de saber.**
+
+**Não há Node no VPS, por desenho** (961 MB de RAM; construir aqui causa OOM — regra do
+`~/atelier-vps/CLAUDE.md`). O `typecheck` é da CI e esta sessão não o podia correr localmente.
+
+**Reverter não é preciso:** nada foi implantado. Corrigir o erro e empurrar é suficiente.
+
 ## 3. O que fica para o Pedro
 
 1. **Lista de browser da execução n.º 5**, em `docs/VERIFICATION-PROTOCOL.md`: exports como
