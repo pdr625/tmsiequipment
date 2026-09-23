@@ -609,7 +609,9 @@ a fonte de preços que ninguém verifica. Migração pesada, arrasta execução 
 **Não fazer antes de um dos gatilhos.** Hoje seria construir uma cache para um problema que uma
 projecção resolveu.
 
-**72. `/prices` pede `select('*')` — 20 colunas onde o ecrã mostra 8** — **2026-09-23**, lote de
+~~**72. `/prices` pede `select('*')` — 20 colunas onde o ecrã mostra 8**~~ ✅ **FECHADO
+2026-09-23** — as duas vistas passam a ser pedidas com a lista explícita de colunas, no ecrã e nos
+dois exports. Asserção `II` do smoke falha se o `select('*')` voltar. Texto original: — **2026-09-23**, lote de
 apresentação. `app/src/app/prices/page.tsx:57` faz `.from(viewName).select('*')`, e a vista tem
 ~20 colunas. Com 283 linhas são ~5 700 valores serializados pelo PostgREST e enviados, para o
 ecrã usar menos de metade.
@@ -622,6 +624,65 @@ rótulo "All branches and channels" (⚠️11) e a falta de coluna/filtro de est
 **Nota de método (item 28, 2026-09-06):** foi exactamente este tipo de diferença — pedir todas as
 colunas em vez das que a app pede — que fez três medições seguidas medirem a coisa errada, com
 8-9× de desvio. Ao medir o `/prices`, confirmar sempre que o pedido é bit-a-bit o que a app envia.
+
+**73. Latência fixa por página: oito pedidos ao backend, e o dado é 18% deles** — **MEDIDO
+2026-09-23** com a instrumentação de tempos do nginx (`tmsi-timing.log`), sobre os cliques reais do
+Pedro em `/prices?branch=APAC` como `finance.test`.
+
+**A anatomia de um carregamento** (janela calma, antes da tempestade de *prefetch*):
+
+| # | Pedido | `urt` | Necessário? |
+|---|---|---|---|
+| 1 | `GET /auth/v1/user` (middleware) | 0,141 s | sim |
+| 2 | `GET /rest/v1/profiles` (middleware) | 0,040 s | sim |
+| 3 | `GET /rest/v1/v_current_branding` (layout) | 0,089 s | sim |
+| 4 | **`GET /auth/v1/user` (página)** | **0,212 s** | **duplicado** |
+| 5 | `POST /rest/v1/rpc/can_read_costs` | 0,036 s | sim |
+| 6 | **`GET /rest/v1/v_branch_prices`** | **0,165 s** | **é o dado** |
+| 7 | `GET /rest/v1/branches` | 0,005 s | sim |
+| 8 | `GET /rest/v1/channels` | 0,005 s | sim |
+| | **soma** | **0,693 s** | página: **0,911 s** (cobre 76%) |
+
+**A consulta de dados vale 18% da página. As duas chamadas ao GoTrue valem o dobro dela.**
+
+**Três causas, todas de app, todas corrigidas sem migração:**
+
+1. **Seis `await` em cadeia** na página — `getUser`, `can_read_costs`, a consulta, `branches`,
+   `channels`, `branding` — quando só a consulta depende do `can_read_costs` (que decide a
+   vista). Passaram a `Promise.all`.
+2. **Tempestade de *prefetch*.** Cada `<Link>` de filtro era pré-carregado pelo Next.js, e cada
+   pré-carregamento é um **render completo no servidor**, com o seu próprio
+   `auth/v1/user` + `profiles` + `branding`. Quatro links = **12 pedidos extra por visita**, e
+   concorrentes: medido, o `/auth/v1/user` passou de **0,141 s para 1,232 s** por fila de espera
+   no GoTrue. A janela do segundo clique mostra **27 pedidos ao backend**, contra os 8 de um
+   carregamento limpo. `prefetch={false}` nos links de filtro — são clicados um de cada vez.
+3. **`getBranding()` chamado duas vezes por render** (layout e página) → dois
+   `v_current_branding`. `cache()` do React dedupe-os dentro da mesma passagem.
+
+**O que fica por decidir (item 74):** o `/auth/v1/user` **duplicado**. O middleware já validou a
+sessão; a página chama outra vez. As duas saídas têm custo próprio e a escolha é do Pedro.
+
+**74. O `/auth/v1/user` duplicado por pedido — decisão pendente** — **2026-09-23**. O middleware
+corre `auth.getUser()` em **todos** os pedidos (matcher `/((?!_next/static|…))`) e a página corre
+outra vez. São dois *round-trips* ao GoTrue por carregamento, e o GoTrue é o serviço que mais
+sofre com concorrência (medido: 0,141 s isolado, 1,232 s sob a tempestade de *prefetch*).
+
+**Duas saídas, ambas com custo:**
+
+1. **O middleware passa a identidade num cabeçalho de pedido** (`x-tmsi-user`), que a página lê
+   por `headers()`. Poupa um *round-trip* ao GoTrue por pedido. **Risco:** implica reconstruir o
+   `NextResponse` com cabeçalhos de pedido novos, e é exactamente aí que vivem os *cookies* de
+   refrescamento da sessão do `@supabase/ssr` — mexer mal ali parte o login de forma
+   intermitente. E o cabeçalho tem de ser **sobrescrito incondicionalmente** pelo middleware, ou
+   um cliente pode forjá-lo.
+2. **Uma função nova na BD**, `tmsi.me()`, devolvendo o perfil de quem chama (`auth.uid()`
+   resolvido do lado do servidor) — a página deixa de precisar do `getUser()` de todo, e ganha o
+   nome no mesmo pedido. **Custo:** é migração, arrasta execução do protocolo, e acrescenta
+   superfície RPC (que o `CLAUDE.md` manda justificar com um chamador — aqui há-o).
+
+**Nesta sessão não se fez nenhuma das duas.** O `getUser()` da página deixou de estar no caminho
+crítico (corre dentro do `Promise.all`, em paralelo com a consulta de preços, que é mais lenta),
+logo já não custa relógio — mas continua a ser uma chamada ao GoTrue por carregamento.
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,

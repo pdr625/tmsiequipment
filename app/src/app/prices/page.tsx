@@ -10,30 +10,6 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getBranding, footerLines } from '@/lib/branding';
 import { PrintButton } from './print-button';
 
-type BranchPriceRow = {
-  product_id: string;
-  branch_id: string;
-  currency: string;
-  total_cost_eur: number | null;
-  margin: number | null;
-  min_price: number | null;
-  ref_price: number | null;
-  alert: string | null;
-  scope_type: string | null;
-};
-
-type SellingPriceRow = {
-  product_id: string;
-  name: string;
-  branch_id: string;
-  currency: string;
-  min_price: number | null;
-  ref_price: number | null;
-  lead_time_days: number | null;
-  category_id: string | null;
-  status: string;
-};
-
 type Branch = { id: string; name: string };
 type Channel = { id: string; name: string };
 
@@ -43,12 +19,27 @@ type Channel = { id: string; name: string };
 // re-implementing the role check here. Whatever it answers, RLS on the
 // underlying tables still scopes which *rows* come back — this is a
 // convenience choice of view, not the actual access control.
+type MetaProduto = { id: string; name: string; category_id: string | null; status: string };
+
+// A forma que as duas vistas têm em comum, mais o que cada uma acrescenta. O
+// ecrã trata as linhas por esta forma e faz o estreitamento onde precisa.
 type LinhaQualquer = {
   product_id: string;
   branch_id: string;
   name?: string;
   category_id?: string | null;
   status?: string;
+};
+
+type LinhaPreco = LinhaQualquer & {
+  currency: string;
+  min_price: number | null;
+  ref_price: number | null;
+  total_cost_eur?: number | null;
+  margin?: number | null;
+  alert?: string | null;
+  scope_type?: string | null;
+  lead_time_days?: number | null;
 };
 
 export default async function PricesPage({
@@ -59,6 +50,13 @@ export default async function PricesPage({
   const { branch, status: statusFiltro } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
+// Which view a user gets (full costs vs selling-price-only) is a security
+// decision, not a UI one — the page asks Postgres (tmsi.can_read_costs(),
+// the same predicate compute_price() itself uses) rather than
+// re-implementing the role check here. Whatever it answers, RLS on the
+// underlying tables still scopes which *rows* come back — this is a
+// convenience choice of view, not the actual access control.
+  //
   // `can_read_costs` decide QUAL vista se lê, logo é o único await que tem
   // mesmo de vir antes dos outros. Até 2026-09-23 os seis awaits desta página
   // estavam todos em cadeia — medido no log de timing: 0,51 s de espera
@@ -74,22 +72,32 @@ export default async function PricesPage({
   const COLUNAS_CUSTO = 'product_id, branch_id, scope_type, currency, total_cost_eur, margin, min_price, ref_price, alert';
   const COLUNAS_VENDA = 'product_id, name, category_id, status, branch_id, currency, min_price, ref_price, lead_time_days';
 
-  let query = supabase.schema('tmsi').from(viewName).select(canReadCosts ? COLUNAS_CUSTO : COLUNAS_VENDA);
-  if (branch) {
-    query = query.eq('branch_id', branch);
-  }
+  // A lista de colunas é escolhida em tempo de execução, logo o postgrest-js
+  // não consegue derivar o tipo do resultado a partir dela (deriva-o da
+  // string literal do `.select()`). O tipo é declarado aqui, uma vez, e a
+  // promessa é tipada à mão — sem isto a inferência colapsa num union que
+  // depois falha em cada uso.
+  const precos = (() => {
+    let q = supabase.schema('tmsi').from(viewName).select(canReadCosts ? COLUNAS_CUSTO : COLUNAS_VENDA);
+    if (branch) {
+      q = q.eq('branch_id', branch);
+    }
+    return q as unknown as PromiseLike<{ data: LinhaPreco[] | null; error: { message: string } | null }>;
+  })();
 
   // A vista de custos não traz nome, categoria nem estado — só `product_id`.
   // Para o papel de custos vai-se buscá-los a `v_products` numa leitura à
   // parte (tabela + RLS, sem compute_price: é barata) e cruzam-se em memória.
   // A alternativa era acrescentar colunas à vista, e isso é migração.
-  const catalogo = canReadCosts
-    ? supabase.schema('tmsi').from('v_products').select('id, name, category_id, status')
+  const catalogo: PromiseLike<{ data: MetaProduto[] | null }> = canReadCosts
+    ? (supabase.schema('tmsi').from('v_products').select('id, name, category_id, status') as unknown as PromiseLike<{
+        data: MetaProduto[] | null;
+      }>)
     : Promise.resolve({ data: null });
 
   const [{ data: rows, error }, catalogoRes, { data: branches }, { data: channels }, userRes] =
     await Promise.all([
-      query,
+      precos,
       catalogo,
       supabase.schema('tmsi').from('branches').select('id, name').eq('active', true).order('id')
         .overrideTypes<Branch[], { merge: false }>(),
@@ -118,9 +126,8 @@ export default async function PricesPage({
     ]);
   const geradoPor = userRes ?? '—';
 
-  const meta = new Map<string, { name: string; category_id: string | null; status: string }>(
-    ((catalogoRes.data ?? []) as { id: string; name: string; category_id: string | null; status: string }[])
-      .map((p) => [p.id, { name: p.name, category_id: p.category_id, status: p.status }]),
+  const meta = new Map<string, MetaProduto>(
+    (catalogoRes.data ?? []).map((p) => [p.id, p]),
   );
 
   // Ordem de apresentação: categoria -> código -> âmbito. O âmbito não é
@@ -145,7 +152,7 @@ export default async function PricesPage({
   // custos.
   const estadoPedido = statusFiltro ?? 'active';
   const mostrarTodos = estadoPedido === 'all';
-  const visiveis = ((rows ?? []) as LinhaQualquer[])
+  const visiveis = (rows ?? [])
     .filter((r) => !canReadCosts || mostrarTodos || estadoDe(r) === estadoPedido)
     .sort(
       (a, b) =>
@@ -157,8 +164,8 @@ export default async function PricesPage({
 
   // Formatação: o custo a duas casas (é dinheiro), a margem em percentagem
   // (está guardada como fracção — 0,15 é o margin_min das settings).
-  const eur = (v: number | null) => (v === null || v === undefined ? '—' : Number(v).toFixed(2));
-  const pct = (v: number | null) =>
+  const eur = (v: number | null | undefined) => (v === null || v === undefined ? '—' : Number(v).toFixed(2));
+  const pct = (v: number | null | undefined) =>
     v === null || v === undefined ? '—' : `${(Number(v) * 100).toFixed(1)} %`;
 
   // ⚠️11: o rótulo descreve o CONTEÚDO, não o filtro. Sem filtro, a lista
@@ -170,7 +177,7 @@ export default async function PricesPage({
   // shown here only for print (the screen already has the branch filter
   // for scope, and no on-screen use for the rest).
   const generatedAt = new Date();
-  const currencies = [...new Set(visiveis.map((r) => (r as unknown as { currency: string }).currency))].sort();
+  const currencies = [...new Set(visiveis.map((r) => (r as LinhaPreco).currency))].sort();
   const branding = await getBranding();
   const footer = footerLines(branding);
 
@@ -290,22 +297,22 @@ export default async function PricesPage({
             </tr>
           </thead>
           <tbody>
-            {(visiveis as unknown as BranchPriceRow[]).map((r) => (
+            {(visiveis as LinhaPreco[]).map((r) => (
               <tr
                 key={`${r.product_id}-${r.branch_id}-${r.scope_type ?? 'b'}`}
                 className="border-b border-gray-100"
               >
                 <td className="py-2 pr-4">
                   <span className="font-medium">{r.product_id}</span>
-                  <span className="text-gray-600"> — {nomeDe(r as unknown as LinhaQualquer)}</span>
+                  <span className="text-gray-600"> — {nomeDe(r)}</span>
                 </td>
                 <td className="py-2 pr-4">{r.branch_id}</td>
                 <td className="py-2 pr-4">
-                  {estadoDe(r as unknown as LinhaQualquer) === 'active' ? (
+                  {estadoDe(r) === 'active' ? (
                     <span className="text-gray-500">active</span>
                   ) : (
                     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
-                      {estadoDe(r as unknown as LinhaQualquer)}
+                      {estadoDe(r)}
                     </span>
                   )}
                 </td>
@@ -334,7 +341,7 @@ export default async function PricesPage({
             </tr>
           </thead>
           <tbody>
-            {(visiveis as unknown as SellingPriceRow[]).map((r) => (
+            {(visiveis as LinhaPreco[]).map((r) => (
               <tr key={`${r.product_id}-${r.branch_id}`} className="border-b border-gray-100">
                 <td className="py-2 pr-4">
                   <span className="font-medium">{r.product_id}</span>
