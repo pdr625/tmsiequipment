@@ -480,6 +480,78 @@ de sessão, geração do `.xlsx`, cabeçalhos de download. A regra do projecto
 sessão de browser fiquem para o Pedro. **Decisão em aberto:** se vale a pena um teste de
 integração com sessão real — hoje não existe, e é por isso que esta regressão chegou a produção.
 
+**69. `/prices` calcula o catálogo inteiro a cada pedido — o filtro de âmbito não desce** —
+**DIAGNOSTICADO 2026-09-23**, a partir de `/prices?branch=APAC` a dar
+`canceling statement due to statement timeout` (8 s no `authenticated`) como `finance.test`.
+
+**A causa, lida no plano e não suposta.** `tmsi.v_branch_prices` é um `UNION ALL` de dois braços,
+cada um um `CROSS JOIN LATERAL tmsi.compute_price(...)`, e projecta **`c.branch_id` — a coluna de
+SAÍDA da função**. O filtro da app (`.eq('branch_id','APAC')`) só pode ser aplicado **depois** de
+a função correr, porque o Postgres não tem forma de saber que
+`compute_price(_, 'branch', b.id).branch_id = b.id`. No plano isto aparece exactamente assim:
+
+```
+->  Function Scan on compute_price c (actual rows=0 loops=229)
+      Filter: (branch_id = 'APAC'::text)
+      Buffers: shared hit=9214
+```
+
+**229 execuções de `compute_price` para produzir ZERO linhas** — `APAC` é um canal, nunca pode
+aparecer como `branch_id` no braço de filial. São **76% dos buffers do pedido** gastos em trabalho
+que é deitado fora por construção.
+
+**Medições (host reiniciado; `si`/`so` não estavam a zero — a própria sessão de agente ocupava
+303 MB, e isso está dito ao lado de cada número):**
+
+| Pedido | Devolve | Tempo | Buffers | Chamadas a `compute_price` |
+|---|---|---|---|---|
+| APAC, `finance` | 54 | 1847 ms | 12 078 | 229 desperdiçadas + 54 úteis |
+| SA, `finance` | 61 | 1417 ms | 10 215 | 229 (61 úteis) + 54 desperdiçadas |
+| APAC, `agent.apac` | 46 | 1880 ms | 8 056 | 184 desperdiçadas + 46 úteis |
+| SA, `sales.sa` | 46 | 1065 ms | 6 453 | 184 + 46, **todas** desperdiçadas menos as 46 |
+
+**`compute_price` isolado, um artigo (`T-1044`), a quente, com controlo repetido:**
+
+| Âmbito | Buffers | Tempo |
+|---|---|---|
+| TBM (a própria origem) | 31 | 5,3 ms · **4,1 ms** (controlo) |
+| SA (filial não-origem, cadeia com fee interco) | 32 | 11,4 ms |
+| **APAC (canal)** | **121** | 9,1 ms |
+
+O canal custa **~4× o I/O** de uma filial de origem por chamada — é real, mas **não é a causa
+dominante**. A causa dominante é o número de chamadas: **283 por pedido, filtrado ou não.**
+
+**O que foi descartado por medição, não por opinião:**
+- `override_value` **tem** o índice certo — `(product_id, scope_type, scope_id, kind)`. Não é aí.
+- Todas as funções do caminho quente são `STABLE` (só `round_up_to` é `IMMUTABLE`). Correcto.
+- `is_trusted_db_session` (0017) é avaliada **uma vez por chamada**, como ficou desenhada — o
+  `v_api_caller` aguentou.
+- `products_visible` após a 0019 faz `Seq Scan` sobre `products`, mas são **62 linhas**: 530
+  buffers, 4% do total. O `||` da origem não impede nada que importe a esta escala.
+- Cada `compute_price` chama `override_value` **6×** e `fx_rate` **3×** — 9 sub-chamadas × 283 =
+  ~2500 procuras por índice por carregamento de página. É muito, mas é consequência do número de
+  chamadas, não causa independente.
+
+**É patologia ou volume?** **As duas, e a patologia é a que interessa:** o custo é
+`O(artigos × âmbitos)` **e filtrar não o reduz em nada**. Pedir uma filial custa exactamente o
+mesmo que pedir todas. Com os 46 artigos activos de hoje são 283 chamadas; o catálogo a crescer
+multiplica-as linearmente, e o `statement_timeout` de 8 s passa a ser atingido por mais pedidos.
+
+⚠️ **Sobre a comparação com o item 14/28 (255 ms para 163 artigos):** essa linha base foi medida
+sobre **outra forma de pedido** — não é `v_branch_prices` com `compute_price` por linha. Dizer
+"10× mais lento" seria comparar coisas diferentes. O que se pode afirmar com o que está medido é
+o que está acima.
+
+**Facto que habilita a correcção, verificado nas 283 linhas:** `c.branch_id` é **sempre** igual ao
+âmbito que conduz o `LATERAL` (`b.id` ou `ch.id`) — zero excepções. Logo projectar o id da tabela
+que conduz, em vez do da função, é semanticamente idêntico **e deixa o filtro descer antes do
+`LATERAL`**.
+
+**Estado: diagnóstico fechado, correcção por decidir pelo Pedro.** Três patamares propostos, com
+custo, ganho e o que arrastam — ver a resposta da sessão de 2026-09-23. Invariante de qualquer
+uma: **impressão digital de `v_branch_prices` IDÊNTICA por papel** — é só desempenho; se mudar, é
+defeito.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de

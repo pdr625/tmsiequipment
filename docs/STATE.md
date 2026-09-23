@@ -21,6 +21,53 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
 
+## Desempenho: `/prices` calcula o catálogo inteiro a cada pedido (2026-09-23)
+
+**O sintoma:** `/prices?branch=APAC` como `finance.test` dava
+`canceling statement due to statement timeout` (8 s no `authenticated`). As outras filiais e o
+"All branches" carregavam.
+
+**Duas causas que se somavam, e convinha separá-las.** A **memória** tornou o problema fatal — no
+momento do erro o host tinha 2 GB de swap e *thrashing*, com quatro sessões de agente a ocupar
+47% da RAM. Depois do reboot o mesmo pedido passou a demorar ≈3 s em vez de rebentar. Mas **a
+consulta é que cria o problema**, e essa não melhorou com o reboot.
+
+**A causa, lida no plano.** `v_branch_prices` projecta **`c.branch_id` — a coluna de SAÍDA de
+`compute_price`**. O filtro `.eq('branch_id','APAC')` só pode ser aplicado depois de a função
+correr, porque nada diz ao Postgres que `compute_price(_,'branch',b.id).branch_id = b.id`. Logo:
+
+```
+->  Function Scan on compute_price c (actual rows=0 loops=229)
+      Filter: (branch_id = 'APAC'::text)
+      Buffers: shared hit=9214
+```
+
+**229 execuções para produzir zero linhas** — 76% do I/O do pedido gasto em trabalho que é
+deitado fora por construção, já que `APAC` é um canal e nunca pode sair como `branch_id` do braço
+de filial. **Cada pedido a `/prices` executa as 283 chamadas, filtrado ou não: filtrar não compra
+nada.**
+
+O canal custa ~4× o I/O de uma filial por chamada (121 vs 31 buffers, isolado e a quente), o que é
+real mas secundário — a causa dominante é o **número** de chamadas.
+
+**Descartado por medição, não por opinião:** o índice de `override_value` existe e é o certo
+(`product_id, scope_type, scope_id, kind`); todas as funções do caminho quente são `STABLE`; a
+`is_trusted_db_session` da 0017 é avaliada **uma vez por chamada**, como foi desenhada; e o `||`
+da origem na `products_visible` (0019) não impede nada que importe — são 62 linhas, 4% dos
+buffers.
+
+**Facto que habilita a correcção, verificado nas 283 linhas:** `c.branch_id` é **sempre** igual ao
+âmbito que conduz o `LATERAL`. Projectar o id da tabela condutora em vez do da função é
+semanticamente idêntico e deixa o filtro descer **antes** de a função correr.
+
+**Correcção por decidir** — três patamares propostos ao Pedro, com a invariante de que a
+impressão digital por papel tem de ficar **idêntica**: é só desempenho.
+
+**Nota de método:** a janela de medição foi deliberadamente curta e a própria sessão de agente
+ocupava 303 MB dos 961 MB do host, com `si`/`so` **não** a zero. Os números absolutos trazem essa
+ressalva ao lado; o **plano** e as **proporções entre nós** não dependem dela, e é neles que o
+diagnóstico assenta.
+
 ## A regressão do export, e um ficheiro que apaguei (2026-09-23)
 
 ### A regressão (item 68) — e porque só apareceu agora

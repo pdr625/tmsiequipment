@@ -1210,6 +1210,12 @@ activo/SA e activo/APAC; `sales` e `agent` idênticos pelo caminho real e pela e
 
    *(Nota: o ramo do `finance` usa `v_branch_prices`, que tem `scope_type` — não foi afectado pelo
    item 68, que só partia o ramo dos papéis sem custos.)*
+
+   **Observação do Pedro no mesmo passo, 2026-09-23:** no âmbito APAC vê-se o `T-0001` (fictício,
+   **inactive**) com margem 0 e `Alert` = `error`. **Está correcto** — é o `errors[]` *soft* a
+   funcionar, que reporta em vez de rebentar. Mas reforça uma falta já conhecida: **o `/prices`
+   não tem coluna nem filtro de estado**, logo artigos não-activos aparecem ao lado dos activos
+   sem se distinguirem. Lote de apresentação, não urgente.
 4. **`Alert` nos três serviços** — no ficheiro do `finance`, confirmar as 15 linhas `critical` de
    `T-1050`/`T-1051`/`T-1052`. É o item 67, e é decisão do Pedro.
 5. **Vista de impressão** (`CC`) — `/prices`, botão de imprimir.
