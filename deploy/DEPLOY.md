@@ -242,6 +242,21 @@ What does **not** survive on its own: the app pointing at the right hostname (§
 GHCR pull credential existing anywhere but this one VPS (§9, and the escrow in §6) — without
 those two, data survival alone doesn't get the service back up.
 
+## 5a. Passo obrigatório num clone novo: activar os hooks
+
+```bash
+git config core.hooksPath scripts/hooks
+```
+
+**Uma linha, uma vez por clone — e sem ela a guarda não existe.** O `core.hooksPath` é
+configuração **local**, não viaja no repositório: um clone novo tem o `scripts/hooks/commit-msg`
+versionado no disco mas **inerte**.
+
+O que ele guarda: recusa um commit que faça um ficheiro de `docs/` perder mais de 50% das linhas
+sem a palavra `rewrite` na mensagem — nasceu de 105 linhas apagadas por um `cat >` num ficheiro
+que se julgava novo (2026-09-23). O bloco `GG` do `scripts/smoke.py` falha se este passo não
+tiver sido dado, o que torna o esquecimento visível em vez de silencioso.
+
 ## 5b. Ficheiros do host a recuperar em qualquer restauro (não são segredos)
 
 Além dos segredos (§6), há ficheiros **fora deste repo** sem os quais um host reconstruído fica
