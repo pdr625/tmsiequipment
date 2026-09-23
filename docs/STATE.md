@@ -21,6 +21,27 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
 
+## ⏳ Medição de aceitação da 0020 — para o Pedro fazer com o host calmo
+
+**O que fazer:** sem sessões de agente abertas (`ps -C claude` vazio), abrir
+`/prices?branch=APAC` como `finance.test` e cronometrar até a tabela aparecer.
+
+**O que deve dar:** **bem abaixo de 1 s** para as 54 linhas. Medido com uma sessão de agente
+aberta (287 MB, ~30% da RAM, swap a 427 MB) deu **382 ms só na base de dados**; sem essa
+contaminação a consulta deve ficar abaixo de ~250 ms, e a página inteira — PostgREST a serializar
+54 linhas × 20 colunas, mais o render — confortavelmente dentro de 1 s.
+
+**Referência do antes:** o mesmo clique dava `canceling statement due to statement timeout` (8 s)
+a 23/09 às 12:01, e ≈3 s depois do reboot mas ainda sem a 0020.
+
+**Se ainda der ≈3 s, não é a 0020 a falhar** — a parte estrutural não pode regredir em silêncio
+(são **54** chamadas a `compute_price` onde eram 283, e o bloco `HH` do smoke parte se voltarem a
+subir). Seria então a camada de cima: serialização das 20 colunas (item 72, `select('*')`), render,
+ou o host outra vez sob pressão. Nessa ordem.
+
+**O "All branches" continua a custar as 283 chamadas** e não melhorou — é o pedido sem filtro, não
+há filtro para descer. É o gatilho do item 71, não um defeito desta migração.
+
 ## Migração 0020 — o filtro de âmbito desce antes do LATERAL (2026-09-23)
 
 Aplicada com dump antes (`tmsi-pre-0020-20260923-131729.dump`). **Diff de duas linhas:** a vista
@@ -48,6 +69,18 @@ não aceitar.
 `compute_price` mascarava a diferença. **Uma prova que só olha para o resultado não vê uma
 mudança em como o resultado é protegido.** Está escrito no `CLAUDE.md` do repo, e o bloco `HH` do
 smoke passou a comparar também as `reloptions`.
+
+**Auditoria a todas as migrações que recriam vistas (2026-09-23): não há precedente.** Onze
+declarações `CREATE ... VIEW` em dez migrações não trazem a cláusula — mas as que recriam vistas
+*invoker* (`0001`, `0009`) fazem `ALTER VIEW ... SET (security_invoker = true)` logo a seguir, a
+`0003` faz o `ALTER` para `false` deliberadamente, e a `0008` declara com a cláusula. **A 0020,
+na sua primeira forma, foi o único caso alguma vez sem nenhuma das duas protecções.**
+
+**E nenhuma vista devia ser invoker e não é.** Estado medido: `v_branch_prices`,
+`v_selling_prices` e `v_current_branding` são invoker; **`v_products` e `v_audit_log` não são, e
+é deliberado** — o mascaramento de colunas por `CASE` da 0003 precisa dos direitos do dono, e a
+visibilidade de linha é reimplementada no `WHERE` de cada uma. O bloco `HH` guarda o mapa
+**nos dois sentidos**, e falha também se aparecer uma vista nova sem decisão registada.
 
 ## Desempenho: `/prices` calcula o catálogo inteiro a cada pedido (2026-09-23)
 

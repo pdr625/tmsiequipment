@@ -163,6 +163,25 @@ begin
   end if;
 end $$;
 
+-- A guarda das reloptions (convenção do CLAUDE.md, 2026-09-23). Nos dois
+-- sentidos: uma vista que devia ser invoker e deixou de o ser é uma camada de
+-- RLS perdida; uma que NÃO devia sê-lo e passou a sê-lo parte o mascaramento
+-- de colunas da 0003, que precisa de correr como dono.
+do $$
+declare v_mau text;
+begin
+  select string_agg(e.nome || ': esperado ' || case when e.invoker then 'invoker' else 'dono' end, ', ')
+    into v_mau
+  from (values ('v_branch_prices', true), ('v_selling_prices', true), ('v_current_branding', true),
+               ('v_products', false), ('v_audit_log', false)) e(nome, invoker)
+  join pg_class v on v.relname = e.nome
+  join pg_namespace n on n.oid = v.relnamespace and n.nspname = 'tmsi'
+  where (coalesce(array_to_string(v.reloptions, ','), '') like '%security_invoker=true%') is distinct from e.invoker;
+  if v_mau is not null then
+    raise exception 'reloptions erradas depois de recriar vista(s): %', v_mau;
+  end if;
+end $$;
+
 -- E a guarda própria desta migração: se a projecção voltar a sair da função,
 -- o filtro deixa de descer em silêncio e o item 69 regressa sem ninguém dar
 -- por isso.

@@ -1741,18 +1741,39 @@ def block_scope_filter_pushdown():
     # apanhou, porque comparava impressões digitais e essas ficaram idênticas —
     # as guardas do `compute_price` mascaravam a diferença. Uma prova que só
     # olha para o RESULTADO não vê uma mudança em COMO ele é protegido.
-    invoker = psql_rows(
+    # TODAS as vistas de tmsi, e nos dois sentidos: uma que devia ser invoker e
+    # deixou de o ser é uma camada de RLS perdida; uma que NÃO devia sê-lo e
+    # passou a sê-lo parte o mascaramento de colunas da 0003, que precisa de
+    # correr como dono. O mapa é explícito de propósito: uma vista nova obriga
+    # a decidir aqui qual dos dois lados é o seu, em vez de herdar o default em
+    # silêncio.
+    ESPERADO = {
+        "v_branch_prices": True,    # 0001 §7, reposta pela 0020
+        "v_selling_prices": True,   # 0001 §7
+        "v_current_branding": True, # 0008, declarada com a cláusula
+        "v_products": False,        # 0003:166 — DELIBERADO: o mascaramento por
+                                    # CASE precisa dos direitos do dono, e a
+                                    # visibilidade de linha é reimplementada no
+                                    # WHERE da própria vista
+        "v_audit_log": False,       # 0014 — mesma razão
+    }
+    vistas = psql_rows(
         "select c.relname, coalesce(array_to_string(c.reloptions, ','), '') "
         "from pg_class c join pg_namespace n on n.oid = c.relnamespace "
-        "where n.nspname = 'tmsi' and c.relkind = 'v' "
-        "  and c.relname in ('v_branch_prices', 'v_selling_prices') order by 1;"
+        "where n.nspname = 'tmsi' and c.relkind = 'v' order by 1;"
     )
-    sem = [l[0] for l in invoker if "security_invoker=true" not in (l[1] or "")]
+    medido = {l[0]: ("security_invoker=true" in (l[1] or "")) for l in vistas if l}
+    divergem = [
+        f"{v}: esperado {'invoker' if e else 'dono'}, está {'invoker' if medido.get(v) else 'dono'}"
+        for v, e in ESPERADO.items() if medido.get(v) != e
+    ]
+    novas = sorted(set(medido) - set(ESPERADO))
     check(
-        "HH: as vistas de preço mantêm security_invoker=true",
-        bool(invoker) and not sem,
-        f"{len(invoker)} vistas verificadas"
-        + (f" · SEM security_invoker: {', '.join(sem)}" if sem else ""),
+        "HH: cada vista de tmsi corre com o security_invoker que lhe foi desenhado",
+        not divergem and not novas,
+        f"{len(medido)} vistas verificadas"
+        + (f" · DIVERGEM: {'; '.join(divergem)}" if divergem else "")
+        + (f" · vista(s) sem decisão registada no mapa: {', '.join(novas)}" if novas else ""),
     )
 
 

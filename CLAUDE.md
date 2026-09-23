@@ -149,6 +149,39 @@ lá está, não o que se julga que lá está.
 
 ## `CREATE OR REPLACE VIEW` reinicia as `reloptions` — o `security_invoker` cai
 
+**Toda a migração que recrie uma vista termina com um bloco `DO` que falha se as `reloptions`
+esperadas não estiverem lá.** Como a guarda do `PUBLIC` (item 65): verificável, não lembrada.
+
+```sql
+do $$
+declare v_mau text;
+begin
+  select string_agg(v.relname || ': esperado ' || case when e.invoker then 'invoker' else 'dono' end, ', ')
+    into v_mau
+  from (values ('v_branch_prices', true), ('v_selling_prices', true), ('v_current_branding', true),
+               ('v_products', false), ('v_audit_log', false)) e(nome, invoker)
+  join pg_class v on v.relname = e.nome
+  join pg_namespace n on n.oid = v.relnamespace and n.nspname = 'tmsi'
+  where (coalesce(array_to_string(v.reloptions, ','), '') like '%security_invoker=true%') is distinct from e.invoker;
+  if v_mau is not null then
+    raise exception 'reloptions erradas depois de recriar vista(s): %', v_mau;
+  end if;
+end $$;
+```
+
+**Nos dois sentidos, e isso importa:** uma vista que devia ser invoker e deixou de o ser é uma
+camada de RLS perdida; uma que **não** devia sê-lo e passou a sê-lo parte o mascaramento de
+colunas da `0003`, que precisa de correr como dono. O bloco `HH` do smoke tem o mesmo mapa e
+falha também quando aparece uma vista nova sem decisão registada.
+
+**O padrão que o projecto usava antes, e que funcionava:** `CREATE OR REPLACE VIEW` sem cláusula,
+**seguido de `ALTER VIEW … SET (security_invoker = …)`** — é o que a `0001`, a `0003` e a `0009`
+fazem. A `0020` recriou sem cláusula **e sem o `ALTER`**, e foi o único caso alguma vez errado
+(auditadas todas as migrações que recriam vistas, 2026-09-23). Qualquer das duas formas serve;
+não ter nenhuma é que não.
+
+### Porquê — o que aconteceu
+
 Recriar uma vista **sem repetir `WITH (security_invoker = true)`** faz a vista voltar a correr
 como o **dono**. Aqui o dono é o `postgres`, que tem `BYPASSRLS` — a RLS da `tmsi.products` deixa
 de ser aplicada e a primeira das duas camadas desaparece.
