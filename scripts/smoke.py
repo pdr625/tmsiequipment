@@ -78,6 +78,12 @@ TEST_USERS = {
     "product_manager": ("pm.test@example.test", f"{CREDENTIALS_DIR}/pm-test-password.txt"),
     "logistics": ("logistics.test@example.test", f"{CREDENTIALS_DIR}/logistics-test-password.txt"),
     "branch_manager": ("branch_manager.test@example.test", f"{CREDENTIALS_DIR}/branch_manager-test-password.txt"),
+    # 2026-09-23: sales e agent passaram a ter conta com password própria (até
+    # aqui só existiam ao nível da BD, por injecção de claims). Nos modos de
+    # login a suite deixa de depender de emulação para os dois papéis de venda
+    # — que são precisamente os que vêem o catálogo real desde a activação.
+    "sales": ("sales.sa@example.test", f"{CREDENTIALS_DIR}/sales-test-password.txt"),
+    "agent": ("agent.apac@example.test", f"{CREDENTIALS_DIR}/agent-test-password.txt"),
 }
 
 RESULTS = []
