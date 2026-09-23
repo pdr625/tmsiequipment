@@ -1674,6 +1674,88 @@ def block_docs_guard():
     )
 
 
+def block_scope_filter_pushdown():
+    """HH — o filtro de âmbito desce antes do LATERAL (item 69, migração 0020).
+
+    Até 2026-09-23 as vistas de preço projectavam `c.branch_id`, a coluna de
+    SAÍDA de `compute_price`. O planeador não pode empurrar um filtro para
+    dentro de uma função opaca, logo `?branch=APAC` executava as 283 chamadas e
+    deitava fora 229 — 76% do I/O em trabalho que nunca poderia produzir uma
+    linha. `/prices?branch=APAC` chegava ao `statement_timeout` de 8 s.
+
+    A asserção é ESTRUTURAL, não temporal: conta as execuções de
+    `compute_price` no plano e exige que não excedam as linhas devolvidas. Um
+    tempo dependeria da carga do host (e a regra do projecto diz que números de
+    desempenho tirados com uma sessão de agente aberta não valem); uma contagem
+    de `loops` é determinística e apanha a regressão no minuto em que alguém
+    voltar a projectar `c.branch_id`."""
+    import re as _re
+
+    for vista, papel, ambito in (
+        ("v_branch_prices", "finance", "APAC"),
+        ("v_branch_prices", "finance", "SA"),
+        ("v_selling_prices", "sales", "SA"),
+    ):
+        uid = psql_rows(
+            f"select (array_agg(user_id order by user_id))[1] from tmsi.user_roles where role = '{papel}';"
+        )
+        if not uid or not uid[0][0]:
+            check(f"HH: {vista}?{ambito}", True, f"SKIP — sem conta de {papel}")
+            continue
+
+        plano = psql_rows(
+            "explain (analyze, costs off, timing off) "
+            f"select * from tmsi.{vista} where branch_id = '{ambito}';",
+            claims_uuid=uid[0][0],
+        )
+        texto = "\n".join(l[0] for l in plano if l)
+        chamadas = sum(
+            int(n) for n in _re.findall(r"compute_price \w+ \(actual rows=\d+ loops=(\d+)\)", texto)
+        )
+        devolvidas = _re.search(r"\(actual rows=(\d+) loops=1\)", texto)
+        n_dev = int(devolvidas.group(1)) if devolvidas else -1
+
+        check(
+            f"HH: o filtro desce em {vista} (âmbito {ambito}) — item 69",
+            chamadas > 0 and n_dev > 0 and chamadas <= n_dev,
+            f"compute_price × {chamadas} para {n_dev} linhas devolvidas"
+            + ("" if chamadas <= n_dev else " — o filtro NÃO está a descer"),
+        )
+
+    # A guarda directa: se a projecção voltar à saída da função, o pushdown
+    # morre em silêncio e o plano volta a inchar.
+    defs = psql_rows(
+        "select case when pg_get_viewdef('tmsi.v_branch_prices'::regclass, true) like '%c.branch_id%' "
+        "then 'REGREDIU' else 'ok' end;"
+    )
+    check(
+        "HH: v_branch_prices projecta o id da tabela, não o da função",
+        bool(defs) and defs[0][0] == "ok",
+        f"projecção={defs[0][0] if defs else '?'}",
+    )
+
+    # `CREATE OR REPLACE VIEW` reinicia as reloptions: uma migração que
+    # esqueça `WITH (security_invoker = true)` faz a vista passar a correr como
+    # o dono (`postgres`, com BYPASSRLS) e a RLS da `tmsi.products` deixa de ser
+    # a primeira camada. Aconteceu na 0020 (2026-09-23) e o ensaio NÃO o
+    # apanhou, porque comparava impressões digitais e essas ficaram idênticas —
+    # as guardas do `compute_price` mascaravam a diferença. Uma prova que só
+    # olha para o RESULTADO não vê uma mudança em COMO ele é protegido.
+    invoker = psql_rows(
+        "select c.relname, coalesce(array_to_string(c.reloptions, ','), '') "
+        "from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+        "where n.nspname = 'tmsi' and c.relkind = 'v' "
+        "  and c.relname in ('v_branch_prices', 'v_selling_prices') order by 1;"
+    )
+    sem = [l[0] for l in invoker if "security_invoker=true" not in (l[1] or "")]
+    check(
+        "HH: as vistas de preço mantêm security_invoker=true",
+        bool(invoker) and not sem,
+        f"{len(invoker)} vistas verificadas"
+        + (f" · SEM security_invoker: {', '.join(sem)}" if sem else ""),
+    )
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -1849,6 +1931,7 @@ def main():
 
     block_select_contract(tokens)
     block_docs_guard()
+    block_scope_filter_pushdown()
 
     delete_smoke_fixture_product()
 

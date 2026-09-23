@@ -21,6 +21,34 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
 
+## Migração 0020 — o filtro de âmbito desce antes do LATERAL (2026-09-23)
+
+Aplicada com dump antes (`tmsi-pre-0020-20260923-131729.dump`). **Diff de duas linhas:** a vista
+projecta `b.id`/`ch.id` — o id da tabela que conduz o `LATERAL` — em vez de `c.branch_id`, a
+coluna de saída da função. `compute_price` não muda um carácter.
+
+**Resultado, em chamadas a `compute_price` (contagem estrutural, não dependente da carga):**
+APAC **283 → 54** · SA **283 → 61** · `v_selling_prices` SA **230 → 61**. O "All branches"
+mantém-se em 283, e isso é legítimo — não há filtro para descer quando se pede tudo. Fica como
+gatilho do item 71.
+
+**A igualdade que a correcção assume foi medida antes**, nas 283 linhas: `c.branch_id` é sempre
+igual ao âmbito que conduz o `LATERAL`, zero excepções. **Impressão digital idêntica nas 9
+identidades** — era a condição de aceitação.
+
+**⚠️ Erro cometido dentro da migração, e a lição que vale mais do que ele.** O primeiro
+`CREATE OR REPLACE VIEW` fez a `v_branch_prices` **perder o `security_invoker=true`** — esse
+comando reinicia as `reloptions`. A vista passou a correr como o dono (`postgres`, com
+`BYPASSRLS`) e a RLS da `tmsi.products` deixou de ser aplicada. **Não houve fuga**, porque as
+guardas internas do `compute_price` são a restrição que vincula para os papéis de venda — mas a
+primeira das duas camadas tinha desaparecido, que é exactamente o que as 0016/0017 ensinaram a
+não aceitar.
+
+**O ensaio não o apanhou** porque comparava impressões digitais, e essas ficaram idênticas: o
+`compute_price` mascarava a diferença. **Uma prova que só olha para o resultado não vê uma
+mudança em como o resultado é protegido.** Está escrito no `CLAUDE.md` do repo, e o bloco `HH` do
+smoke passou a comparar também as `reloptions`.
+
 ## Desempenho: `/prices` calcula o catálogo inteiro a cada pedido (2026-09-23)
 
 **O sintoma:** `/prices?branch=APAC` como `finance.test` dava

@@ -147,6 +147,23 @@ lá está, não o que se julga que lá está.
 
 ---
 
+## `CREATE OR REPLACE VIEW` reinicia as `reloptions` — o `security_invoker` cai
+
+Recriar uma vista **sem repetir `WITH (security_invoker = true)`** faz a vista voltar a correr
+como o **dono**. Aqui o dono é o `postgres`, que tem `BYPASSRLS` — a RLS da `tmsi.products` deixa
+de ser aplicada e a primeira das duas camadas desaparece.
+
+Aconteceu na `0020` (2026-09-23). **Não houve fuga**, porque as guardas internas do
+`compute_price` são a restrição que vincula para os papéis de venda — mas a defesa em
+profundidade tinha desaparecido, e é precisamente o que as `0016`/`0017` ensinaram a não aceitar.
+
+**Porque o ensaio não o apanhou, e esta é a parte que vale:** comparava impressões digitais, e
+elas ficaram **idênticas** — o `compute_price` mascarava a diferença. **Uma prova que só olha para
+o RESULTADO não vê uma mudança em COMO o resultado é protegido.** Ao mexer numa vista, comparar
+também `reloptions`, dono e ACL — não só as linhas que saem. O bloco `HH` do smoke fá-lo.
+
+---
+
 ## Uma migração que alarga visibilidade não pode ter a impressão digital igual
 
 A verificação habitual — *md5 de `v_branch_prices` idêntico antes e depois* — **inverte-se**

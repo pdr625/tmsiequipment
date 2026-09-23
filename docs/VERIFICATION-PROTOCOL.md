@@ -1136,6 +1136,46 @@ com `awk`.
 
 ---
 
+### Execução n.º 6 — 2026-09-23 (migrações 0001–0020)
+
+**Porquê:** a **0020** mexe nas vistas de preço — o gate manda repetir. E mexe na camada de
+segurança sem querer: o primeiro `CREATE OR REPLACE VIEW` fez a `v_branch_prices` perder o
+`security_invoker`, o que só se soube por se ter ido ver as `reloptions` **depois** de aplicar.
+
+**Âmbito:** 9 identidades, 0001–0020. Digest `83c4a4f7…`, revisão `24c8a70` — **sem deploy**, a
+0020 é só de BD.
+
+| Identidade | `v_branch_prices` | Impressão digital |
+|---|---|---|
+| `admin` · `finance` · `product_manager` | 283 | **IDÊNTICA** |
+| `logistics` | 184 | **IDÊNTICA** |
+| `agent` | 92 | **IDÊNTICA** |
+| `branch_manager` | 57 | **IDÊNTICA** |
+| `sales` | 46 | **IDÊNTICA** |
+| `anon` | **RECUSADO** | — |
+
+**A impressão digital tinha de ficar idêntica, e ficou** — a 0020 é só desempenho. Note-se o
+contraste deliberado com a **0019**, onde a regra do `CLAUDE.md` diz que a impressão digital
+**tem** de mudar: lá alargava-se visibilidade, aqui não se toca em quem vê o quê.
+
+**Smoke: 109 → 114**, verde nos três modos. Bloco **HH** novo, com a invariante estrutural do
+item 69 (contagem de `loops` no plano, não tempo — um tempo dependeria da carga do host) e a
+verificação das `reloptions` que o ensaio não tinha.
+
+**Achado da própria execução, o quinto desta cadeia de sessões.** A `v_branch_prices` perdeu o
+`security_invoker=true` — `CREATE OR REPLACE VIEW` reinicia as `reloptions`. A vista passou a
+correr como o dono (`postgres`, com `BYPASSRLS`) e a RLS da `tmsi.products` deixou de ser
+aplicada; medido pela ausência do `Filter` com `products_visible()` no plano. **Não houve fuga** —
+as contagens por papel mantiveram-se, porque as guardas do `compute_price` são a restrição que
+vincula — mas a primeira camada tinha desaparecido. Reposto, a cláusula está no ficheiro, e o
+`HH` verifica-a.
+
+**E porque é que o ensaio não o apanhou:** comparava impressões digitais, e ficaram idênticas.
+**Uma prova que só olha para o resultado não vê uma mudança em como o resultado é protegido.**
+Escrito no `CLAUDE.md` do repo.
+
+---
+
 ### Execução n.º 5 — 2026-09-20 (migrações 0001–0019, **sobre dados reais activos**)
 
 **A primeira execução com o catálogo real visível aos papéis comerciais.** Até aqui, `sales` e

@@ -480,8 +480,42 @@ de sessão, geração do `.xlsx`, cabeçalhos de download. A regra do projecto
 sessão de browser fiquem para o Pedro. **Decisão em aberto:** se vale a pena um teste de
 integração com sessão real — hoje não existe, e é por isso que esta regressão chegou a produção.
 
-**69. `/prices` calcula o catálogo inteiro a cada pedido — o filtro de âmbito não desce** —
-**DIAGNOSTICADO 2026-09-23**, a partir de `/prices?branch=APAC` a dar
+~~**69. `/prices` calcula o catálogo inteiro a cada pedido — o filtro de âmbito não desce**~~
+✅ **FECHADO 2026-09-23 pela migração 0020.** A vista passou a projectar `b.id`/`ch.id` — o id da
+tabela que conduz o `LATERAL` — em vez de `c.branch_id`, a coluna de saída da função. O filtro
+desce agora para o scan de `branches`/`channels`, **antes** de `compute_price` correr.
+
+**Medido, antes → depois (chamadas a `compute_price`, que é contagem estrutural e não depende da
+carga do host):**
+
+| Pedido | Chamadas | Buffers | ms (com sessão de agente aberta) |
+|---|---|---|---|
+| APAC, `finance` | **283 → 54** | 12 068 → 1 721 | 730 → **49** |
+| SA, `finance` | **283 → 61** | 10 215 → 1 923 | 792 → 138 |
+| APAC, `agent` | **230 → 54** | 8 056 → 1 739 | 919 → 328 |
+| SA, `sales` | **230 → 61** | 6 453 → 2 011 | 1 375 → 374 |
+| `v_selling_prices` SA, `sales` | **230 → 61** | 8 462 → 2 574 | 1 764 → 326 |
+| "All branches" | 283 → 283 | *(inalterado)* | — |
+
+`v_selling_prices` **herda** o pushdown, verificado e não assumido — é a vista que `sales`/`agent`
+usam, e o item 68 mostrou como é fácil esquecê-la.
+
+**Impressão digital IDÊNTICA nas 9 identidades** — nenhum valor mudou, que era a condição de
+aceitação. Asserção `HH` do smoke fixa a invariante por contagem de `loops` no plano, não por
+tempo (um tempo dependeria da carga; uma contagem é determinística) — e **provou falhar** contra
+o estado anterior: *«compute_price × 285 para 54 linhas devolvidas — o filtro NÃO está a descer»*.
+
+**⚠️ Erro cometido e corrigido dentro da própria migração:** o primeiro `CREATE OR REPLACE VIEW`
+**perdeu o `security_invoker=true`**, porque esse comando reinicia as `reloptions`. A vista passou
+a correr como o dono (`postgres`, com `BYPASSRLS`) e a RLS da `tmsi.products` deixou de ser
+aplicada — medido: o `Filter` com `products_visible()` desapareceu do plano. **Não houve fuga**
+(as contagens por papel mantiveram-se, porque as guardas internas do `compute_price` são a
+restrição que vincula), mas a primeira das duas camadas tinha desaparecido. Reposto, a cláusula
+está agora no ficheiro, e o bloco `HH` passou a verificar as `reloptions`.
+
+**A lição, que é a que fica:** o ensaio comparava impressões digitais e elas ficaram **idênticas**
+— o `compute_price` mascarava a diferença. **Uma prova que só olha para o RESULTADO não vê uma
+mudança em COMO o resultado é protegido.** Texto original do diagnóstico: — **DIAGNOSTICADO 2026-09-23**, a partir de `/prices?branch=APAC` a dar
 `canceling statement due to statement timeout` (8 s no `authenticated`) como `finance.test`.
 
 **A causa, lida no plano e não suposta.** `tmsi.v_branch_prices` é um `UNION ALL` de dois braços,
@@ -551,6 +585,43 @@ que conduz, em vez do da função, é semanticamente idêntico **e deixa o filtr
 custo, ganho e o que arrastam — ver a resposta da sessão de 2026-09-23. Invariante de qualquer
 uma: **impressão digital de `v_branch_prices` IDÊNTICA por papel** — é só desempenho; se mudar, é
 defeito.
+
+**71. `price_cache` — preços materializados, condicionado** — **PROPOSTO 2026-09-23**, e
+**deliberadamente não feito agora**. A 0020 resolveu o pedido **filtrado**; o pedido **sem
+filtro** ("All branches", e os exports) continua a executar uma chamada a `compute_price` por
+artigo × âmbito, porque aí não há filtro para descer. É custo legítimo — está a pedir-se tudo —
+mas cresce linearmente com o catálogo.
+
+**Gatilhos propostos, calculados dos números de hoje.** Hoje: 62 artigos → **285 chamadas**,
+~11 300 buffers. As chamadas escalam a ≈4,6 por artigo, e o `statement_timeout` do
+`authenticated` é **8 s**.
+
+- **X = 4 s** para o "All branches" ou um export, **com o host calmo e sem sessões de agente**.
+  Metade do timeout: além disso, um dia mau ou um host ocupado faz o resto do caminho sozinho.
+- **N = 200 artigos reais.** A ≈4,6 chamadas por artigo são ~920 chamadas, **3,2× as de hoje** —
+  o ponto em que o "All branches" se aproxima de X por volume, não por acidente.
+
+**O que seria:** tabela de preços calculados, refrescada por *trigger* quando muda um input
+(EXW, FX, margem, override, transporte, direito). **Com o smoke a comparar `cache ≡ motor`** —
+sem essa asserção, uma cache que diverge em silêncio é pior do que não a ter, porque passa a ser
+a fonte de preços que ninguém verifica. Migração pesada, arrasta execução do protocolo.
+
+**Não fazer antes de um dos gatilhos.** Hoje seria construir uma cache para um problema que uma
+projecção resolveu.
+
+**72. `/prices` pede `select('*')` — 20 colunas onde o ecrã mostra 8** — **2026-09-23**, lote de
+apresentação. `app/src/app/prices/page.tsx:57` faz `.from(viewName).select('*')`, e a vista tem
+~20 colunas. Com 283 linhas são ~5 700 valores serializados pelo PostgREST e enviados, para o
+ecrã usar menos de metade.
+
+**Não é a causa do item 69 e não a teria resolvido** — a computação acontece na mesma, e este
+custo é de transferência e serialização. Mas é desperdício mensurável e trivial de corrigir:
+listar as colunas mostradas, como o export já faz. Fica com o lote de apresentação, junto com o
+rótulo "All branches and channels" (⚠️11) e a falta de coluna/filtro de estado no `/prices`.
+
+**Nota de método (item 28, 2026-09-06):** foi exactamente este tipo de diferença — pedir todas as
+colunas em vez das que a app pede — que fez três medições seguidas medirem a coisa errada, com
+8-9× de desvio. Ao medir o `/prices`, confirmar sempre que o pedido é bit-a-bit o que a app envia.
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
