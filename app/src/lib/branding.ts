@@ -63,7 +63,14 @@ function fromRow(row: BrandingRow): Branding {
 // one (the login page): tmsi.v_current_branding is anon-readable (0008),
 // so @supabase/ssr's server client resolves it as `anon` with no session
 // and still gets a row back, never a 401.
-export async function getBranding(): Promise<Branding> {
+// 2026-09-23: `cache()` do React. O layout E a página chamam getBranding() no
+// mesmo render, e isso dava DOIS pedidos a v_current_branding por carregamento
+// — medido no log de timing do nginx. O cache é por passagem de render, logo
+// não há risco de servir branding obsoleto entre pedidos: o segundo chamador
+// do mesmo render recebe a promessa do primeiro, e o pedido seguinte volta a
+// ler. Uma cache com TTL entre pedidos seria outra coisa, e precisaria de
+// invalidação no /config/branding — não é isto.
+export const getBranding = cache(async function getBranding(): Promise<Branding> {
   const supabase = await createSupabaseServerClient();
   // .maybeSingle() BEFORE .overrideTypes() — the established lesson from
   // audit/page.tsx (docs/STATE.md, E3-i6 F1): overrideTypes() is a
@@ -77,7 +84,7 @@ export async function getBranding(): Promise<Branding> {
     .maybeSingle()
     .overrideTypes<BrandingRow, { merge: false }>();
   return data ? fromRow(data) : DEFAULT_BRANDING;
-}
+});
 
 // For contexts with NO request/cookies at all — today only the GoTrue
 // email templates (app/src/app/email-templates/*/route.ts), fetched

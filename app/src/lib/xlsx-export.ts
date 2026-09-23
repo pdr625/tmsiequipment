@@ -42,6 +42,8 @@ export async function buildXlsx(opts: {
   headers: string[];
   widths: number[];
   rows: (string | number | null)[][];
+  /** índice de coluna (base 0) -> formato numérico do Excel, ex. '0.00' ou '0.0%' */
+  numberFormats?: Record<number, string>;
   footerLines: string[];
   primaryColor?: string;
   fontFamily?: string;
@@ -93,7 +95,21 @@ export async function buildXlsx(opts: {
   headerRow.font = { bold: true, name: fontName };
 
   for (const row of opts.rows) {
-    sheet.addRow(row.map((v) => v ?? '—')).font = { name: fontName };
+    const linha = sheet.addRow(row.map((v) => v ?? '—'));
+    linha.font = { name: fontName };
+    // 2026-09-23: os números saem como NÚMEROS com formato, não como texto
+    // pré-formatado — quem receber o ficheiro tem de poder somar e ordenar.
+    // `numberFormats` mapeia índice de coluna -> formato do Excel; as colunas
+    // que lá não estiverem ficam como estavam.
+    if (opts.numberFormats) {
+      for (const [idx, fmt] of Object.entries(opts.numberFormats)) {
+        const cel = linha.getCell(Number(idx) + 1);
+        if (typeof cel.value === 'number') {
+          cel.numFmt = fmt;
+          cel.alignment = { horizontal: 'right' };
+        }
+      }
+    }
   }
 
   if (opts.footerLines.length > 0) {

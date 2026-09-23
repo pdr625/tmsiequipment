@@ -1777,6 +1777,75 @@ def block_scope_filter_pushdown():
     )
 
 
+def block_presentation_contract(tokens):
+    """II — o lote de apresentação, no que é verificável por API.
+
+    O ecrã e o .xlsx só se vêem no browser. O que se pode fixar aqui é o
+    CONTRATO de que eles dependem: que as colunas que a app passou a pedir
+    existem e chegam, e que o `/prices` deixou de pedir `select('*')` — o item
+    72, medido a 2026-09-23 no log de timing do nginx (283 linhas × ~20
+    colunas serializadas para o ecrã usar oito)."""
+    import re as _re
+    import pathlib as _pathlib
+
+    pagina = (
+        _pathlib.Path(__file__).resolve().parent.parent
+        / "app" / "src" / "app" / "prices" / "page.tsx"
+    )
+    if pagina.is_file():
+        texto = pagina.read_text()
+        check(
+            "II: /prices já não pede select('*') (item 72)",
+            ".select('*')" not in texto,
+            "select('*') ausente" if ".select('*')" not in texto else "AINDA presente",
+        )
+        # A tempestade de prefetch: cada <Link> de filtro pré-carregado é um
+        # render completo no servidor, com o seu /auth/v1/user. Medido: quatro
+        # links = 12 pedidos extra por visita, e o auth passava de 0,14 s para
+        # 1,2 s por fila de espera no GoTrue.
+        links = len(_re.findall(r"<Link\b", texto))
+        sem_prefetch = len(_re.findall(r"prefetch=\{false\}", texto))
+        check(
+            "II: todos os <Link> de /prices têm prefetch={false}",
+            links > 0 and sem_prefetch >= links,
+            f"{sem_prefetch} prefetch={{false}} para {links} <Link>",
+        )
+
+    # As colunas novas têm de existir e chegar de facto — `v_products` é a
+    # fonte do nome/categoria/estado no ramo de custos, que a vista de preços
+    # não traz.
+    tok = tokens.get("finance")
+    if tok:
+        status, corpo = http(
+            "GET",
+            f"{BASE}/rest/v1/v_products?select=id,name,category_id,status&limit=1",
+            token=tok,
+        )
+        ok = status == 200 and isinstance(corpo, list) and len(corpo) == 1
+        campos = sorted(corpo[0].keys()) if ok else []
+        check(
+            "II: v_products serve nome, categoria e estado ao ramo de custos",
+            ok and campos == ["category_id", "id", "name", "status"],
+            f"http_{status} · campos={campos}",
+        )
+
+    # A margem é uma fracção (0,15 é o margin_min), e o ecrã/Excel mostram-na
+    # em percentagem. Se algum dia passar a vir já em pontos percentuais, a
+    # multiplicação por 100 fica errada em silêncio — esta asserção ancora a
+    # unidade.
+    limites = psql_rows(
+        "select min(margin)::text, max(margin)::text from tmsi.v_branch_prices "
+        "where margin is not null;"
+    )
+    if limites and limites[0][0]:
+        lo, hi = float(limites[0][0]), float(limites[0][1])
+        check(
+            "II: a margem continua a ser fracção, não pontos percentuais",
+            -1.0 <= lo and hi <= 1.0,
+            f"intervalo [{lo:.4f}, {hi:.4f}] — esperado dentro de [-1, 1]",
+        )
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -1953,6 +2022,7 @@ def main():
     block_select_contract(tokens)
     block_docs_guard()
     block_scope_filter_pushdown()
+    block_presentation_contract(tokens)
 
     delete_smoke_fixture_product()
 
