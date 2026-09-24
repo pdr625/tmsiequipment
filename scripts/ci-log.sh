@@ -93,35 +93,41 @@ if [ "$N" = "0" ]; then
   exit 0
 fi
 
-printf '%s' "$RUNS" | python3 -c '
+# O código vem por stdin e o JSON por argumento: dentro de python3 -c '...' as
+# aspas escapadas não sobrevivem ao shell, e a API devolve `workflow_runs`,
+# não `runs` (as duas coisas partiram a primeira versão, 2026-09-24).
+python3 - "$RUNS" <<'PY'
 import json, sys
-d = json.load(sys.stdin)
-for r in d["runs"]:
-    print(f"  #{r[\"run_number\"]}  {r[\"status\"]}/{r.get(\"conclusion\") or \"—\"}  {r[\"created_at\"]}  id={r[\"id\"]}")
-'
+d = json.loads(sys.argv[1])
+for r in d["workflow_runs"]:
+    fim = r.get("conclusion") or "—"
+    print(f'  #{r["run_number"]}  {r["status"]}/{fim}  {r["created_at"]}  id={r["id"]}')
+PY
 
-RUN_ID="$(printf '%s' "$RUNS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["runs"][0]["id"])')"
-CONCLUSAO="$(printf '%s' "$RUNS" | python3 -c 'import json,sys; print(json.load(sys.stdin)["runs"][0].get("conclusion") or "em curso")')"
+RUN_ID="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["workflow_runs"][0]["id"])' "$RUNS")"
+CONCLUSAO="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["workflow_runs"][0].get("conclusion") or "em curso")' "$RUNS")"
 
 echo
 echo "=== passos da execução mais recente (conclusão: $CONCLUSAO) ==="
 JOBS="$(api "$API/actions/runs/$RUN_ID/jobs")" || exit 1
-printf '%s' "$JOBS" | python3 -c '
+python3 - "$JOBS" <<'PY'
 import json, sys
-d = json.load(sys.stdin)
+d = json.loads(sys.argv[1])
 for j in d["jobs"]:
-    print(f"  job {j[\"name\"]}: {j[\"status\"]}/{j.get(\"conclusion\") or \"—\"}")
-    for s in j.get("steps", []):
-        marca = "✘" if s.get("conclusion") == "failure" else " "
-        print(f"    {marca} {s[\"number\"]:>2}. {s[\"name\"]}  [{s.get(\"conclusion\") or s[\"status\"]}]")
-'
+    print(f'  job {j["name"]}: {j["status"]}/{j.get("conclusion") or "—"}')
+    for p in j.get("steps", []):
+        marca = "✘" if p.get("conclusion") == "failure" else " "
+        estado = p.get("conclusion") or p["status"]
+        print(f'    {marca} {p["number"]:>2}. {p["name"]}  [{estado}]')
+PY
 
-JOB_ID="$(printf '%s' "$JOBS" | python3 -c '
+JOB_ID="$(python3 - "$JOBS" <<'PY'
 import json, sys
-d = json.load(sys.stdin)
+d = json.loads(sys.argv[1])
 falhados = [j for j in d["jobs"] if j.get("conclusion") == "failure"]
 print(falhados[0]["id"] if falhados else (d["jobs"][0]["id"] if d["jobs"] else ""))
-')"
+PY
+)"
 [ -z "$JOB_ID" ] && { echo "sem job para ler."; exit 0; }
 
 echo
@@ -134,18 +140,35 @@ if [ "$TUDO" = "--tudo" ]; then
   exit 0
 fi
 
+# Numa execução VERDE não há erro para procurar, e varrer o log à mesma dá
+# falsos positivos — o dump do contexto do GitHub traz a palavra "error" em
+# campos que nada têm a ver com a compilação (apanhado a 2026-09-24, na
+# primeira utilização real desta ferramenta).
+if [ "$CONCLUSAO" = "success" ]; then
+  echo "=== execução VERDE — nada a reportar ==="
+  echo "  (para o log completo: $0 ${SHA:0:7} --tudo)"
+  exit 0
+fi
+
 echo "=== o que interessa ==="
-# `Failed to type check` / `Failed to compile` do Next vêm DEPOIS das linhas do
-# erro, logo mostra-se contexto para trás; `Type error:` e `error TS####` vêm
-# com o ficheiro e a linha logo antes ou na própria linha.
+# As linhas do erro PRIMEIRO, sem contexto: são a resposta, e é isso que se
+# quer ver no topo. A primeira versão desta secção punha 12 linhas de contexto
+# antes de cada correspondência, o ruído do tsconfig enchia o ecrã e o `head`
+# cortava antes da linha do erro — que era exactamente o que se procurava
+# (apanhado a 2026-09-24, na primeira utilização real).
 ACHOU=0
-if printf '%s\n' "$LOG" | grep -qiE "Type error:|error TS[0-9]{4}|Failed to compile|Failed to type check"; then
+ERROS="$(printf '%s\n' "$LOG" | grep -oE "[^ ]+\([0-9]+,[0-9]+\): error TS[0-9]+: .*|Type error: .*" | sort -u)"
+if [ -n "$ERROS" ]; then
   ACHOU=1
-  printf '%s\n' "$LOG" \
-    | grep -niE -B12 -A4 "Type error:|error TS[0-9]{4}|Failed to compile|Failed to type check" \
-    | sed 's/^[0-9]*[:-]//' \
-    | grep -vE '^\s*$' \
-    | head -60
+  printf '%s\n' "$ERROS" | sed 's/^/  ✘ /'
+fi
+
+# E depois o enquadramento: onde é que o build desistiu.
+RESUMO="$(printf '%s\n' "$LOG" | grep -E "Failed to compile|Failed to type check|npm ERR!|ERROR: failed to build" | head -6)"
+if [ -n "$RESUMO" ]; then
+  ACHOU=1
+  echo
+  printf '%s\n' "$RESUMO" | sed -E 's/^[0-9T:.Z-]+ //; s/^/  /'
 fi
 
 if [ "$ACHOU" = "0" ]; then

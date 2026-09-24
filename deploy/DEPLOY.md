@@ -474,8 +474,35 @@ scripts/ci-log.sh 21bfa2f --tudo
 Devolve o passo que falhou e as linhas com `Type error` / `error TS####` / `Failed to compile`.
 Nunca imprime o token nem o cabeçalho de autorização.
 
+**No escrow desde 2026-09-24.** O `tmsi-secrets-2026-09-24.gpg` leva os **três** segredos —
+`.env`, PAT do GHCR e PAT das Actions — e substituiu o `2026-09-06-rotated.gpg`, que foi
+destruído com `shred -u -z` **só depois** de o novo ter sido provado. A prova não foi "decifra sem
+erro": foi `cmp` byte a byte entre o decifrado e o original, mais a presença dos três marcadores.
+A *passphrase* é a mesma dos anteriores (confirmado antes de escrever, abrindo o antigo com ela) e
+foi destruída a seguir.
+
 **Rotação:** junto dos outros tokens da conta, no inventário do dossier
 (`CREDENTIALS-INVENTORY.md`).
+
+### Defeitos do `ci-log.sh` corrigidos na primeira utilização real (2026-09-24)
+
+Quatro, todos só visíveis ao usar a ferramenta a sério — vale a pena ficarem escritos, porque são
+a razão pela qual uma ferramenta se prova contra um caso conhecido antes de se confiar nela:
+
+1. a API devolve **`workflow_runs`**, não `runs`;
+2. aspas escapadas dentro de `python3 -c '…'` **não sobrevivem ao shell** — o código passou a vir
+   por *stdin* e o JSON por argumento;
+3. numa execução **verde** procurava erros à mesma, e casava com a palavra `error` no *dump* do
+   contexto do GitHub — passou a sair cedo quando a conclusão é `success`;
+4. as 12 linhas de contexto antes de cada correspondência enchiam o ecrã com o ruído do
+   `tsconfig` e o `head` cortava **antes** da linha do erro. Agora as linhas de erro vêm
+   **primeiro**, sem contexto, e o enquadramento depois.
+
+Provado contra `0c8bff6` (a revisão que falhou a 23/09):
+
+```
+✘ src/lib/branding.ts(73,28): error TS2552: Cannot find name 'cache'. Did you mean 'Cache'?
+```
 
 ## 10. Moving to the company server (E6, not started)
 
