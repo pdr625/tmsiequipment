@@ -265,9 +265,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         {priceRows.length === 0 && priceErrors.length === 0 && (
           <p className="text-sm text-gray-500">Not priced for any branch or channel visible to you.</p>
         )}
+        {/* Item 79: a coluna Alert é só de quem lê custos — para os outros
+            papéis o motor devolve sempre 0 alertas, e era uma coluna vazia. */}
         {(priceRows.length > 0 || priceErrors.length > 0) && (
-          {/* Item 79: a coluna Alert é só de quem lê custos — para os outros
-              papéis o motor devolve sempre 0 alertas, e era uma coluna vazia. */}
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-left text-gray-500">
