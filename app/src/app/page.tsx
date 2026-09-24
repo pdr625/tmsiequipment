@@ -5,13 +5,15 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
-import Link from 'next/link';
+import { MenuButton } from './menu-button';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { isAdmin, pricingConfigReadAccess, canReadAuditLog, canManageProducts } from '@/lib/auth-guard';
 import { getBranding } from '@/lib/branding';
 
 // Minimal authenticated home — middleware already guarantees a session
 // exists here. Further screens (app/README.md) are their own routes.
+// Os itens do menu são <MenuButton> (router.push), não <Link>: item 81, zero
+// prefetch — nem por viewport nem por hover.
 // The "Admin" link below is convenience only — /admin/users has its own
 // server-side gate and doesn't depend on this link being hidden.
 export default async function HomePage() {
@@ -30,98 +32,98 @@ export default async function HomePage() {
       <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
         <h1 className="mb-2 text-xl font-semibold">{branding.displayName}</h1>
         <p className="mb-6 text-sm text-gray-600">Signed in as {user?.email}</p>
-        <Link
+        <MenuButton
           href="/prices"
           className="mb-4 block w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white"
         >
           Price list
-        </Link>
-        <Link
+        </MenuButton>
+        <MenuButton
           href="/products"
           className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
         >
           Products
-        </Link>
+        </MenuButton>
         {(readCosts || readLogistics) && (
-          <Link
+          <MenuButton
             href="/config"
             className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
           >
             Pricing configuration
-          </Link>
+          </MenuButton>
         )}
         {readCosts && (
-          <Link
+          <MenuButton
             href="/dashboard"
             className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
           >
             Dashboard
-          </Link>
+          </MenuButton>
         )}
-        <Link
+        <MenuButton
           href="/overrides"
           className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
         >
           Overrides
-        </Link>
-        <Link
+        </MenuButton>
+        <MenuButton
           href="/proposals"
           className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
         >
           Proposals
-        </Link>
+        </MenuButton>
         {canReadAudit && (
-          <Link
+          <MenuButton
             href="/audit"
             className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
           >
             Audit log
-          </Link>
+          </MenuButton>
         )}
         {(admin || canProducts) && (
-          <Link
+          <MenuButton
             href="/import"
             className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
           >
             Bulk import
-          </Link>
+          </MenuButton>
         )}
         {admin && (
-          <Link
+          <MenuButton
             href="/branches"
             className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
           >
             Branches &amp; channels
-          </Link>
+          </MenuButton>
         )}
         {admin && (
-          <Link
+          <MenuButton
             href="/admin/users"
             className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
           >
             User administration
-          </Link>
+          </MenuButton>
         )}
         {admin && (
-          <Link
+          <MenuButton
             href="/config/branding"
             className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
           >
             Branding
-          </Link>
+          </MenuButton>
         )}
-        <Link
+        <MenuButton
           href="/account/password"
           className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
         >
           Change password
-        </Link>
-        <Link
+        </MenuButton>
+        <MenuButton
           href="/privacy"
           className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
         >
           Data processing notice
-        </Link>
+        </MenuButton>
         <form action="/logout" method="post">
           <button
             type="submit"

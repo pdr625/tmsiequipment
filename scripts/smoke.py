@@ -2155,6 +2155,26 @@ def block_me_and_settings(tokens, claims):
           sem_pedidos_antigos(gx, False), "getMe presente, sem os pedidos antigos")
 
 
+def block_home_menu():
+    """MM — item 81: o menu da página inicial não tem <Link> (zero prefetch,
+    nem por viewport nem por hover). Leitura estática, por ELEMENTOS reais
+    (como o II), e com o outro lado da fronteira: que há botões e que o
+    componente navega por router.push — senão "nenhum Link" passava também
+    com o menu apagado."""
+    import re as _re
+    import pathlib as _pl
+    raiz = _pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app"
+    pagina = (raiz / "page.tsx").read_text()
+    botao = (raiz / "menu-button.tsx").read_text()
+    links = _re.findall(r"<Link\s[^>]*>", pagina)
+    botoes = _re.findall(r"<MenuButton\s", pagina)
+    check("MM: a página inicial não tem nenhum <Link> (item 81)", len(links) == 0, f"{len(links)} <Link>")
+    check("MM: o menu é feito de <MenuButton> (não está vazio)", len(botoes) >= 10, f"{len(botoes)} <MenuButton>")
+    check("MM: o MenuButton navega por router.push e não usa <Link>",
+          "router.push(href)" in botao and not _re.search(r"<Link\s[^>]*>", botao),
+          "router.push presente, sem <Link>")
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -2335,6 +2355,7 @@ def main():
     block_alert_rule()
     block_price_notice(sell_side.get("sales"))
     block_me_and_settings(tokens, claims)
+    block_home_menu()
 
     delete_smoke_fixture_product()
 
