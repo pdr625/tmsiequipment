@@ -2143,6 +2143,16 @@ def block_me_and_settings(tokens, claims):
           "getMe(" in pagina and "auth.getUser" not in pagina and "'profiles'" not in pagina
           and "can_read_costs')" not in pagina and "v_products" not in pagina,
           "getMe presente, sem os quatro pedidos antigos")
+    def sem_pedidos_antigos(t, tambem_sem_v_products):
+        return ("getMe(" in t and "auth.getUser" not in t and "'profiles'" not in t and "can_read_costs')" not in t
+                and (not tambem_sem_v_products or "v_products" not in t))
+    raiz_app = _pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app"
+    px = (raiz_app / "prices" / "export" / "route.ts").read_text()
+    gx = (raiz_app / "products" / "export" / "route.ts").read_text()
+    check("LL: /prices/export usa me() e já não pede getUser, profiles, can_read_costs nem v_products",
+          sem_pedidos_antigos(px, True), "getMe presente, sem os pedidos antigos")
+    check("LL: /products/export usa me() e já não pede getUser, profiles nem can_read_costs",
+          sem_pedidos_antigos(gx, False), "getMe presente, sem os pedidos antigos")
 
 
 def block_bulk_import(logistics_token, pm_token):
