@@ -5,6 +5,7 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
+import { cache } from 'react';
 import { createSupabaseServerClient } from './supabase-server';
 
 // item 26: the whole point of this module is that NONE of these defaults
