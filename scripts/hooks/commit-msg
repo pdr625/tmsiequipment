@@ -2,7 +2,8 @@
 # commit-msg — a guarda que faltou a 2026-09-23.
 #
 # Falha o commit se um ficheiro de `docs/` perder mais de metade das linhas,
-# a menos que a mensagem traga a palavra `rewrite`.
+# for APAGADO, ou for RENOMEADO para fora de `docs/` — a menos que a mensagem
+# traga a palavra `rewrite`.
 #
 # PORQUÊ: nesse dia escrevi `docs/TEST-ACCOUNTS.md` com `cat >` a assumir que
 # não existia. Existia — 105 linhas do levantamento de 19/09 sobre o que se
@@ -28,26 +29,44 @@ LIMITE_PCT=50
 
 grep -qiE '\brewrite\b' "$MSG_FILE" && exit 0
 
+# Item 78 (2026-09-24): até aqui só as entradas `M` eram avaliadas. Um `git rm
+# docs/X.md` (D) e um `git mv docs/X.md fora/X.md` (R) passavam sem verificação
+# — e perder um documento inteiro é o caso extremo do que a guarda existe para
+# apanhar. Medido num repositório descartável: `git mv -f A B` sobre um B que
+# já existe sai como `D A` + `M B`, logo o D também cobre esse caso. O `-M`
+# fixa a detecção de renomeações, que não depende da configuração do clone.
+#   M  ficheiro            -> compara linhas HEAD vs índice
+#   D  ficheiro            -> perda de 100%
+#   R  antigo  novo        -> se o novo está fora de docs/: perda de 100%;
+#                             senão compara linhas do antigo (HEAD) com o novo
 falhas=()
-while IFS=$'\t' read -r estado ficheiro; do
-  [ "$estado" = "M" ] || continue
-  case "$ficheiro" in
-    docs/*) ;;
-    *) continue ;;
-  esac
-  antes=$(git show "HEAD:$ficheiro" 2>/dev/null | wc -l)
-  [ "${antes:-0}" -gt 0 ] || continue
-  depois=$(git show ":$ficheiro" 2>/dev/null | wc -l)
-  perdido=$(( (antes - depois) * 100 / antes ))
+em_docs() { case "$1" in docs/*) return 0 ;; *) return 1 ;; esac; }
+avaliar() {  # $1 rótulo, $2 ficheiro em HEAD, $3 linhas depois
+  local antes perdido
+  antes=$(git show "HEAD:$2" 2>/dev/null | wc -l)
+  [ "${antes:-0}" -gt 0 ] || return 0
+  perdido=$(( (antes - $3) * 100 / antes ))
   if [ "$perdido" -gt "$LIMITE_PCT" ]; then
-    falhas+=("  $ficheiro: $antes -> $depois linhas (-${perdido}%)")
+    falhas+=("  $1$2: $antes -> $3 linhas (-${perdido}%)")
   fi
-done < <(git diff --cached --name-status)
+}
+while IFS=$'\t' read -r estado f1 f2; do
+  case "$estado" in
+    M)   em_docs "$f1" && avaliar "" "$f1" "$(git show ":$f1" 2>/dev/null | wc -l)" ;;
+    D)   em_docs "$f1" && avaliar "apagado: " "$f1" 0 ;;
+    R*)  em_docs "$f1" || continue
+         if em_docs "$f2"; then
+           avaliar "renomeado para $f2: " "$f1" "$(git show ":$f2" 2>/dev/null | wc -l)"
+         else
+           avaliar "movido para fora de docs/ ($f2): " "$f1" 0
+         fi ;;
+  esac
+done < <(git diff --cached --name-status -M)
 
 if [ ${#falhas[@]} -gt 0 ]; then
   {
     echo
-    echo "COMMIT RECUSADO — ficheiro(s) de docs/ a perder mais de ${LIMITE_PCT}% das linhas:"
+    echo "COMMIT RECUSADO — ficheiro(s) de docs/ a perder mais de ${LIMITE_PCT}% das linhas (ou apagado(s)/movido(s)):"
     printf '%s\n' "${falhas[@]}"
     echo
     echo "Se a perda for deliberada (dividir, arquivar, reescrever), põe a palavra"

@@ -1673,6 +1673,40 @@ def block_docs_guard():
         f"com rewrite: saída {aceita.returncode} (esperado 0)",
     )
 
+    # Item 78: apagados e renomeados. Cada caso é um repositório descartável
+    # novo, com um docs/d.md de 100 linhas (e um fora/x.md, para o controlo:
+    # apagar fora de docs/ NÃO é da conta desta guarda).
+    def caso(operacao, mensagem):
+        with _tempfile.TemporaryDirectory() as tmp:
+            def git(*a):
+                return _sp.run(["git", "-C", tmp, *a], capture_output=True, text=True)
+            git("init", "-q"); git("config", "user.email", "smoke@example.test"); git("config", "user.name", "smoke")
+            (_pathlib.Path(tmp) / "docs").mkdir(); (_pathlib.Path(tmp) / "fora").mkdir()
+            conteudo = "\n".join(f"linha {i}" for i in range(100)) + "\n"
+            (_pathlib.Path(tmp) / "docs" / "d.md").write_text(conteudo)
+            (_pathlib.Path(tmp) / "fora" / "x.md").write_text(conteudo)
+            git("add", "-A"); git("commit", "-q", "-m", "base")
+            operacao(git)
+            msg = _pathlib.Path(tmp) / "msg"; msg.write_text(mensagem + "\n")
+            return _sp.run([str(hook), str(msg)], cwd=tmp, capture_output=True, text=True).returncode
+    apagar = lambda git: git("rm", "-q", "docs/d.md")
+    sair = lambda git: (git("mv", "docs/d.md", "fora/d.md"))
+    renomear = lambda git: git("mv", "docs/d.md", "docs/e.md")
+    apagar_fora = lambda git: git("rm", "-q", "fora/x.md")
+    r_rm, r_rm_ok = caso(apagar, "apago"), caso(apagar, "rewrite: apago de propósito")
+    r_out, r_out_ok = caso(sair, "movo"), caso(sair, "rewrite: movo de propósito")
+    r_ren, r_fora = caso(renomear, "renomeio"), caso(apagar_fora, "apago fora")
+    check(
+        "GG: a guarda recusa git rm e mover para fora de docs/ (item 78), e aceita com 'rewrite'",
+        r_rm != 0 and r_rm_ok == 0 and r_out != 0 and r_out_ok == 0,
+        f"git rm: {r_rm}/{r_rm_ok} · mover para fora: {r_out}/{r_out_ok} (sem rewrite != 0; com rewrite 0)",
+    )
+    check(
+        "GG: sem falsos positivos — renomear dentro de docs/ e apagar fora de docs/ passam",
+        r_ren == 0 and r_fora == 0,
+        f"renomear dentro: {r_ren} · apagar fora de docs/: {r_fora} (esperado 0 e 0)",
+    )
+
 
 def block_scope_filter_pushdown():
     """HH — o filtro de âmbito desce antes do LATERAL (item 69, migração 0020).
