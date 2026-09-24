@@ -84,6 +84,21 @@ e nenhum canal; `branch_manager` só a CORP.
 **5. `README.md`:** checklist substituída por três linhas de estado e ponteiros; corrigidos também
 o diagrama (não há Kong; nginx → `tmsi-app`/GoTrue/PostgREST) e o layout.
 
+### Prova de browser do prefetch — feita pelo Pedro, 12:19–12:22
+
+`scripts/contar-pedidos.sh 10` depois da passagem do rato (como admin): **zero pedidos com
+`pf=1` para `/prices?branch=…`**. Os seis botões de âmbito já não pré-carregam. As duas navegações
+para `CORP` (12:19:29, 12:21:55) têm `pf=-`, ou seja, são navegações e não prefetch.
+
+**Mas a linha `PREFETCH` deu 12, e não vêm do `/prices`.** Caíram todos no mesmo segundo e meio
+(12:19:57–59), logo depois de um `GET /?_rsc=` às 12:19:56 (o `Back` para a página inicial). São
+**os 12 `<Link>` do menu da página inicial** (`/config`, `/products`, `/overrides`, `/dashboard`,
+`/audit`, `/proposals`, `/import`, `/branches`, `/admin/users`, `/config/branding`, `/prices`,
+`/account/password`), pré-carregados **por viewport** porque não têm `prefetch={false}`. Cada um é
+um render completo no servidor. É a mesma tempestade do item 73, noutra página. **Não foi
+corrigido nesta sessão:** está fora do âmbito pedido, e corrigi-lo pedia outro ciclo de
+CI e deploy. Fica registado como item 81.
+
 ### Verificado nesta sessão, sem alteração
 
 - **`/products/[id]` desenha a coluna `Alert` para todos os papéis** (só custo e margem são

@@ -770,6 +770,18 @@ de margem, que é mais grave), mas é a distância entre o pedido («admin-only�
 Fechar na BD = uma política por chave, ou `operational_price_notice` fora de `settings` — migração.
 **Decisão do Pedro.**
 
+**81. A página inicial pré-carrega os 12 ecrãs do menu a cada visita** — **MEDIDO
+2026-09-24, 12:19:57–59**, na prova de browser do prefetch dos filtros (que deu zero para o
+`/prices`). Os `<Link>` de `app/src/app/page.tsx` não têm `prefetch={false}`, e o App Router
+pré-carrega por viewport todos os que estão no ecrã: **12 renders completos no servidor**, cada um
+com o seu `/auth/v1/user` + `profiles` + `branding`, sempre que alguém volta ao menu (como admin;
+os outros papéis têm menos links). Na janela medida, foram 12 de 161 pedidos ao backend.
+**Correcção:** `prefetch={false}` nos links do menu. Isso também desliga o prefetch de hover?
+Não — o item 73 mostrou que não. Para zero, a página inicial precisa do mesmo tratamento que os
+filtros do `/prices` (`router.push` ao clique). Um commit de app, sem migração. Aceitar
+o prefetch por hover no menu (um ecrã de cada vez) é uma decisão possível. O por viewport não
+tem nada que o justifique.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de
