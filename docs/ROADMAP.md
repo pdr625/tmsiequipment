@@ -1,424 +1,184 @@
-# TMSI Equipment Price Listing — ROADMAP
+# ROADMAP.md — TMSI Equipment Price Listing
+
 Copyright © 2026 Pedro Alexandre. Proprietary — see ../LICENSE.
 
-Folha de rota do projecto. **Regras de manutenção:** este ficheiro é enviado ao Claude Code
-no início de cada etapa; a sessão que fechar (ou alterar o âmbito de) uma etapa actualiza-o
-no mesmo passe (estado + data + desvios), commit + push — tal como o `STATE.md`.
-Divisão de papéis dos documentos: `ROADMAP.md` = ordem e critérios das etapas ·
-`STATE.md` = estado corrente de runtime · `handover.md` = histórico (não seguir) ·
-`BACKLOG.md` = fila de trabalho priorizada do Pedro (ordem de sessões), este ficheiro
-absorve-a por etapa conforme cada item é iniciado/fechado.
+**Versão 6, em vigor desde 2026-09-24.** Nasceu como `ROADMAP-PROPOSTA-v6.md` (2026-09-19, a
+partir do estado real apurado em `docs/STATUS-REPORT-2026-09.md`), foi validada pelo Pedro e
+actualizada com tudo o que fechou de 20 a 24/09 antes de ser promovida. A versão anterior está em
+`docs/archive/ROADMAP-v5.md` — histórico, não seguir.
+Sem estimativas de datas, por desenho.
 
-## Backlog e ordem de sessões (2026-09-05)
+**Regras de manutenção:** a sessão que fechar ou mudar o âmbito de um passo actualiza este ficheiro
+no mesmo passe (estado + data), como o `STATE.md`. Divisão: `ROADMAP.md` = ordem e critérios ·
+`STATE.md` = o que foi feito, com prova · `BACKLOG.md` = itens numerados · `HANDOVER.md` = o que a
+sessão seguinte precisa de saber primeiro.
 
-`docs/BACKLOG.md` (colado pelo Pedro, verbatim) é a referência de trabalho corrente,
-substitui a lista da análise de 05/09. Ordem: **i9 (passwords sem email) → i10 (export
-Excel/PDF) → sessão técnica (smoke tests + lockfile) → auth/headers → code review → piloto
-→ L2/E4 informada pelo uso → restantes por procura.** Duas mudanças de prioridade face ao
-que este ficheiro assumia antes: **EOP despromovido de bloqueio a melhoria** (decisão do
-Pedro, i9 — o onboarding do piloto passa a depender de password temporária comunicada
-verbalmente pelo admin, não de email; o desvio EOP/quarentena da E5-VPS, linha abaixo,
-continua por cobrir mas já não bloqueia nada) e **export Excel/PDF promovido a crítico**
-(i10, antes nem listado aqui).
+**O eixo:** deixou de ser «que etapa falta construir» e passou a ser «o que falta para os dados
+reais serem usados». A construção está feita; os dados reais estão activos (§3, fechada a 23/09).
+**O que falta agora é apresentação, decisões de negócio e a licença** (§4).
 
-**Tarefa 3 (smoke tests + lockfile) — ✅ fechada 2026-09-05.** O ciclo de release ganha um
-passo obrigatório novo: **push → CI → deploy por digest → `python3 scripts/smoke.py` ✅** —
-já corrido uma vez de ponta a ponta contra o primeiro deploy `npm ci`. Detalhe:
-`docs/STATE.md`.
+---
 
-**Tarefa 4 (auth/headers) — ✅ fechada 2026-09-05.** A lacuna do `PUT /auth/v1/user`
-(i9/i10) fechada na raiz, no próprio GoTrue
-(`GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD`); política de password
-(mínimo 12, quatro classes) e rate limit novo em `/auth/v1/token` (GoTrue não tinha
-nenhum); quatro *security headers* no vhost (nenhum estava definido). Detalhe:
-`docs/STATE.md`.
+## 1. Feito e provado
 
-**Tarefa 5 (code review read-only) — ✅ fechada 2026-09-05.** 9 achados triados em
-`app/src` (48 ficheiros), sem reescrita nenhuma — 2 com relevância de segurança directa
-(ban-status silencioso, open redirect no logout), o resto correcção/manutenibilidade;
-segredos em logs voltou limpo. Prepara a entrega E6. Detalhe: `docs/STATE.md`.
+Entregue **e** com prova re-executável (smoke, protocolo executado, ou medição ao vivo registada).
 
-## Estado das etapas
+| Bloco | Prova |
+|---|---|
+| Infra backend, Supabase self-hosted reduzido (3 serviços) | E0; medido ao vivo |
+| CI → GHCR, deploy por digest, fail-fast de runtime | `.github/workflows/ci.yml`, `app/Dockerfile`; revisão em `deploy/supabase/docker-compose.yml` |
+| **Ler a CI a partir do VPS** | `scripts/ci-log.sh` (PAT *Actions: read-only*, no escrow) — desde 23/09, nenhuma alteração de app sem ler o resultado |
+| Autenticação: login, logout, troca obrigatória de password | 0006 + middleware; smoke |
+| Fronteira de custo ao nível da BD (linha **e** coluna) | 0003/0004; smoke blocos G·H·I, incl. oráculo booleano |
+| Âmbito por filial e por canal | 0009; smoke J·T·W |
+| Motor de preços: FX, fee interco, transporte, direitos, margem, overrides | 0001→0012; smoke A·B (API ≡ BD), X |
+| Arredondamento por moeda | 0010; smoke U |
+| Workflow propor→aprovar (config, filial, canal) | 0007/0009; smoke R·S·T |
+| Decisão em lote, atómica | 0015; smoke AA |
+| Importação em massa com pré-visualização e desfazer — **com `unit`** | 0013 + **0018**; smoke Z |
+| Guardas de integridade (activação, motivo de override, EXW→review) | smoke O·Q·P |
+| Auditoria global + fronteira de conteúdo | 0001 + 0014; `/audit`, `v_audit_log`; smoke BB |
+| Backups, restauro provado, escrow, kit de desastre | `docs/DISASTER-DRILL.md` |
+| Off-site do backup | Verificado a 19/09 pelo padrão de `atime` |
+| Security headers + rate limit no `/auth/v1/token` | vhost **e** zona versionados (`deploy/nginx/`, item 54); **vivo = repo**, confirmado por `diff` a 24/09; `nosniff` servido |
+| `sales`, `agent`, `viewer`, `anon` | Smoke CC e DD; matriz de 9 identidades |
+| Fronteira de execução das funções (0016) · guardas do `compute_price` fecham (0017) | Itens 59/64/65; guarda na migração **e** smoke DD |
+| **A origem também vende (0019)** | `sales.sa` vê os 46; smoke EE |
+| **Catálogo real activo** | **46 `active`** de 49; execução n.º 5 (20/09) e **n.º 6** (23/09, 0001–0020) do protocolo |
+| **Fronteira de custo no export, com ficheiro real** | `.xlsx` gerado pelo Pedro como `sales.sa` (23/09): 46 linhas, só SA, sem custo. Regressão do item 68 corrigida; smoke FF (contrato `select` ↔ schema, 252 colunas) |
+| **O filtro de âmbito desce antes do `LATERAL` (0020)** | Item 69: APAC 283 → 54 chamadas a `compute_price`; smoke HH por contagem de `loops`, **e** o mapa das `reloptions` nos dois sentidos |
+| **Instrumentação de latência** | `log_format tmsi_timing` com `rsc=`/`pf=`/`purpose=` (versionado em `deploy/nginx/`); `scripts/contar-pedidos.sh` separa navegação de prefetch |
+| **Lote de apresentação** | Itens 72/73: colunas explícitas, `Promise.all`, `cache()` no branding, margem em %, estado com `active` por omissão, ordenação, «Generated by» com nome; smoke II |
+| **Filtros sem prefetch ao hover** | 24/09: `<FilterButton>` (`router.push` ao clique); smoke II verifica que nenhum `<Link>` real aponta para `/prices` |
+| **Item 67 — regra do `Alert`** | 24/09: serviços/opções sem classificação (célula vazia); `Alert` nunca no export dos papéis sem custos; smoke JJ |
+| **Aviso de preços operacionais (item 32)** | 24/09: `/prices`, impressão, rodapé do export; admin-only em `/config`; ausente = ligado; smoke KK (leitura viva como `sales`, transacção revertida) |
+| **Guarda de documentos** | `scripts/hooks/commit-msg` recusa perder > 50% de um `docs/` sem `rewrite`; smoke GG exercita-a |
 
-| Etapa | Título | Estado |
+**Smoke:** 129 asserções, verde nos três modos (24/09).
+
+---
+
+## 2. Feito, por re-provar
+
+Existe e funcionou uma vez; **não tem prova que sobreviva a uma regressão**.
+
+| Item | Porque está aqui | Critério de «feito» |
 |---|---|---|
-| E0 | Infra backend (Supabase magro + schema + proxy + SMTP + backup) | ✅ 03/09/2026 |
-| E1 | Scaffold frontend Next.js + CI→GHCR | ✅ 04/09/2026 |
-| E2 | Deploy do frontend no VPS + vhost | ✅ 04/09/2026 |
-| E3 | Ecrãs da aplicação, por iterações — i1 auth ✅, i2 preços ✅, i3 admin utilizadores ✅, i4 formulário de produto ✅, i5 configuração do pricing ✅, i6 overrides + auditoria ✅, i7 protocolo de verificação ✅, i8 dashboard ✅ | ✅ 05/09/2026 — **COMPLETA**; estendida pelo backlog: i9 (passwords sem email, migração 0006) ✅ 05/09/2026 (mecanismo; browser pendente), i10 (export Excel/PDF) ✅ 05/09/2026, tarefa 3 (smoke+lockfile) ✅ 05/09/2026, tarefa 4 (auth/headers) ✅ 05/09/2026 |
-| — | Migração 0003/0004 — protecção de custos ao nível da BD | ✅ 04/09/2026 |
-| — | Migração 0005 — correcção de câmbio no mesmo dia | ✅ 04/09/2026 |
-| — | Migração 0006 — gestão de passwords sem email (i9) | ✅ 05/09/2026 (mecanismo; provas de ecrã real pendentes do Pedro) |
-| E4 | Migração 0007 — workflow de aprovação (regra 90 dias + notificações separadas, `docs/BACKLOG.md` item 27, fora deste âmbito) | ✅ 06/09/2026 |
-| E5 | Operações e endurecimento — VPS ✅, homelab por iniciar | em curso |
-| E6 | Validação do piloto + preparação da migração para a empresa (gate: `VERIFICATION-PROTOCOL.md`) | por iniciar |
+| **Paridade do catálogo completo** | Escrita (`ENGINE-PARITY.md` §9) mas não re-executável: o comparador foi de sessão e a fonte vive fora do git | Comparador versionado em `scripts/` |
+| Gestão de passwords (0006) | Passos W/X do protocolo por executar | Execução registada |
+| Branding / white-label (0008) | Sem asserção | `.xlsx` real com branding, verificado |
+| Correcção de FX no mesmo dia (0005) | Coberta indirectamente pelo bloco R | Asserção própria ou nota explícita |
+| Exportações `.xlsx` — invólucro Next.js | A rota exige cookies; smoke FF/JJ/KK cobrem a consulta e o código, **não** o ficheiro | Ficheiros reais abertos no browser, por papel (lista de browser do `HANDOVER.md`) |
+| Dashboard | Metade browser (passo V) | Passo V executado |
+| Convites, ban/unban | Sem asserções | Asserção ou passo de protocolo |
 
-## E0 — Infra backend — ✅ FECHADA 03/09/2026
-Entregue: stack magra db+auth+rest (rede `tmsi_net` 172.20.40.0/24), schema `tmsi` aplicado
-(seed fictício, `count(v_branch_prices)=30`), vhost nginx + HTTPS, SMTP via relay do host
-(listener dedicado sem STARTTLS), backup nocturno com restauro provado, primeiro admin criado,
-RLS provado nos dois ramos. Detalhe: `STATE.md` + dossier `VPS.md`.
+---
 
-## E1 — Scaffold frontend + CI→GHCR — ✅ FECHADA 04/09/2026
-Entregue: `app/` (Next.js app router, TypeScript, Tailwind v4; página de login placeholder com o
-aviso proprietário no rodapé; `app/api/health`; cliente Supabase via `@supabase/ssr`, dividido em
-`supabase-client.ts`/`supabase-server.ts` — `next/headers` é server-only, não cabia no mesmo
-módulo do factory de browser sem quebrar o build); `Dockerfile` multi-stage (`node:24.20.0-alpine`,
-output standalone, non-root, `HOSTNAME=0.0.0.0`); `.dockerignore`; workflow GitHub Actions (push
-em `app/**` → build → push GHCR, `docker/metadata-action` para as tags). Dependências pinadas por
-versão verificada no registo npm, não de memória. Detalhe completo: `STATE.md`.
+## 3. Caminho até os dados reais serem utilizáveis — ✅ **FECHADA 2026-09-23**
 
-⚠️ **CI teve dois attempts — só o #2 é válido** (o #1 correu antes do segredo
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` existir, imagem com a chave vazia). Confirmado pelo Pedro; na E2
-apurou-se que "#1"/"#2" eram dois *re-runs* do mesmo workflow run (terminologia do GitHub), não
-dois runs distintos — daí só haver um run no histórico. `STATE.md` tem o digest e a data
-(`Created`) usados para confirmar que o attempt #2 (o re-run bom) é o que ficou nas tags.
+**Os dados reais são utilizáveis.** 46 artigos `active`, visíveis aos papéis comerciais, fronteira
+de custo provada no export por um ficheiro real.
 
-**Duas melhorias identificadas nesta etapa:**
-1. ✅ **Implementada na E2, removida no item 22 (2026-09-06):** o guard de CI existiu
-   enquanto `NEXT_PUBLIC_SUPABASE_ANON_KEY` era um build-arg — deixou de fazer sentido
-   quando esse valor passou a env de runtime (`SUPABASE_ANON_KEY`). A validação de arranque
-   vive agora num guard `sh -c` no próprio `CMD` do `app/Dockerfile`, não num
-   `instrumentation.ts` do Next.js — tentado primeiro, descartado ao provar ao vivo que
-   `register()` corre nalgum contexto interno do Next.js/Turbopack onde nem
-   `process.kill(process.pid, 'SIGKILL')` chamado de dentro da app derruba o processo real.
-2. ✅ **Fechada no item 22 (2026-09-06), não só documentada.** A premissa desta linha
-   (rodar `JWT_SECRET` exige rebuild da imagem) deixou de ser verdade: `SUPABASE_URL`/
-   `SUPABASE_ANON_KEY` já não estão embutidos na imagem, são env de runtime lidos de
-   `deploy/supabase/.env` — rodar qualquer um dos dois passa a ser um redeploy do container,
-   nunca um rebuild. Detalhe: `docs/DISASTER-DRILL.md` achado 3, `docs/STATE.md`.
+**O que resta são dados que a equipa completa** — nenhum valor foi, nem será, inventado:
 
-## E2 — Deploy do frontend + vhost — ✅ FECHADA 04/09/2026
-Entregue: container `tmsi-app` (imagem pinada por digest, `172.20.40.1:3001`, `mem_limit
-192m`) no compose da E0; `location /` acrescentada ao vhost, `/auth/v1/`/`/rest/v1/` confirmados
-intocados; `/api/health` e `/` a responder por HTTPS; página placeholder confirmada no browser
-pelo Pedro. Footprint medido antes/depois (`STATE.md`): RAM −52 MB, swap +24 MB, sem
-crescimento contínuo.
+| # | O quê | Quem | Critério de «feito» |
+|---|---|---|---|
+| 5 | Os três `draft`: `hs_code` do `T-1020`; SAP de origem do `T-1020` e do `T-1002`; peso do `T-1025` | Equipa | `compute_price` sem `errors[]`; os três activados |
+| 6 | `sap_code_us` duplicado (`NC01728-998` em `T-1021`/`T-1023`/`T-1042`, item 53) | CORP | Ficheiro corrigido, ou a constraint revista com fundamento |
+| 9 | Refs 47–49 por carregar | Equipa (artigo-pai + filial primária) | 52 artigos carregados |
 
-⚠️ **Ajuste de âmbito ao ROADMAP, registado:** a página de login da E1 é placeholder sem lógica
-— o critério de saída passou de "login real" para "app servida + `/api/health` por HTTPS". Login
-real (e a prova de que o `ANON_KEY` embutido é o correcto) move-se para a E3, 1.ª iteração.
+*(Passos 1–4, 7 e 8 feitos entre 19 e 23/09 — detalhe em `docs/archive/ROADMAP-v5.md` e no
+`STATE.md`. O passo 10, o despachante, passou para §4.2.)*
 
-Dois problemas fora do prompt, encontrados e corrigidos nesta etapa (detalhe em `STATE.md`):
-healthcheck a `localhost` falhava por resolução IPv6 antes de IPv4; o comando de backup do vhost
-que o agente deu ao Pedro copiava o symlink (não o conteúdo) para dentro de `sites-enabled`,
-onde o `include` do nginx (sem filtro `*.conf`) o carregava como vhost duplicado.
+---
 
-## E3 — Ecrãs da aplicação — EM CURSO
-Iterações pela ordem do `app/README.md` (referência de ecrãs). Cada iteração: editar → push →
-CI → nova imagem → deploy por digest. UI em inglês.
-**Critério de saída por iteração:** o ecrã exercido com utilizadores de roles diferentes,
-incluindo o ramo negado.
+## 4. Caminho até ao deployment final (E6)
 
-### i1 — Autenticação real — ✅ FECHADA 04/09/2026
-Login, logout, reset de password por email, protecção de rotas via middleware. As 6 provas
-comportamentais confirmadas pelo Pedro (login, ramo negado, refresh, logout+redirect, reset
-completo ponta-a-ponta, `/auth/v1/`/`/rest/v1/` inalterados). Detalhe completo, incluindo três
-bugs reais encontrados e corrigidos e um incidente de segredo (sessão revogada): `STATE.md`.
+Três sub-blocos, por esta ordem de dependência. **A licença é o que separa o segundo do terceiro.**
 
-⚠️ **O reset de password precisou de mais do que routing correcto.** GoTrue's `flowType: pkce`
-por omissão do `@supabase/ssr` guarda o `code_verifier` num cookie do browser que pediu o
-reset — um link de email aberto noutro contexto (telemóvel, browser diferente) não o tem. Fix:
-template de recovery próprio (servido pela nossa app, obtido pelo GoTrue via
-`GOTRUE_MAILER_TEMPLATES_RECOVERY`) a usar `token_hash` + `verifyOtp`, sem estado local. Só
-`RECOVERY` — `CONFIRMATION`/`INVITE`/`EMAIL_CHANGE` ficam com o template por omissão do GoTrue,
-por agora aceitável (`DISABLE_SIGNUP=true`, quase não exercidos neste piloto).
+### 4.1 Apresentação à equipa — ✅ preparada 2026-09-24, falta apresentar
 
-### i2 — Listagem de preços por role/filial — ✅ FECHADA 04/09/2026
-Rota `/prices`: escolha de vista (`v_branch_prices` vs `v_selling_prices`) decidida por RPC a
-`tmsi.can_read_costs()`, não replicada em TypeScript — a segurança real continua a ser RLS +
-`security definer`. Filtro por filial via query param. Dois utilizadores de teste fictícios
-(`sales.sa@example.test`, `agent.apac@example.test`, domínio `.test` IANA-reservado). As 6
-provas comportamentais confirmadas (3 no browser pelo Pedro, 3 via API pelo agente antes do
-deploy). Detalhe completo, incluindo o achado sobre como `v_branch_prices` realmente trata
-roles sem acesso a custos (linhas com `NULL`, não filas ausentes) e a correcção à lista de
-"roles de custo" deste prompt (`logistics` não está em `can_read_costs()`): `STATE.md`.
+| # | O quê | Estado |
+|---|---|---|
+| 1 | Filtros do `/prices` sem prefetch ao hover | ✅ 24/09 — **prova no browser**: `contar-pedidos.sh` com `PREFETCH: 0` depois de passar o rato pelos seis botões |
+| 2 | Item 67 (`Alert`) | ✅ 24/09 |
+| 3 | Aviso «preços operacionais» | ✅ 24/09 |
+| 4 | `PILOT-ONBOARDING.md` contra o estado real (⚠️4) | ✅ 24/09, em inglês |
+| 5 | `README.md` (⚠️5) | ✅ 24/09 |
+| 6 | Guião da apresentação | ✅ `docs/DEMO-SCRIPT.md` |
+| 7 | Lista de browser antes da reunião | Pedro — `HANDOVER.md` §3 |
+| 8 | **A apresentação** | Pedro |
 
-### i3 — Administração de utilizadores — ✅ FECHADA 04/09/2026
-Rota `/admin/users`: listar, convidar (Admin API do GoTrue), atribuir/remover role (RLS directa,
-sessão do próprio admin), disable/reactivate (ban via Admin API). As 5 provas do prompt
-confirmadas. Detalhe completo, incluindo o bug real encontrado e corrigido em F4 (`/auth/confirm`
-consumia o token no `GET`, explorável por scanners de email corporativos) e o achado externo
-(quarentena Microsoft 365/EOP para `condat.fr`, fora do nosso controlo): `STATE.md`.
+### 4.2 Decisões de negócio
 
-⚠️ **Lição de teste, para toda a iteração futura com fluxo de email:** endereços `.test` (nunca
-entregues) e Gmail pessoal (sem scanner de links) não exercitam um gateway corporativo — foi
-essa lacuna que deixou o bug do `GET` acima sobreviver, sem detecção, da i1 até à i3. Sempre que
-uma prova envolver um link de email a ser clicado, incluir pelo menos um destinatário real atrás
-de um gateway corporativo (M365/EOP, Proofpoint, Mimecast) antes de considerar a prova fechada.
+| # | O quê | Estado |
+|---|---|---|
+| 1 | Item 67 — `Alert` dos serviços | ✅ **decidido e feito 2026-09-24**: não classificados; coluna fora dos exports sem custos |
+| 2 | **Item 32 — base do direito aduaneiro por zona** | 🔴 **aberto, externo (despachante).** Até lá os preços são operacionais e o aviso fica ligado. Fecha quando o despachante responder e o admin desligar o aviso |
+| 3 | **Licença com a empresa** | 🔴 **aberta.** Condição do §4.3 inteiro |
 
-### i4 — Formulário de produto — ✅ FECHADA 04/09/2026
-Ciclo de vida e o motor `compute_price` na UI: `/products`, `/products/new` (rascunho mínimo),
-`/products/[id]` (detalhe, breakdown por filial, histórico de `price_versions`, `audit_log`,
-edição gated por `canManageProducts()`). Status é um `<select>` livre — a 0001 não impõe grafo de
-transições além do trigger de activação e do de reabertura por EXW; nenhuma máquina de estados
-inventada no cliente. As 6 provas confirmadas via API (detalhe: `STATE.md`).
+### 4.3 Suspenso até à licença
 
-⚠️ **Defeito real da 0001, encontrado em F1 antes de qualquer código de UI, corrigido pela
-migração `0002` (aprovada pelo Pedro, aplicada 04/09/2026):** `tmsi.record_exw_version()` não era
-`security definer` — toda e qualquer escrita em `tmsi.products` falhava por RLS em
-`tmsi.price_versions`, para qualquer role. `tmsi.audit()` tinha o mesmo tipo de falha por omissão
-de `search_path` (apanhado na revisão do Pedro antes de aplicar). Detalhe completo: `STATE.md`,
-`supabase/migrations/0002_price_versions_security_definer.sql`.
+Nada disto se faz antes de a licença estar fechada — mexe em nomes, formalidades ou canais que só
+fazem sentido com o destino decidido.
 
-⚠️ **Reaberta no mesmo dia — achado real de teste (Pedro, browser):** `exw_price` (e
-`sap_code_*`/`supplier_id`) visíveis a `sales.sa` em `/products`/`/products/[id]`. `tmsi.products`
-não tem protecção nenhuma ao nível da coluna, só da linha — `compute_price()` esconde os valores
-derivados do EXW, mas as páginas liam a tabela crua. Corrigido ao nível do `.select()`
-(`can_read_costs()` escolhe a lista de colunas antes do pedido sair, nunca ao nível da
-renderização) — provado ao nível do payload, não só do ecrã. ✅ **A candidata registada aqui foi
-implementada — ver secção "Migração 0003/0004" abaixo. Fechada.**
+| # | O quê | Nota |
+|---|---|---|
+| 1 | Renome de infra — repo, imagem, domínio | Decisão de 06/09, por executar |
+| 2 | CPI L113-9 / formalidades da migração para a empresa | Conforme `docs/archive/ROADMAP-v5.md`, E6 |
+| 3 | EOP / entregabilidade de email (item 7) | Via TI, junto com o CPI |
 
-Depois: configuração (câmbios, fees, transporte, direitos, margens), overrides + histórico/
-auditoria, dashboard.
+### Pendentes técnicos herdados da v6 — não bloqueiam a apresentação
 
-### i5 — Configuração do pricing — ✅ FECHADA 04/09/2026
-`/config`: câmbios (`exchange_rates`, append-only — `fx_rate()` escolhe sempre a data efectiva
-mais recente ≤ hoje, editar significa acrescentar, nunca reescrever histórico; fonte
-obrigatória, já `not null` na 0001), fees interco, escalões de transporte, direitos por HS,
-grelhas de margem e settings (edição no próprio sítio — a seed já cobre todas as combinações
-das cinco, sem UI de criar/apagar). Acesso de leitura e escrita são as políticas RLS reais de
-cada tabela (matriz extraída na F0 antes de qualquer código), espelhadas como helpers nomeados
-em `auth-guard.ts` — nenhuma das seis mistura colunas seguras/sensíveis na mesma linha como
-`tmsi.products` (i4), por isso RLS ao nível da linha chega, sem precisar de uma vista como a
-`tmsi.v_products` da 0003. As 5 provas confirmadas via API, incluindo cálculo à mão do preço
-esperado antes de cada edição, exacto em todos os casos (detalhe: `STATE.md`).
+| O quê | Nota |
+|---|---|
+| Retenção de 5 anos do `audit_log` (item 49) | Decidida, não implementada — o `/privacy` di-lo |
+| Métrica de idade da cópia off-site (item 55) | Hoje, se o pull parar, ninguém dá por isso |
+| Desactivar as contas `.test` | **Na fase de produção**, não antes (decisão do Pedro); até lá mantêm a password partilhada |
+| Piloto com colegas reais (item 8) | Adiado pelo Pedro desde 05/09; guião pronto em `PILOT-ONBOARDING.md` |
 
-### i6 — Overrides + auditoria — ✅ FECHADA 04/09/2026
-`/overrides`: criar e listar (activo/expirado/futuro) `price_overrides` (fx/fee/transport/duty/
-margin/coef — cada um substitui um input do motor, nunca o resultado, sempre com motivo, autor
-de sessão e validade) e `product_hs_overrides`. `/products/[id]` ganhou uma coluna "Overridden"
-por filial e uma secção com os overrides do próprio produto. `/audit`: leitura global,
-filtrável, só-leitura, complementando o audit por-produto já existente desde a i4. As 6 provas
-confirmadas via `psql`/RLS directa, com cálculo à mão do preço/direito esperado antes de cada
-teste, exacto em todos os casos (detalhe: `STATE.md`).
+---
 
-⚠️ **Achado real de F0, não hipotético, resolvido sem migração:** `product_hs_overrides.scope_type`
-aceita `branch`/`channel`/`agent` na BD, mas `compute_price()` só lê `scope_type='branch'` — um
-override de canal/agente seria aceite e pareceria válido, mas nunca teria efeito no preço.
-Decisão do Pedro: a UI só oferece `branch` por agora; linhas `channel`/`agent` já existentes
-nunca ficam invisíveis, aparecem marcadas "no effect". Duas perguntas de desenho ficam
-registadas para quando canal/agente forem implementados — ver "Questões abertas" no fim deste
-ficheiro.
+## 5. Depois
 
-⚠️ **Achado menor, também sem migração:** `price_overrides.created_by` é `uuid` nullable — a
-app define-o sempre a partir da sessão, mas um pedido directo à API a contornar a app podia
-criar um override sem autor. `product_hs_overrides` não tem `created_at`/`created_by`/validade
-nenhuma (só o `admin` escreve, e o `audit_log` cobre a tabela). Ambos sinalizados, nenhum
-corrigido nesta iteração — candidatos a migração futura, não bloqueiam nada hoje.
+| Item | Origem | Nota |
+|---|---|---|
+| `tmsi.me()` — o `/auth/v1/user` duplicado (itens 74/76) | 23–24/09 | A via do middleware foi rejeitada (item 76); esta é migração |
+| Nome do artigo na vista de preços (item 75) | 24/09 | Migração pequena; poupa um pedido por carregamento |
+| `price_cache` (item 71) | 23/09 | **Só com gatilho:** 4 s no «All branches» com host calmo, ou 200 artigos reais |
+| Alerta de revisão a 90 dias | Plano inicial | Nunca iniciado |
+| Notificações por email de negócio | Plano inicial | Só existe email transaccional do GoTrue |
+| Filtros por família e moeda de visualização | Plano inicial | Estado e âmbito já existem |
+| API interna para integrações | Plano inicial | |
+| Exportação PDF por servidor | Plano inicial | Hoje `window.print()` + CSS |
+| Máquina de estados do artigo no frontend | Auditoria | A UI passa `status` livre e deixa os triggers recusarem |
+| Ledger de migrações para `tmsi` | Auditoria | Hoje o estado infere-se por sondagem |
+| Validação no importador: uma filial com fee 0, e ser a de origem | 16/09 | |
+| Segundo modo de importação (proposta agrupada) | `docs/IMPORT.md` | Contrato escrito |
+| `product_hs_overrides` no workflow de aprovação | Item 10, parcial | |
 
-### i7 — Protocolo de verificação de segurança — ✅ FECHADA 04/09/2026
-Iteração documental, sem deploy. `docs/VERIFICATION-PROTOCOL.md` (protocolo re-executável de
-teste/auditoria/formação/demonstração à direcção): quatro camadas de segurança em uma página,
-matriz de visibilidade por papel, 20 passos de teste por papel (browser + API), regras de
-execução em produção, tabela de registo re-utilizável. A matriz-base do prompt foi verificada
-célula a célula contra o schema real (`can_read_costs()`/`can_read_operational()`/
-`products_visible()`, `see_costs`/`see_sell` do `compute_price()`, políticas RLS reais) —
-**16 correcções** encontradas e feitas, nenhuma célula ficou por confirmar. Duas classes de
-erro dominaram: (a) o papel `viewer` estava marcado ❌ em 7 células onde a BD real lhe dá
-acesso total e sem âmbito (`can_read_costs()`/`can_read_operational()`/`see_costs`/`audit_read`
-incluem `viewer` sem condição nenhuma — é um papel de supervisão total, não "só leitura
-limitada"); (b) a capacidade de criar overrides tinha `product_manager` marcado ✅ (não está em
-`overrides_write` nenhures) e `branch_manager`/`logistics` marcados ❌ (podem escrever, cada um
-restrito a um subconjunto diferente de `kind`/filial). Detalhe completo, célula a célula:
-`STATE.md`.
+---
 
-### i8 — Dashboard (KPIs e margens por filial) — ✅ FECHADA 05/09/2026 (reaberta e corrigida no dia seguinte) — **E3 completa**
-`/dashboard`, gate `can_read_costs()` (já inclui `admin`). Cinco secções, todas lidas pelas
-mesmas vistas/funções que os ecrãs já existentes usam, nenhuma query nova a contornar as
-fronteiras 0003/0004: tiles de estado (`review` destacado), margem média por filial em barras
-(só produtos activos), frescura dos câmbios por moeda (mesmo desempate do `fx_rate()`, 0005),
-overrides activos, actividade recente do `audit_log`. Paleta categórica CVD-safe (hexes exactos
-do prompt) como CSS custom properties, rótulos directos + tabela acessível por gráfico (séries
-3/4 falham 3:1 no `surface` claro), paleta de estado própria (nunca reutilizada das séries) para
-`review`/câmbio velho. As 5 provas confirmadas — cálculo à mão de cada tile via `psql`, ramo de
-aviso traçado com o limiar temporariamente baixado (nunca dados falsos), ramo negado
-(`sales.sa`/`logistics.test`) sem qualquer agregado de custo alcançável.
+## 6. Suspenso / fora de âmbito
 
-⚠️ **Reaberta no dia seguinte — achado do Pedro no browser:** o cartão de gráfico do dashboard
-tinha `prefers-color-scheme`/`[data-theme]` ligados (implementados correctamente e confirmados
-em produção — ver F3 original, `STATE.md`), mas era o **único** elemento theme-aware de toda a
-app; numa máquina com o SO em modo escuro, só esse cartão mudava, o resto ficava claro —
-inconsistência, não tema. **Decisão do Pedro: app light-only por agora.** Blocos dark
-removidos de `.dashboard-charts` (não só desligados), com os hexes dark validados guardados em
-comentário no CSS para arranque futuro. Redeploy confirmado sem nenhum `prefers-color-scheme`/
-`data-theme` no bundle servido. Detalhe completo: `STATE.md`.
+| Item | Decisão | Data |
+|---|---|---|
+| Piloto com utilizadores reais | Adiado; só contas `.test` até ao deployment final | 2026-09-05 |
+| Terceira perna do backup | Suspensa; as duas primeiras existem | 2026-09-06 |
+| Dark mode | Removido; app light-only | 2026-09-05 |
+| `channels.margin_delta` | Largada na 0009 | 2026-09-09 |
+| `interco_fees` | Histórico; o motor deixou de a ler na 0012 | 2026-09-10 |
+| `branch_manager` aprovar config global | Em aberto, sem prazo (item 50) | 2026-09-16 |
+| Restringir a chave do aviso ao admin **na BD** | A RLS de `settings` deixa admin **e** finance escrever qualquer chave; o limite admin-only do aviso é da app. Fechá-lo na BD é migração — não pedida | 2026-09-24 |
 
-📌 **«Dark mode global» — melhoria futura de baixa prioridade, sem etapa atribuída.** A app é
-light-only hoje, de propósito. A paleta dark dos gráficos do dashboard já está validada (esteve
-em produção, confirmada correcta) — um trabalho futuro de tema escuro a sério parte dela, não
-do zero.
+---
 
-Com a i8 fechada, **o E3 está completo**. Próximo passo é decisão do Pedro entre a E5
-(operações, antes de utilizadores reais) e a E4/0006 (quando a decisão L2 fechar) — nenhuma das
-duas arranca sem a primeira execução formal do `VERIFICATION-PROTOCOL.md` (ver "Gate de
-produção" abaixo).
+## 7. O que mudou face à v5 (arquivada)
 
-## Gate de produção
-**Princípio do Pedro, registado 2026-09-04:** provas com dados fictícios validam o
-**mecanismo** (a lógica de acesso está correcta), não o **ambiente** (que ninguém com acesso
-legítimo consegue, na prática, ver o que não devia). Antes de qualquer utilizador real ou dado
-real, e antes de qualquer apresentação à direcção: **re-execução completa do
-`docs/VERIFICATION-PROTOCOL.md`, com registo assinado** (secção 7 desse documento). Repete-se a
-cada migração que toque em RLS/vistas/privilégios e a cada release major. A E6 (validação do
-piloto + preparação da migração para a empresa) só avança depois da primeira execução formal
-deste protocolo — é o critério de entrada dessa etapa, não só uma recomendação.
-
-✅ **Gate satisfeito para o estado actual — execução n.º 1, 2026-09-05.** Migrações 0001–0005,
-digest `sha256:3775da62...`, resultado OK, os 8 papéis testados. Dois defeitos reais do
-próprio protocolo corrigidos durante a execução (`/dashboard` em falta; a nota sobre
-`logistics` não conseguir ler overrides de `duty` estava errada, não só desactualizada — vê
-essas linhas via `overrides_write`, uma política `for all`). Desvio documentado: os testes de
-email (S/T) só cobriram Gmail e Hotmail pessoais — a variante com gateway corporativo
-M365/EOP, a mesma quarentena identificada na i3, continua por cobrir. Detalhe completo:
-`STATE.md` e `docs/VERIFICATION-PROTOCOL.md` (secções 6/7).
-
-✅ **Gate satisfeito por inteiro para o estado actual — Execução n.º 2, 2026-09-16
-(`docs/BACKLOG.md` item 41, fechado).** Entre a execução n.º 1 (0001–0005) e esta, cada
-migração (0007, 0008, 0009, 0010+0011) só tinha ganho uma adenda **parcial** em
-`docs/VERIFICATION-PROTOCOL.md` §7 (só os passos novos dessa sessão) — a 0012 nem isso. A
-Execução n.º 2 escreveu primeiro as duas adendas em falta (0012/0013) e depois re-testou os 8
-papéis completos sobre 0001–0013, digest `sha256:b47070dfb4307fea66f827b5d84cdcdf1ea774434ab681ec2fdba3d01bc0fb5f`
-— zero fuga na fronteira de custos por nenhum dos 4 caminhos testados (API directa, vistas,
-exports, `/import` da 0013), três correcções de texto ao próprio protocolo (documentação
-desactualizada, nunca a app), zero defeito encontrado. Passos que só um browser/caixa de
-correio real consegue exercer continuam por confirmar pelo Pedro (mesma limitação desde a
-execução n.º 1) — não bloqueiam o gate, nunca tocaram a fronteira de custos. **O critério de
-entrada da E6 abaixo está cumprido** pelo lado técnico; falta o carregamento do catálogo real
-em si (fora do âmbito deste gate). Detalhe completo: `docs/VERIFICATION-PROTOCOL.md` secção 7,
-"Execução n.º 2".
-
-## Migração 0003/0004 — protecção de custos ao nível da BD — ✅ FECHADA 04/09/2026
-Fecha a pendência da i4: RLS só protegia linhas, nunca colunas — um pedido manual à API,
-contornando a app, ainda lia `exw_price`/`sap_code_*`/`supplier_id`. O candidato simples do
-prompt original (`REVOKE SELECT (col)`) revelou-se um no-op silencioso (privilégios de coluna
-Postgres são aditivos sobre os de tabela — 0001 já concede tudo à tabela); e uma vista ingénua
-para os roles de custo lerem as colunas revogadas **ignorava a RLS por completo** (dono com
-`BYPASSRLS`). O desenho final: `REVOKE`/`GRANT` ao nível certo na tabela + `tmsi.v_products`
-(vista com semântica de dono para o acesso a colunas, mas visibilidade de linha replicada
-explicitamente via `tmsi.products_visible()`, a mesma função que a policy `products_read` passou
-a chamar). Duas fronteiras nomeadas — `can_read_operational()` (custos ou `logistics`, que já lê
-dados físicos noutro lado) e `can_read_costs()` (só financeiro) — não uma genérica. 0004 corrigiu
-uma regressão da própria 0003 (primary_branch/sold_in tinham ficado gated, partindo o
-price-by-branch para sales/agent) antes de qualquer prova ser reportada feita. As 4 provas do
-prompt confirmadas, incluindo a suite completa da i4 sem regressão. Detalhe completo, incluindo
-o percurso empírico de F1 (`BEGIN`/`ROLLBACK`) que descartou o candidato simples: `STATE.md`.
-
-## Migração 0005 — correcção de câmbio no mesmo dia — ✅ FECHADA 04/09/2026
-Achado real do Pedro ao usar o `/config` da i5, não hipotético: `unique(currency,
-effective_date)` em `tmsi.exchange_rates` só permitia uma entrada por moeda por dia — um engano
-ficava sem correcção possível até ao dia seguinte. Verificado antes de desenhar que
-`tmsi.fx_rate()` é o único leitor de cálculo desta tabela. Corrigido: `unique` relaxado,
-`fx_rate()` a desempatar por `created_at` entre entradas do mesmo dia. Achado de F1: o valor por
-omissão de `created_at` (`now()`) fica congelado durante toda a transacção — mudado para
-`clock_timestamp()`, que reflecte sempre o momento real da inserção. `/config` actualizado a
-marcar entradas do mesmo dia superadas como tal, em vez de as mostrar como duplicatas
-inexplicadas. Cenário exacto do Pedro reproduzido e o ramo temporal (consulta histórica
-insensível a correcções de hoje) confirmados antes de fechar. Detalhe completo: `STATE.md`.
-
-## E4 — Migração 0007 — workflow de aprovação — ✅ FECHADA 06/09/2026
-Decisão L2 do Pedro (06/09), fechando o que a i5 só registava como inclinação: modificações
-a preços publicados passam a exigir aprovação do Branch Manager da filial afectada OU de um
-admin — um aprovador basta; «quem edita não aprova» **não** se aplica (admin pode aprovar a
-sua própria proposta — decisão consciente de fase-piloto, a revisitar com mais utilizadores
-reais; `audit_log` mostra sempre autor e aprovador, mesmo coincidindo).
-
-**F0 — dois desvios reais entre o desenho e o schema, resolvidos com o Pedro antes de
-escrever DDL nenhuma (nunca assumidos):**
-1. «BM da filial afectada» só tem significado limpo para `transport_tiers`/`margin_grids`/
-   `price_overrides` (uma única coluna `branch_id` cada). `exchange_rates` (só `currency`),
-   `customs_rates` (só `zone`) e `interco_fees` (DUAS filiais, sem que `branch_manager`
-   alguma vez tivesse escrita nelas) não têm identidade de filial nenhuma para pendurar essa
-   elegibilidade — decisão do Pedro: aprovação **admin-only** para estas três, rejeitando
-   derivar "a filial" a partir da moeda/zona (dados de hoje, não uma garantia do schema).
-2. Só `exchange_rates`/`price_overrides` tinham histórico (padrão 0005) — `interco_fees`/
-   `transport_tiers`/`customs_rates`/`margin_grids` tinham a PK na própria identidade da
-   configuração, sem onde materializar uma "nova versão". Decisão do Pedro, a opção maior:
-   redesenhar as quatro com o mesmo versionamento `effective_date`/`created_at` que
-   `exchange_rates` já tinha, `compute_price()`/`branch_margin()` a escolherem sempre "o mais
-   recente aplicável" — sem tocar a assinatura/colunas de saída de `compute_price()`.
-
-**Migração 0007:** as quatro tabelas ganham `id`/`effective_date`/`created_at`/`created_by`
-(padrão 0005); `branch_margin()` recriada com `p_date` e selecção "mais recente por tier";
-`compute_price()` com as mesmas três procuras (interco/transporte/direitos) a respeitar
-`effective_date`; nova tabela `tmsi.price_proposals` (genérica, 6 tipos-alvo) com RLS
-(`proposals_read`/`proposals_insert`, sem `UPDATE`/`DELETE` nenhum para `authenticated`);
-nova função `tmsi.decide_price_proposal()` (SECURITY DEFINER, `search_path=pg_temp`,
-reconfirma elegibilidade sempre por dentro, nunca confia no chamador); as 6 políticas de
-escrita directa (`config_write` × 5, `overrides_write`) removidas — `tmsi.settings` fica
-intocado, fora de âmbito. Validada em 14 verificações `BEGIN`/`ROLLBACK` (baseline idêntico,
-bypass negado, propostas inelegíveis negadas, fluxo completo, motor insensível a pendente,
-filial errada negada, motor-vivo, insensibilidade histórica, re-decisão negada, rejeição
-sem/com motivo, auto-aprovação de admin, `audit_log` completo) antes de aplicar — commitada e
-pushed antes de tocar a produção, backup fresco imediatamente antes do DDL.
-
-Código da app (`/config`, `/overrides` a propor em vez de escrever directamente; novo
-`/proposals`, a fila de aprovação) + `scripts/smoke.py` com 11 verificações novas do
-workflow (38/38 total). Detalhe completo, achado a achado: `STATE.md`.
-
-## E5 — Operações e endurecimento — EM CURSO (E5-VPS ✅ fechada 05/09/2026)
-
-### E5-VPS — ✅ FECHADA 05/09/2026
-Três frentes do lado do VPS (prompt E5-VPS), detalhe: `STATE.md`.
-1. **Quarentena EOP (desvio S/T) — tentado, não fechado.** Bloqueado por falta de acesso do
-   Pedro ao portal `security.microsoft.com` do tenant `@condat.fr`, não por quarentena
-   persistente. Continua por cobrir; caminho seguinte (acesso ou pedido à TI) é decisão do
-   Pedro, fora do âmbito de uma sessão VPS.
-2. **PAT → deploy key — ✅ fechado.** `~/.git-credentials` removido; `origin` do
-   `tmsiequipment` passou a SSH dedicado (`github-tmsiequipment`, deploy key **com** escrita —
-   corrigido de "read-only" para "write", a sessão precisa de escrever `STATE.md`/`ROADMAP.md`
-   a cada fecho, read-only não teria chegado). Provado com `git pull` + push real.
-3. **Métricas TMSI no `status.json` — ✅ fechado (parcial, por desenho).** `tmsi_containers_up`/
-   `tmsi_containers_total` e `tmsi_backup_age_h` expostos, prova ao vivo via túnel. Idade da
-   taxa de câmbio mais recente **dispensada** — exigiria o `vps-stats.service` (hoje sem
-   dependência de Postgres) ligar-se à BD, não "barato"; fica para quando fizer falta a sério.
-
-### E5-HOMELAB — 🟠 parcial (depende da F3 da E5-VPS, já fechada)
-Off-site do backup · tile no dashboard do homelab a consumir as chaves `tmsi_*` novas do
-`status.json` · métrica T8.
-Pode correr em paralelo com a E3; não bloqueia nem é bloqueada por ela.
-
-**Correcção de estado (2026-09-19, auditoria A1):** a linha "o dump só existe no VPS" já não
-descreve a realidade — **o off-site está a correr.** O pull nocturno do homelab apanha os
-ficheiros `-window` e já levou dumps que contêm a carga real do item 51: `atime` do dump de
-16/09 lido a 17/09 03:08, o de 17/09 a 18/09 03:05, o de 18/09 a 19/09 03:02 (sistema em
-`relatime`; o `wtmp` só regista sessões interactivas, logo estas leituras não são de pessoa).
-O trabalho off-site vive no projecto do homelab, não neste repo — este ROADMAP é que nunca foi
-actualizado. **Fica por fechar:** a confirmação do lado do destino (que daqui não se vê) e a
-métrica de idade da cópia off-site, hoje inexistente — o `status.json` só publica
-`tmsi_backup_age_h`, que é a idade do dump **no VPS**. Ver `docs/BACKLOG.md` item 55.
-
-✅ **Lockfile/pinagem definitiva das imagens da app — resolvida na tarefa 3 (2026-09-05,
-sessão VPS), não precisou de esperar pela E5-HOMELAB:** `generate-lockfile.yml` gera e
-commita `app/package-lock.json`, Dockerfile passa a `npm ci`. Detalhe: `docs/STATE.md`.
-
-## E6 — Validação do piloto + migração para a empresa — por iniciar
-⚠️ **Gate de entrada (ver "Gate de produção" acima):** não arranca sem uma primeira execução
-formal do `docs/VERIFICATION-PROTOCOL.md`, com registo assinado — as provas por dados
-fictícios de cada iteração validam o mecanismo, não substituem esta execução com dados e
-utilizadores reais.
-
-Validação com utilizadores-piloto (dados sempre fictícios). Preparar: procedimento de
-migração (`git clone` + novo `.env` + `pg_restore` — destino: servidor da empresa),
-autorização escrita ao abrigo da licença, e o esclarecimento CPI art. L113-9 (questão do
-handover §7 — do Pedro, antes de qualquer transferência).
-
-📋 **Code review read-only (tarefa 5, 2026-09-05) já feita como preparação** — 9 achados
-triados em `app/src`, nenhum corrigido ainda (decisão de prioridade/calendário por tomar).
-Detalhe: `docs/STATE.md`.
-
-## Questões abertas do Pedro (do handover §7 — não bloqueiam E1–E2)
-Moeda dos escalões de transporte TBM (T2) · periodicidade/mecanismo das taxas SAP (C2 —
-manual no piloto) · ~~quem aprova (L2 — bloqueia E4)~~ ✅ **decidida e implementada
-06/09/2026** (`docs/BACKLOG.md` item 9, E4/migração 0007) · titularidade CPI (bloqueia E6).
-
-**Duas questões novas da i6 — actualizadas na reconciliação de 2026-09-15
-(`docs/BACKLOG.md` item 10), esta nota ficou desactualizada desde a migração 0009:**
-**(b) está resolvida para `price_overrides`** — `compute_price()` ganhou
-`p_scope_type`/`p_scope_id` na 0009 (já não é só `p_product, p_branch, p_date`), e um
-override de margem/transporte por canal já tem efeito real. **(b) continua por resolver só
-para `product_hs_overrides`** — essa tabela ainda só lê `scope_type='branch'`, linhas de
-canal/agente continuam "no effect" na UI. **(a) a precedência tornou-se irrelevante, não foi
-decidida** — a migração 0010 fez o âmbito canal zerar sempre a taxa de direitos, por isso o
-HS code deixou de influenciar de todo um preço de canal; reabre só se os direitos voltarem a
-aplicar-se a canais.
+- **O eixo:** de «que etapa falta construir» para «o que falta para os dados reais serem usados».
+- **§2 «Feito, por re-provar»**, categoria que a v5 não tinha.
+- **As migrações 0008–0020** entram no mapa (a v5 parava na 0007).
+- **O gate de produção** deixou de ser um estado declarado: é a execução do protocolo, repetida a
+  cada migração que toque RLS, vistas ou privilégios (n.º 6 sobre 0001–0020).
+- **E6** passou a três sub-blocos, com a licença como fronteira explícita.
+- Nada foi apagado: a v5 inteira está em `docs/archive/ROADMAP-v5.md`.
