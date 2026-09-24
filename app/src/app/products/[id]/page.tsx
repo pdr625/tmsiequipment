@@ -266,6 +266,8 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <p className="text-sm text-gray-500">Not priced for any branch or channel visible to you.</p>
         )}
         {(priceRows.length > 0 || priceErrors.length > 0) && (
+          {/* Item 79: a coluna Alert é só de quem lê custos — para os outros
+              papéis o motor devolve sempre 0 alertas, e era uma coluna vazia. */}
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-left text-gray-500">
@@ -278,7 +280,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 )}
                 <th className="py-2 pr-4">Min price</th>
                 <th className="py-2 pr-4">Ref price</th>
-                <th className="py-2 pr-4">Alert</th>
+                {canReadCosts === true && <th className="py-2 pr-4">Alert</th>}
                 <th className="py-2 pr-4">Overridden</th>
               </tr>
             </thead>
@@ -303,15 +305,17 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     <td className="py-2 pr-4">
                       {r.ref_price ?? '—'} {r.currency}
                     </td>
-                    <td className="py-2 pr-4">
-                      {r.errors && r.errors.length > 0 ? (
-                        <span role="alert" className="text-red-700">
-                          {r.errors.join(', ')}
-                        </span>
-                      ) : (
-                        (alertaDe(r.alert, product.item_type) ?? '—')
-                      )}
-                    </td>
+                    {canReadCosts === true && (
+                      <td className="py-2 pr-4">
+                        {r.errors && r.errors.length > 0 ? (
+                          <span role="alert" className="text-red-700">
+                            {r.errors.join(', ')}
+                          </span>
+                        ) : (
+                          (alertaDe(r.alert, product.item_type) ?? '—')
+                        )}
+                      </td>
+                    )}
                     <td className="py-2 pr-4">
                       {overriddenInputs.length === 0 ? (
                         '—'
@@ -327,7 +331,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               {priceErrors.map((e) => (
                 <tr key={`error-${e.branchId}`} className="border-b border-gray-100">
                   <td className="py-2 pr-4">{e.branchId}</td>
-                  <td colSpan={seesCosts ? 6 : 4} role="alert" className="py-2 pr-4 text-red-700">
+                  <td colSpan={(seesCosts ? 2 : 0) + 3 + (canReadCosts === true ? 1 : 0)} role="alert" className="py-2 pr-4 text-red-700">
                     Calculation error: {e.message}
                   </td>
                 </tr>

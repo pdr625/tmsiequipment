@@ -2175,6 +2175,23 @@ def block_home_menu():
           "router.push presente, sem <Link>")
 
 
+def block_product_alert_column():
+    """NN — item 79: a coluna Alert de /products/[id] só existe para quem lê
+    custos, e o colSpan da linha de erro acompanha as colunas que há."""
+    import pathlib as _pl
+    t = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "products" / "[id]" / "page.tsx").read_text()
+    check("NN: o <th> Alert do /products/[id] está condicionado a canReadCosts",
+          'canReadCosts === true && <th className="py-2 pr-4">Alert</th>' in t
+          and '<th className="py-2 pr-4">Alert</th>' not in t.replace('canReadCosts === true && <th className="py-2 pr-4">Alert</th>', ''),
+          "th condicionado, sem th solto")
+    i = t.find("alertaDe(r.alert, product.item_type)")
+    antes = t[max(0, i - 400):i]
+    check("NN: o <td> do Alert está dentro de canReadCosts === true", i > 0 and "canReadCosts === true &&" in antes,
+          "td condicionado" if i > 0 else "alertaDe não encontrado")
+    check("NN: o colSpan da linha de erro conta a coluna Alert só quando ela existe",
+          "(canReadCosts === true ? 1 : 0)" in t and "colSpan={seesCosts ? 6 : 4}" not in t, "colSpan dinâmico")
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -2356,6 +2373,7 @@ def main():
     block_price_notice(sell_side.get("sales"))
     block_me_and_settings(tokens, claims)
     block_home_menu()
+    block_product_alert_column()
 
     delete_smoke_fixture_product()
 
