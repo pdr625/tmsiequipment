@@ -74,6 +74,20 @@ tocou em RLS, vistas nem privilégios**, logo não pede execução nova.
 
 ---
 
+## 4b. Próxima sessão de app — decidido pelo Pedro, 2026-09-24
+
+Uma sessão, com dois assuntos:
+
+1. **Migração 0021**, que junta os itens **75** (nome e categoria na vista de preços), **76**
+   (`tmsi.me()`, o que resta do item 74) e **80** (aviso admin-only também na BD). É migração:
+   guardas do `PUBLIC` e das `reloptions` (`CLAUDE.md`), impressão digital idêntica, execução do
+   protocolo.
+2. **Item 81:** os links do menu da página inicial passam a botões com `router.push`, como o
+   `<FilterButton>` do `/prices`. É um commit de app só com isto, e a prova é a mesma: `contar-pedidos.sh` com
+   `PREFETCH: 0` depois de voltar ao menu e passar o rato pelos links.
+
+Um assunto por commit, e a CI lida entre cada um.
+
 ## 5. O que NÃO fazer já
 
 - **Item 71 (`price_cache`)** — só com gatilho: 4 s no «All branches» com host calmo, ou 200
