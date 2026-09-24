@@ -439,6 +439,44 @@ can restore the data and rebuild the image, but the very last `docker compose pu
 Rotation: alongside the account's other tokens, planned for January (dossier
 `CREDENTIALS-INVENTORY.md`).
 
+## 9b. Ler a CI sem browser (PAT de Actions, 2026-09-24)
+
+**Porquê existe:** a 2026-09-23 três revisões seguidas falharam no `npm run build` e não houve
+forma de saber porquê a partir do VPS — não há `gh` instalado, o PAT do §9 tem só
+`read:packages`, e não há Node aqui para compilar. Três palpites, três ciclos de CI desperdiçados.
+
+**O token.** PAT **fine-grained**, âmbito **apenas `pdr625/tmsiequipment`**, permissão única
+**`Actions: Read-only`**. Não é o token do §9 e não o substitui: aquele faz `pull` de imagens,
+este lê logs. Dois âmbitos separados, de propósito.
+
+```bash
+read -rsp 'PAT: ' P && printf '%s' "$P" > ~/tmp/tmsi-sudo/github-actions-read.txt && unset P
+chmod 600 ~/tmp/tmsi-sudo/github-actions-read.txt
+```
+
+Sem newline final, `600`, ao lado dos outros segredos de teste. **Inspeccionar só por `wc -c`,
+`wc -l` e `stat`** — nunca `cat`/`head`/`tail`/`od`, nem parciais (regra do
+`~/atelier-vps/CLAUDE.md`, três recidivas).
+
+**Escrow (§6): este token entra no `tmsi-secrets-<data>.gpg`**, junto do `.env` e do PAT do GHCR,
+**e o escrow é re-cifrado quando ele nascer ou rodar** — a mesma regra que já vale para o `.env`.
+Sem isso, uma recuperação de raiz fica outra vez cega à CI, que é precisamente o momento em que
+mais se precisa dela.
+
+**Uso:**
+
+```bash
+scripts/ci-log.sh              # o HEAD actual
+scripts/ci-log.sh 21bfa2f      # um sha
+scripts/ci-log.sh 21bfa2f --tudo
+```
+
+Devolve o passo que falhou e as linhas com `Type error` / `error TS####` / `Failed to compile`.
+Nunca imprime o token nem o cabeçalho de autorização.
+
+**Rotação:** junto dos outros tokens da conta, no inventário do dossier
+(`CREDENTIALS-INVENTORY.md`).
+
 ## 10. Moving to the company server (E6, not started)
 
 Same procedure as §5's restore, on new hardware, plus:

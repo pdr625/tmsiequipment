@@ -249,6 +249,38 @@ Uma redução legítima escreve `rewrite` na mensagem e explica porquê; fica no
 
 ---
 
+## Nenhuma alteração a `app/src` sem ler o resultado da CI
+
+**Não há Node neste VPS, por desenho** — 961 MB de RAM, e construir aqui causa OOM (regra dos
+recursos do `~/atelier-vps/CLAUDE.md`). Logo **o `typecheck` é da CI, e é a única forma de saber
+se o código compila.** Escrever cinco ficheiros de app e empurrar sem ler o resultado é trabalhar
+às cegas.
+
+**A ferramenta:** `scripts/ci-log.sh [sha]` — diz o passo que falhou e imprime as linhas com
+`Type error`, `error TS####` ou `Failed to compile`, pela API das Actions, sem `gh`. Precisa de um
+PAT *fine-grained* com `Actions: Read-only`, em `~/tmp/tmsi-sudo/github-actions-read.txt` (600) e
+**no escrow** (`DEPLOY.md` §6).
+
+**O ciclo, e não é negociável:** empurrar → `scripts/ci-log.sh` → **ler** → só depois implantar ou
+continuar a escrever.
+
+### Commits de app: pequenos, um assunto cada
+
+**Para a CI poder dizer qual deles parte.** A 2026-09-23 o lote de apresentação foi **um** commit
+com cinco ficheiros e sete alterações de comportamento; falhou o `npm run build` e não havia forma
+de saber qual das sete. Seguiram-se **três palpites e três ciclos de CI desperdiçados**, cada um
+de minutos, quando o log tinha a resposta desde o primeiro.
+
+Esse lote devia ter sido **quatro** commits: (1) paralelizar os `await`; (2) `prefetch={false}` e
+`cache()` no branding; (3) colunas explícitas e formatação; (4) coluna de estado e ordenação. Com
+quatro, a primeira falha isolava-se sozinha.
+
+**A regra do desempenho já dizia metade disto** — *nunca correr o passo pesado na mesma
+sessão/processo que está a decidir se ele deve correr*. Esta é a outra metade: **nunca escrever o
+lote inteiro antes de saber se a primeira linha dele compila.**
+
+---
+
 ## Provas: contagens e identificadores, nunca valores
 
 Nada de preços, custos ou margens reais em output, logs, relatórios ou commits. Para comparar
