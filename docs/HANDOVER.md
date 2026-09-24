@@ -2,59 +2,76 @@
 
 Copyright © 2026 Pedro Alexandre. Proprietary — see ../LICENSE.
 
-**Escrito:** 2026-09-24, no fim da sessão «E6, parte 1 — preparar a apresentação à equipa».
-**Estado:** a app está pronta para ser mostrada. O que falta é a apresentação, o despachante
-(item 32) e a licença. A versão anterior deste ficheiro (latência, 23/09) está no git
-(`git show a258215:docs/HANDOVER.md`); o essencial dela passou para o `STATE.md` e o `ROADMAP.md`.
+**Escrito:** 2026-09-24, no fim da sessão «0021 — `me()`, nome do artigo na vista, `settings`, e o lote
+de app pendente». **Estado:** a app está pronta para ser mostrada; falta a apresentação, o despachante
+(item 32) e a licença. A versão anterior deste ficheiro (E6 parte 1) está no git
+(`git show b16ff0f:docs/HANDOVER.md`); o essencial passou para o `STATE.md` e o `ROADMAP.md`.
 
 ---
 
 ## 1. Onde isto está
 
-**Produção:** revisão `392770f`, digest `sha256:345a31c92f01…`, `healthy`. Migrações **0001–0020**.
-Smoke **129/129**, verde nos três modos. Execução n.º 6 do protocolo (23/09) — **esta sessão não
-tocou em RLS, vistas nem privilégios**, logo não pede execução nova.
+**Produção:** revisão `3fcf3f8`, digest `sha256:3f5be0e1f424…`, `healthy`. Migrações **0001–0021**.
+Smoke **164/164**, verde nos três modos. **Execução n.º 7** do protocolo (24/09), sobre 0001–0021.
 
 | | |
 |---|---|
 | Artigos reais | 49 carregados · **46 `active`** · 3 `draft` (`T-1002`, `T-1020`, `T-1025`) |
 | Contas de teste | seis `@example.test`, password única partilhada até à produção — `docs/TEST-ACCOUNTS.md` |
-| Roadmap | **`docs/ROADMAP.md` é agora a v6**; a v5 está em `docs/archive/ROADMAP-v5.md` |
-| Guião da demo | `docs/DEMO-SCRIPT.md` |
-| Onboarding | `docs/PILOT-ONBOARDING.md` (inglês, reescrito contra o estado real) |
+| Roadmap | `docs/ROADMAP.md` (v6) · guião da demo `docs/DEMO-SCRIPT.md` · onboarding `docs/PILOT-ONBOARDING.md` |
+| Dump antes da 0021 | `~/backups/tmsi/tmsi-pre-0021-20260924-170043.dump` |
+
+**O que mudou nesta sessão, em três linhas:** `tmsi.me()` dá a identidade numa só chamada e o
+`/prices` e os dois exports usam-na; `v_branch_prices` traz nome, categoria, estado e tipo (o
+`v_products` deixou de ser pedido); o `finance` já não escreve o aviso operacional, e ninguém em
+`authenticated`/`anon` tem `TRUNCATE`. Mais os itens 77, 78, 79 e 81.
 
 ---
 
 ## 2. Coisas vivas que a sessão seguinte tem de saber
 
-- **O aviso «preços operacionais» não tem linha em `settings` até o admin lhe tocar.** Ausente =
-  ligado, por desenho. Não criar a chave por psql: a autoria seria nula ou emprestada.
-- **Depois da demo, o `T-0004` fica com um override de margem aprovado** (artigo fictício, CORP)
-  **e há uma proposta de câmbio rejeitada** no histórico. A proposta fica — é registo. O override
-  remove-se: `select id, kind, valid_from from tmsi.price_overrides where product_id = 'T-0004'
-  order by id;` — o de maior `id` com motivo «demo». Transacção, contagem antes/depois.
-  *Só se a demo tiver acontecido — confirmar com o Pedro.*
-- **Um câmbio nunca se aprova numa demo.** Só o admin aprova (proposta sem filial), e aprovar move
-  os preços reais da moeda inteira. Está no guião; não reinventar.
+- **A chave `operational_price_notice` já existe em `settings`** (o Pedro tocou-lhe). Ausente = ligado,
+  por desenho; agora só o admin a escreve, **também na BD**. O `finance` continua a escrever os seis
+  limiares (`margin_*`, `fx_tolerance`, `fx_source`, `review_days`) — é o item 82.
+- **Depois da demo, o `T-0004` fica com um override de margem aprovado** (artigo fictício, CORP) **e há
+  uma proposta de câmbio rejeitada** no histórico. A proposta fica — é registo. O override remove-se:
+  `select id, kind, valid_from from tmsi.price_overrides where product_id = 'T-0004' order by id;` — o
+  de maior `id` com motivo «demo». Transacção, contagem antes/depois. *Só se a demo tiver acontecido —
+  confirmar com o Pedro.*
+- **Um câmbio nunca se aprova numa demo.** Só o admin aprova, e aprovar move os preços reais da moeda
+  inteira. Está no guião; não reinventar.
+- **`anon` chamar `me()` dá 401/403, não «zero linhas».** A guarda da convenção proíbe `EXECUTE` a
+  `anon`; o corpo devolve 0 linhas a uma sessão sem `auth.uid()` como segunda camada.
+- **Um smoke que rebenta a meio deixa o `T-9698` em `tmsi.products`** e a corrida seguinte falha com
+  `duplicate key` (item 83). Apagar só esse id, com contagem antes/depois.
+- **Corridas seguidas do smoke em modo `login` podem dar `http_503` no login** (não diagnosticado, item
+  83). O modo `jwt` não é afectado.
 
 ---
 
 ## 3. O que fica para o Pedro — lista de browser, por ordem
 
-1. **Agora, nesta sessão:** passar o rato pelos seis botões de âmbito do `/prices`, **zero
-   cliques** → `scripts/contar-pedidos.sh 5` deve dar `PREFETCH: 0` (ou nenhuma linha
-   `PREFETCH`).
-2. **Como admin** → `Pricing configuration` → *Operational price notice*: **Hide notice** → abrir
-   `/prices` (o aviso sumiu) → **Show notice** → volta. É a prova do interruptor e deixa a chave
-   criada com a tua autoria.
-3. **Como `finance.test`** → `/config`: a secção *Operational price notice* **não** aparece; na
-   tabela Settings a linha `operational_price_notice` está **só de leitura**.
-4. **Como `sales.sa`** → `/prices`: aviso no topo · clicar **TBM** → «No prices visible…» ·
-   **Export**: sem `Alert`, sem custos, aviso no rodapé · **Print**: aviso na pré-visualização.
-5. **Como `finance.test`** → `/prices?branch=SA` → **Export**: coluna `Alert` presente, e
-   **vazia** nos `T-1050`/`T-1051`/`T-1052` · filtro **draft** → os três, sem erro, a âmbar.
-6. **Como `finance.test`** → `Products` → `T-1050`: `Alert` vazio.
-7. **Checklist dos 10 minutos** antes da reunião: `DEMO-SCRIPT.md` §0.
+1. **Agora, nesta sessão — o que mede a sessão.** Como admin, **uma só carga** de `/prices` (URL
+   directo, sem cliques nem passar o rato por nada), esperar meio minuto, e correr
+   `scripts/contar-pedidos.sh 2`. **Previsto: 8 pedidos ao backend** (middleware 2 + `me`,
+   `v_branch_prices`, `branches`, `channels`, `v_current_branding`, `settings`), 1 carregamento
+   completo; **antes eram 11**. O prompt da sessão contava 5 — esqueceu o middleware e o aviso, ver
+   `STATE.md` e o item 85.
+2. **Item 81:** ainda como admin, `Back` para a página inicial e passar o rato pelo menu, **sem
+   clicar**; `scripts/contar-pedidos.sh 2` → **`PREFETCH: 0`** (antes: 12).
+3. **Como `finance.test` → `/config`:** a tabela Settings mostra os limiares **editáveis** — grava um
+   sem o mudar (deve dar certo: é o que a política nova preserva) — e `operational_price_notice`
+   **só de leitura**.
+4. **Como `sales.sa` → `/products/<qualquer>`:** a tabela de preços **sem** coluna `Alert` (item 79).
+   **Como `finance.test` → `/products/T-1050`:** a coluna `Alert` **presente e vazia**.
+5. **Como `sales.sa` → `/prices`:** aviso no topo · clicar **TBM** → «No prices visible…» ·
+   **Export**: sem `Alert`, sem custos, aviso no rodapé, e **«Generated by» com o nome** (agora vem de
+   `me()`). **Como `finance.test` → `/prices?branch=SA` → Export:** coluna `Alert` presente, vazia nos
+   `T-1050/1/2`, nome em «Generated by».
+6. **`/privacy`** (qualquer conta): «access logs (**90 days**)».
+7. **Repetir o ensaio da demonstração depois deste deploy** (`DEMO-SCRIPT.md` §0, checklist dos 10
+   minutos): mexeu-se na página de preços, nos exports, no menu e na coluna `Alert` do produto — as
+   quatro coisas que a demo mostra.
 8. Ainda em aberto da execução n.º 5 (`VERIFICATION-PROTOCOL.md`): exports como `logistics.test`,
    branding no `.xlsx`, fluxos de email, dashboard (passo V).
 
@@ -62,44 +79,32 @@ tocou em RLS, vistas nem privilégios**, logo não pede execução nova.
 
 ## 4. Decisões que são tuas — só as novas desta sessão
 
-1. **Item 80 — o aviso é admin-only na app, não na BD.** A RLS de `settings` deixa `finance`
-   escrever qualquer chave; com um pedido directo, um `finance` consegue desligar o aviso. Aceitar
-   (risco baixo), ou fechar na BD (migração).
-2. **A demo do câmbio** vai **até à rejeição**, não até à aprovação (§2 acima, e o porquê no
-   `DEMO-SCRIPT.md` §4). Se quiseres mesmo mostrar um câmbio aprovado, é com a tua conta admin e
-   mexe nos preços reais dessa moeda — não recomendo.
-3. **Itens 77–79**, pequenos, sem pressa mas antes de haver colegas reais: `/privacy` diz 14 dias
-   de registos de acesso e são 90 (77); a guarda de documentos não vê `git rm`/`git mv` (78); a
-   coluna `Alert` vazia no `/products/[id]` para quem não lê custos (79).
+1. **Item 82 — o `finance` escreve os limiares de margem sem proposta nem aprovação.** Decide o `Alert`
+   que a equipa vê (`margin_min` = onde começa o «crítico»). Manter, pôr no fluxo de proposta, ou
+   admin-only (parte os formulários do `finance` no `/config`).
+2. **Item 84 — a `/privacy` diz «cópias nocturnas, 30 dias».** Há uma cópia diária sem purga
+   (`window`) e uma semanal com 8 guardadas. Qual é a política declarada?
+3. **Item 85 — o que sobra por carregamento** (o `profiles` do middleware pede o que `me()` já
+   devolve; o aviso e o branding podiam viajar juntos; a página inicial faz vários pedidos de identidade seguidos).
+   Só com gatilho de medição — não há urgência.
 
 ---
 
-## 4b. Próxima sessão de app — decidido pelo Pedro, 2026-09-24
-
-Uma sessão, com dois assuntos:
-
-1. **Migração 0021**, que junta os itens **75** (nome e categoria na vista de preços), **76**
-   (`tmsi.me()`, o que resta do item 74) e **80** (aviso admin-only também na BD). É migração:
-   guardas do `PUBLIC` e das `reloptions` (`CLAUDE.md`), impressão digital idêntica, execução do
-   protocolo.
-2. **Item 81:** os links do menu da página inicial passam a botões com `router.push`, como o
-   `<FilterButton>` do `/prices`. É um commit de app só com isto, e a prova é a mesma: `contar-pedidos.sh` com
-   `PREFETCH: 0` depois de voltar ao menu e passar o rato pelos links.
-
-Um assunto por commit, e a CI lida entre cada um.
-
 ## 5. O que NÃO fazer já
 
-- **Item 71 (`price_cache`)** — só com gatilho: 4 s no «All branches» com host calmo, ou 200
-  artigos reais.
+- **Item 71 (`price_cache`)** — só com gatilho: 4 s no «All branches» com host calmo, ou 200 artigos reais.
 - **§4.3 do roadmap** (renome de infra, CPI, EOP) — suspenso até à licença.
 - **Desactivar as contas `.test`** — só na fase de produção.
+- **Tocar no middleware** — o item 76 decidiu que o `getUser()` dele fica; o item 85(a) só se reabre por decisão tua.
 
 ---
 
 ## 6. Leituras obrigatórias antes de escrever código
 
-**`CLAUDE.md`** (raiz do repo) — todas as regras nasceram de defeitos reais. As que mais pesaram
-nesta sessão: **nenhuma alteração a `app/src` sem ler a CI** (`scripts/ci-log.sh`), **um assunto
-por commit**, e **toda a substituição com asserção** — uma parou hoje uma substituição cuja
-contagem estava errada (uma substring contida noutra), antes de escrever o ficheiro.
+**`CLAUDE.md`** (raiz do repo) — todas as regras nasceram de defeitos reais. As que mais pesaram nesta
+sessão: **nenhuma alteração a `app/src` sem ler a CI** (`scripts/ci-log.sh`) — foi o log que localizou o
+comentário JSX mal posto do `f516ca7` à primeira leitura —, **um assunto por commit**, **toda a
+substituição com asserção**, **guardas da convenção no fim da migração** (funções, `reloptions`,
+`TRUNCATE`), e a regra nova: **nenhuma tabela de `tmsi` tem `TRUNCATE` para `authenticated`/`anon`**.
+Uma migração escreve-se com `pg_get_functiondef`/`pg_get_viewdef` da produção, ensaia-se em transacção
+revertida com as 9 identidades, e **mostra-se ao Pedro antes de aplicar**.

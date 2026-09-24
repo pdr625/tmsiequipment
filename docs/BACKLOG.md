@@ -694,8 +694,13 @@ sofre com concorrência (medido: 0,141 s isolado, 1,232 s sob a tempestade de *p
 crítico (corre dentro do `Promise.all`, em paralelo com a consulta de preços, que é mais lenta),
 logo já não custa relógio — mas continua a ser uma chamada ao GoTrue por carregamento.
 
-**75. Nome do artigo na consulta de preços — precisa de migração** — **MEDIDO 2026-09-24**, e
-as duas vias sem migração **não existem**:
+~~**75. Nome do artigo na consulta de preços — precisa de migração**~~ ✅ **FECHADO 2026-09-24 —
+0021 + `eb10427`/`cabfdb4`.** `v_branch_prices` passou a projectar `name`, `category_id`, `status` e
+`item_type` (quatro, e não duas: o ecrã também filtra por estado e decide o `Alert` por tipo);
+`v_selling_prices` **já** os projectava e não foi tocada. O `/prices` e o export deixaram de pedir
+`v_products`. Impressão digital das 20 colunas antigas idêntica em 10/10 identidades.
+
+*Original — **MEDIDO 2026-09-24**, e as duas vias sem migração **não existem**:*
 
 | Via | Resultado, medido |
 |---|---|
@@ -718,8 +723,13 @@ de aceitação: só se acrescentam colunas.
 **Custo de não fazer:** um pedido por carregamento (o `v_products`, um dos oito). Barato — tabela
 e RLS, sem `compute_price`.
 
-**76. O `/auth/v1/user` duplicado: a via do middleware foi avaliada e REJEITADA** — **2026-09-24**,
-substitui a opção 1 do item 74.
+~~**76. O `/auth/v1/user` duplicado: a via do middleware foi avaliada e REJEITADA**~~ ✅ **FECHADO
+2026-09-24 — `tmsi.me()` (0021) + `eb10427`/`cabfdb4`.** `SECURITY INVOKER`, uma linha, filtra por
+`auth.uid()`; a página e os dois exports (`/prices`, `/products`) trocaram `getUser()` + `profiles` +
+`can_read_costs()` por ela. O middleware não mudou. Único alargamento RPC: `my_channels()` passou a
+ter `EXECUTE` a `authenticated` (é o que o invoker precisa; devolve só os canais do próprio).
+
+*Original — 2026-09-24, substitui a opção 1 do item 74.*
 
 Passar a identidade por cabeçalho obriga a construir o `NextResponse` com
 `{ request: { headers } }` em **dois** sítios: na criação inicial **e dentro do `setAll`** — que é
@@ -741,28 +751,47 @@ mais lenta. O ganho é de **carga** no GoTrue (0,141 s isolado, **1,232 s sob co
 toca no middleware, e substitui `getUser()` **e** o `profiles` da página por uma chamada — **8 →
 7**. É migração.
 
-**77. O `/privacy` diz que os registos de acesso ficam 14 dias; ficam 90** — **REGISTADO
-2026-09-24**, ao escrever as respostas da demo. O item 66 passou o `logrotate` a `rotate 90` a
+~~**77. O `/privacy` diz que os registos de acesso ficam 14 dias; ficam 90**~~ ✅ **FECHADO
+2026-09-24 — `3fcf3f8`.** Página e nota de tratamento de dados dizem 90; a nota passou a declarar
+também o `tmsi-timing.log` (mesmo IP e URL, `rotate 90`). Bloco `OO` do smoke lê o `rotate N` do
+logrotate e compara. *(Ao verificar apareceu o item 84.)*
+
+*Original — **REGISTADO 2026-09-24***, ao escrever as respostas da demo. O item 66 passou o `logrotate` a `rotate 90` a
 20/09, e a página (`app/src/app/privacy/page.tsx`, «access logs (14 days)») e o
 `docs/DATA-PROCESSING-NOTICE.md` não foram actualizados. Uma nota de tratamento de dados que
 subdeclara a retenção é o erro no sentido errado. Correcção de texto, um commit de app. O
 `DEMO-SCRIPT.md` avisa para dizer 90 de viva voz até lá.
 
-**78. A guarda de documentos ignora ficheiros apagados e renomeados** — **REGISTADO
-2026-09-24.** `scripts/hooks/commit-msg` só avalia entradas `M` do `git diff --cached
+~~**78. A guarda de documentos ignora ficheiros apagados e renomeados**~~ ✅ **FECHADO 2026-09-24 —
+`8fea7f0`.** `D` conta como perda de 100%; `R` compara com `HEAD` (movido para fora de `docs/` =
+100%); `git mv -f A B` sobre um B existente sai como `D A` + `M B`, medido, logo o `D` também o
+cobre. Sem falsos positivos em renomear dentro de `docs/`. Provado pelo ramo negado num `git rm` real
+(recusado, ficheiros repostos) e no bloco `GG` do smoke (o hook anterior dá 0/0, este 1/0).
+
+*Original — **REGISTADO 2026-09-24.*** `scripts/hooks/commit-msg` só avalia entradas `M` do `git diff --cached
 --name-status`: um `git rm docs/X.md`, ou um `git mv` que substitua um ficheiro por outro,
 **passam sem verificação** — e perder um documento inteiro é o caso extremo do que a guarda existe
 para apanhar. Visto ao promover o roadmap (a proposta saiu como `D`). Proposta: tratar `D` como
 perda de 100%, e `R` comparando com o conteúdo do destino que existia em `HEAD`. Acrescentar ao
 bloco `GG` o caso do `git rm`.
 
-**79. `/products/[id]` desenha a coluna `Alert` a todos os papéis** — **REGISTADO 2026-09-24**,
-cosmético. Custo e margem são condicionais a `canReadCosts`; o `Alert` não. **Não é fuga**
+~~**79. `/products/[id]` desenha a coluna `Alert` a todos os papéis**~~ ✅ **FECHADO 2026-09-24 —
+`83fab8b`** (o `f516ca7` partiu a CI com um comentário JSX mal posto; ver STATE). `<th>`, `<td>` e o
+`colSpan` da linha de erro acompanham `canReadCosts`. Bloco `NN` do smoke.
+
+*Original — **REGISTADO 2026-09-24**, cosmético.* Custo e margem são condicionais a `canReadCosts`; o `Alert` não. **Não é fuga**
 (medido por claims: `compute_price` devolve 0 alertas a `sales` e a `logistics`, 46 linhas cada),
 mas é uma coluna sempre vazia para os papéis sem custos — e é o papel que vai ver a app na demo.
 Um `canReadCosts &&` no `<th>` e no `<td>`.
 
-**80. O aviso operacional é admin-only na app, não na BD** — **REGISTADO 2026-09-24.** A política
+~~**80. O aviso operacional é admin-only na app, não na BD**~~ ✅ **FECHADO 2026-09-24 — 0021.**
+Decisão do Pedro: só o aviso, não a tabela — o `finance` escreve legitimamente seis chaves
+(`margin_good`, `margin_min`, `margin_target`, `fx_tolerance`, `fx_source`, `review_days`) pelo
+`/config`. `config_write` passou a `admin OR (finance AND key <> 'operational_price_notice')`, com o
+mesmo predicado no `WITH CHECK` (também não se renomeia outra chave para o aviso). Medido antes/depois:
+`finance` no aviso 1→0 linhas, nos limiares 1→1. A assimetria dos limiares ficou no item 82.
+
+*Original — **REGISTADO 2026-09-24.*** A política
 `config_write` de `tmsi.settings` deixa **admin e finance** escrever qualquer chave. O
 `setPriceNotice`/`updateSetting` recusam a quem não é admin, mas um `finance` com o token dele e um
 pedido directo ao PostgREST consegue desligar o aviso. Risco baixo (o finance já escreve a política
@@ -770,9 +799,12 @@ de margem, que é mais grave), mas é a distância entre o pedido («admin-only�
 Fechar na BD = uma política por chave, ou `operational_price_notice` fora de `settings` — migração.
 **Decisão do Pedro.**
 
-**81. A página inicial pré-carrega os 12 ecrãs do menu a cada visita** — **DECIDIDO pelo Pedro
-2026-09-24: botões com `router.push`, como nos filtros do `/prices`** (zero também no hover). Fica
-para a próxima sessão de app, junto com a 0021. — **MEDIDO
+~~**81. A página inicial pré-carrega os 12 ecrãs do menu a cada visita**~~ ✅ **FEITO 2026-09-24 —
+`cea1947`, prova de browser pendente.** Os 13 `<Link>` passaram a `<MenuButton>` (`router.push`);
+bloco `MM` do smoke. Falta a prova do Pedro: `contar-pedidos.sh` com «Back» e rato pelo menu →
+`PREFETCH: 0`.
+
+*Original — **DECIDIDO pelo Pedro 2026-09-24: botões com `router.push`** (zero também no hover). — **MEDIDO
 2026-09-24, 12:19:57–59**, na prova de browser do prefetch dos filtros (que deu zero para o
 `/prices`). Os `<Link>` de `app/src/app/page.tsx` não têm `prefetch={false}`, e o App Router
 pré-carrega por viewport todos os que estão no ecrã: **12 renders completos no servidor**, cada um
@@ -783,6 +815,48 @@ Não — o item 73 mostrou que não. Para zero, a página inicial precisa do mes
 filtros do `/prices` (`router.push` ao clique). Um commit de app, sem migração. Aceitar
 o prefetch por hover no menu (um ecrã de cada vez) é uma decisão possível. O por viewport não
 tem nada que o justifique.
+
+**82. O `finance` escreve os limiares de margem sem proposta nem aprovação** — **REGISTADO
+2026-09-24, a pedido do Pedro, para decidir mais tarde.** `margin_min`, `margin_target` e
+`margin_good` (e `fx_tolerance`, `review_days`, `fx_source`) vivem em `tmsi.settings` e o `finance`
+altera-os por escrita directa (`updateSetting`, `config_write`), **sem** o fluxo de proposta e
+aprovação da 0007 que protege câmbios, transporte, direitos, grelhas de margem e overrides. A 0007
+deixou-os de fora de propósito («afinam limiares de alerta, não um valor que o `compute_price`
+devolva»). **A assimetria que interessa:** `margin_min` decide o `Alert` (`critical` abaixo dele) que
+o ecrã mostra — não muda um preço, muda **o que a equipa julga estar em risco**. Um único papel
+consegue redefinir o que é «crítico» sem segunda pessoa e sem que fique nada além da linha do
+`audit_log`. Opções: manter (limiares são configuração de leitura, o audit chega); pô-los no fluxo de
+proposta; ou admin-only (parte os seis formulários do `/config` do `finance`). **Decisão do Pedro.**
+
+**83. O smoke deixa o artigo fictício se rebentar a meio** — **REGISTADO 2026-09-24**, causado e
+visto nesta sessão. O `T-9698` é criado a seguir ao login e só apagado no fim do `main()`; uma
+excepção no meio (aqui um `IndexError` numa asserção nova) deixa-o em `tmsi.products`, e a corrida
+seguinte rebenta com `duplicate key`. Apagado à mão (só esse id, contagem 63→62 verificada).
+**Correcção:** `try/finally` à volta dos blocos, ou apagar o fixture no início. **Visto também:** duas
+corridas em modo `login` seguidas deram um `http_503` no login (à terceira, passou; não
+diagnosticado — o palpite é o limite de pedidos do nginx da zona de auth, item 54, mas não foi
+verificado).
+
+**84. A `/privacy` e a nota de dados dizem «cópias nocturnas, 30 dias» — a realidade é outra** —
+**REGISTADO 2026-09-24**, ao verificar o item 77. Existem dois serviços de cópia: `tmsi-backup-window`
+(diário, «janela de carga do catálogo real», sem purga visível) e `tmsi-backup-weekly`
+(`tail -n +9`: guarda as 8 semanais mais recentes, ~56 dias). Nenhum é «nocturno, 30 dias». Não
+mexido (fora do item 77): a declaração certa depende de qual dos dois é a política — **decisão do
+Pedro** — e de a `window` ter ou não fim. Igual à lição do 77: subdeclarar retenção é o erro no
+sentido errado.
+
+**85. Pedidos por carregamento que sobram no `/prices`** — **REGISTADO 2026-09-24. O «antes» (11) está
+medido no log; o «depois» é PREVISTO por leitura do código até o Pedro o medir** (ver STATE, métrica
+da sessão). Depois da 0021 e do deploy, devem ficar: **middleware** (`auth/v1/user` + `profiles` de
+`must_change_password`, 2), `me`, `v_branch_prices`, `branches`, `channels`, `v_current_branding` e
+`settings` (o aviso operacional, item 32). O prompt da sessão contava 5; o número real é maior
+porque o middleware (2) e o aviso (1) não estavam na conta. (O 8 do item 73 tinha o middleware e não tinha
+`v_products`, o nome de quem gera nem o aviso: 8 → 11 no lote de 23–24/09 → 8 com a 0021.) **Próximas oportunidades, nenhuma
+feita:** (a) o `profiles` do middleware pede o mesmo que `me()` devolve (`must_change_password`) —
+mexe no middleware, que o item 76 mandou não tocar; (b) `getPriceNotice()` e `getBranding()` são
+duas leituras pequenas por página que podiam viajar juntas; (c) a página inicial faz `getUser()` +
+`has_role` ×2 + `pricingConfigReadAccess` + `canReadAuditLog` + branding — `me()` cobre quase
+tudo. Só com gatilho de medição.
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,

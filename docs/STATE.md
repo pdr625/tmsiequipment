@@ -3,7 +3,14 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: E6, apresentação à equipa PREPARADA — 2026-09-24.** Revisão `392770f` em produção
+**Etapa actual: sessão 0021 — `me()`, vista de preços com nome/categoria/estado/tipo, aviso operacional
+só do admin, sem `TRUNCATE` — 2026-09-24.** Revisão `3fcf3f8` em produção (digest
+`sha256:3f5be0e1f424…`), migrações 0001–0021, smoke **164/164** nos três modos, execução n.º 7 do
+protocolo. A página `/prices` e os dois exports pedem a identidade uma vez (`tmsi.me()`), a página
+inicial deixou de pré-carregar o menu, e os itens 75–81 fecharam (o 81 aguarda a prova de browser).
+Detalhe: secção seguinte. **Ainda por medir com o Pedro:** os pedidos por carregamento, depois.
+
+**Etapa anterior: E6, apresentação à equipa PREPARADA — 2026-09-24.** Revisão `392770f` em produção
 (digest `sha256:345a31c92f01…`), smoke **129/129** nos três modos. Os filtros do `/prices` deixaram de
 pré-carregar ao hover, o item 67 foi decidido e feito, o aviso «preços operacionais» (item 32) está
 vivo, o onboarding e o README descrevem o estado real, há guião da demo (`docs/DEMO-SCRIPT.md`) e o
@@ -27,6 +34,90 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 0021 — `me()`, colunas de artigo, aviso admin-only, sem TRUNCATE (2026-09-24)
+
+**Implantado:** revisão `3fcf3f8`, digest `sha256:3f5be0e1f4242a9d29ba0fd2aece29ea42a639a86dcfde6b83d9af23cc0774c3`,
+`healthy`, `/api/health` 200. **Smoke 129 → 164**, verde nos três modos (omissão, `login`, `jwt` sem
+credenciais). Dump antes da migração: `tmsi-pre-0021-20260924-170043.dump` (755 entradas no TOC).
+
+### Bloco A — migração 0021 (`602eca2`), aplicada com dump antes
+
+Ensaio em transacção revertida, **9 identidades + uma sem papel**, repetido depois de acrescentar o
+`TRUNCATE`; zero resíduo verificado (contagens, política, existência de `me()` e `my_channels`).
+
+| | Resultado |
+|---|---|
+| Contagens das 5 vistas | idênticas em todas as identidades (283 / 184 / 92 / 57 / 46 / 0; `anon` recusado) |
+| Impressão digital | `v_branch_prices` sobre as **20 colunas antigas** idêntica 10/10; as quatro novas ficam fora do md5 de propósito (senão mudava por definição), e são verificadas à parte contra `products`: 0 discordantes |
+| `reloptions`, dono, ACL | inalterados nas cinco vistas; a ACL só perde o `D` do TRUNCATE (verificado com o `D` retirado dos dois lados) |
+| `me()` | igual à matriz por papel, sempre só o próprio; `anon` recusado; JWT sem `sub` → 0 linhas |
+| `settings` | `finance` no aviso: update 1→0, delete 1→0, renomear → `RECUSADO`; nos limiares 1→1 |
+| `TRUNCATE` | 30 concessões a `authenticated` → 0; `service_role` mantém as 26 dele; `SELECT/INSERT/UPDATE/DELETE` 121→121 |
+| Item 69 | com `branch_id=APAC` o braço de filial não chama o `compute_price` («never executed») |
+
+**Desvios ao que foi pedido, todos decididos pelo Pedro no ficheiro antes de aplicar:**
+1. **`v_selling_prices` já projectava** `name`, `category_id`, `status` e `item_type` — não foi tocada. Em
+   `v_branch_prices` foram **quatro** colunas e não duas (o ecrã filtra por estado e decide o `Alert` por
+   tipo), com os nomes da `v_selling_prices`; `category_id` e não o nome da categoria.
+2. **Item 80: o `finance` escreve seis chaves pela app** (`margin_good/min/target`, `fx_tolerance`,
+   `fx_source`, `review_days`), logo a tabela não passou a admin-only: só o aviso.
+3. **`anon` recusado por privilégio, não «zero linhas»:** a guarda da convenção proíbe `EXECUTE` a `anon`.
+4. **`my_channels()` ganhou `EXECUTE` a `authenticated`** — o único alargamento RPC; o `me()` invoker precisa.
+5. **`TRUNCATE`:** eram **26 tabelas e 4 vistas**, não só as três nomeadas. `REVOKE`, `ALTER DEFAULT
+   PRIVILEGES` (aqui funciona, ao contrário do PUBLIC do item 65: revoga-se uma entrada que existe em
+   `pg_default_acl`) e guarda da convenção.
+
+### Bloco B — um commit por assunto, CI lida antes do seguinte
+
+| Commit | Assunto | CI |
+|---|---|---|
+| `eb10427` | `/prices`: `me()` e colunas novas, sem `v_products` | ✅ #56 |
+| `cabfdb4` | `/prices/export` e `/products/export` com `me()` | ✅ #57 |
+| `cea1947` | Item 81: menu da página inicial com `router.push` | ✅ #58 |
+| `f516ca7` | Item 79: coluna `Alert` só para quem lê custos | ❌ #59 |
+| `83fab8b` | Correcção do anterior | ✅ #60 |
+| `3fcf3f8` | Item 77: retenção a 90 dias | ✅ #61 |
+| `8fea7f0` | Item 78: guarda de docs/ com apagados e movidos | — fora de `app/**` |
+| `f83d7b8` | Digest em produção | — |
+
+**O `f516ca7` partiu a CI, e foi o `ci-log.sh` que disse porquê.** O `Turbopack` parou em
+`products/[id]/page.tsx:271:18`, `Expected '</'`: pus um comentário JSX `{/* */}` **dentro** de `( … )`,
+ao lado da `<table>` — duas expressões adjacentes. Um comentário JSX só é válido como irmão de um
+condicional, não dentro dele. Uma leitura do log e uma correcção; não houve palpites.
+
+**Todas as asserções novas do smoke foram provadas a falhar** contra a versão anterior (o ficheiro do
+`HEAD` para as estáticas; uma cópia invertida para as de dados; um `git rm` real recusado para o hook).
+
+### A métrica da sessão — pedidos por carregamento do `/prices`
+
+**Antes — MEDIDO no log de timing** (carga completa de 24/09 às 12:24:14): **11** pedidos da app ao
+backend, não 8. O 8 do item 73 (medição de 23/09) **já incluía** os dois do middleware e ainda não tinha
+`v_products`, o `profiles` do nome de quem gera nem o `settings` do aviso: os três entraram no lote de
+apresentação de 23–24/09 e levaram a conta de 8 a 11 sem que ninguém a refizesse. Discriminados: **middleware 2**
+(`auth/v1/user`, `profiles` de `must_change_password`) + **página 9** (`auth/v1/user`, `profiles`,
+`can_read_costs`, `v_branch_prices`, `v_products`, `branches`, `channels`, `v_current_branding`,
+`settings`).
+
+**Depois — PREVISTO por leitura do código, a medir com o Pedro:** middleware 2 + página 6 (`me`,
+`v_branch_prices`, `branches`, `channels`, `v_current_branding`, `settings`) = **8**; e a página, por si,
+**9 → 6**. **O «5» do prompt não é atingível** sem tocar no middleware (proibido pelo item 76) e sem
+tirar o aviso — **o prompt contava só os pedidos da página e esqueceu o aviso**; nos mesmos termos do
+prompt (só a página), o resultado previsto é **9 → 6**, e no total **11 → 8**, igual ao 8 original de
+23/09: a sessão desfez o crescimento do lote de apresentação, não foi além dele. Fica o item 85. *(Valor medido: por preencher quando o Pedro fizer a carga.)*
+
+### Achados nesta sessão, todos com destino
+
+- **Item 82 (novo):** assimetria dos limiares de margem escritos pelo `finance` sem proposta nem
+  aprovação — pedido do Pedro, para decidir mais tarde.
+- **Item 83 (novo):** o smoke deixa o `T-9698` se rebentar a meio (aconteceu, **causado por mim** com uma
+  asserção nova; apagado à mão, só esse id, 63→62). E um `http_503` no login à 2.ª/3.ª corrida seguida em
+  modo `login`, não diagnosticado.
+- **Item 84 (novo):** a `/privacy` diz «cópias nocturnas, 30 dias»; há um serviço diário (`window`, sem
+  purga) e um semanal (8 guardadas). Achado ao corrigir o 77.
+- **Item 85 (novo):** o que sobra por carregamento e onde está a próxima poupança.
+- A nota de tratamento de dados **não declarava o `tmsi-timing.log`** (mesmo IP e URL que o access log) —
+  passou a declarar.
 
 ## E6, parte 1 — preparar a apresentação à equipa (2026-09-24)
 

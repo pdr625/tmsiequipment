@@ -123,6 +123,25 @@ nada — só se soube ao testar o `GRANT` real, não porque o DDL falhasse.
 
 ---
 
+## Nenhuma tabela de `tmsi` tem `TRUNCATE` para `authenticated` nem `anon`
+
+**Medido a 2026-09-24 (0021): `authenticated` tinha `TRUNCATE` em 26 tabelas e 4 vistas de `tmsi`.**
+O `pg_default_acl` do `postgres` em `tmsi` concede `arwdDxt` a tudo o que se cria, e o `D` é o
+`TRUNCATE`. **Não passa pela RLS** — uma política não o vê — e o PostgREST não o expõe, por isso não
+era alcançável por HTTP; mas fica uma tabela inteira à distância de um pedido SQL directo, ou de uma
+versão futura do PostgREST. Ninguém o usava (grep à app, ao smoke e às migrações).
+
+**O que existe agora:** a 0021 fez `REVOKE` nas existentes e `ALTER DEFAULT PRIVILEGES … REVOKE
+TRUNCATE` para as futuras (aqui **funciona**, ao contrário do PUBLIC do item 65: revoga-se uma entrada
+que existe em `pg_default_acl`, não o privilégio built-in). A guarda está no fim da 0021 **e no bloco
+`LL` do smoke**, que falha se alguma tabela ou vista de `tmsi` voltar a tê-lo — logo uma migração
+futura que crie uma tabela e mude a ACL por omissão parte o smoke em vez de reabrir o buraco em
+silêncio.
+
+Ao **conceder** privilégios a uma tabela nova, não conceder `TRUNCATE` a `authenticated`/`anon`.
+
+---
+
 ## Vista, app, `REVOKE` — por esta ordem
 
 Ao trocar a leitura de uma tabela por uma vista: criar a vista, **migrar a app**, e só então

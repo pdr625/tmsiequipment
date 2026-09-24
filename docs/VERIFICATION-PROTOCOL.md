@@ -1136,6 +1136,67 @@ com `awk`.
 
 ---
 
+### Execução n.º 7 — 2026-09-24 (migrações 0001–0021)
+
+**Porquê:** a **0021** mexe em três coisas que o protocolo cobre — uma função nova invocável por
+`authenticated` (`me()`, mais o `EXECUTE` de `my_channels()`), a vista de preços (`v_branch_prices`
+ganhou quatro colunas) e a RLS de `settings` (`config_write`) — e retira `TRUNCATE` a `authenticated`
+e `anon` em 26 tabelas e 4 vistas. **Âmbito:** 9 identidades (8 papéis + `anon`), 0001–0021, digest
+`3f5be0e1…`, revisão `3fcf3f8`. Medido **sobre a base viva já com a 0021**, em transacção revertida
+(o `viewer` é uma concessão efémera, sem conta `.test`; zero resíduo verificado). Só contagens.
+
+| Capacidade (contagens) | admin | product_mgr | finance | branch_mgr | logistics | sales | agent | viewer | anon |
+|---|---|---|---|---|---|---|---|---|---|
+| Artigos (`v_products`) | 62 | 62 | 62 | 57 | 62 | 46 | 46 | 62 | ❌ |
+| Com custo (`exw_price`) | 62 | 62 | 62 | 57 | **0** | **0** | **0** | 62 | ❌ |
+| Com SAP/fornecedor | 58 | 58 | 58 | 55 | **0** | **0** | **0** | 58 | ❌ |
+| Com HS/peso | 53 | 53 | 53 | 51 | 53 | **0** | **0** | 53 | ❌ |
+| Não-activos visíveis | 16 | 16 | 16 | 11 | 16 | **0** | **0** | 16 | ❌ |
+| Linhas de preço | 283 | 283 | 283 | 57 | 184 | 46 | 92 | 283 | ❌ |
+| Âmbitos | todos | todos | todos | CORP | CORP/LTD/SA/TBM | SA | APAC/TBM | todos | — |
+| Com `total_cost` (breakdown) | 283 | 283 | 283 | 57 | **0** | **0** | **0** | 283 | ❌ |
+| Auditoria global | 5232 | **0** | 5232 | 5232 | **0** | **0** | **0** | 5232 | ❌ |
+| Overrides visíveis ¹ | 491 | 491 | 491 | 101 | 0 | 0 | 0 | 491 | ❌ |
+| Perfis visíveis pela RLS | **10** | 1 | 1 | 1 | 1 | 1 | 1 | 1 | ❌ |
+| Escreve produtos (linhas) | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | ❌ |
+| Escreve um limiar de `settings` | 1 | 0 | **1** | 0 | 0 | 0 | 0 | 0 | ❌ |
+| **Escreve o aviso operacional** | 1 | 0 | **0** | 0 | 0 | 0 | 0 | 0 | ❌ |
+| `TRUNCATE settings` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **`me()`: linhas · só o próprio** | 1 · sim | 1 · sim | 1 · sim | 1 · sim | 1 · sim | 1 · sim | 1 · sim | 1 · sim | ❌ |
+| `me()`: custos / operacional | ✅/✅ | ✅/✅ | ✅/✅ | ✅/✅ | ❌/✅ | ❌/❌ | ❌/❌ | ✅/✅ | — |
+
+¹ O `logistics` mede 0, mas a matriz (§3) diz que vê os `kind=duty`. **0 = 0 não prova nada aqui:** não
+há overrides de direitos na base, logo a linha não exercita a excepção. Não é regressão (a nota ³ da §3 registou-a
+na execução n.º 1, com uma linha inserida em transacção); fica dito para ninguém ler o 0 como confirmação.
+
+**Todas as células batem com a matriz da §3**, e os números por papel (283 / 184 / 92 / 57 / 46)
+são **os da execução n.º 6**: a 0021 não mudou quem vê o quê. As impressões digitais das 20 colunas
+antigas de `v_branch_prices` estão registadas na linha respectiva do relatório (`352f0ec7` para os
+papéis de custos completos, `a64b25d1` bm, `ca0abc44` logistics, `cce4f95c` sales, `e3780409` agent) e
+foram provadas **idênticas antes/depois** no ensaio, com a migração aplicada na mesma transacção.
+
+**Célula nova e permanente: «`me()` devolve só o próprio».** O `admin` vê **10** perfis pela RLS
+(`profiles_self` acrescenta `OR admin`) e mesmo assim `me()` devolve **1**, a sua — é o que torna
+a fronteira não-vazia. Casos de fronteira: `anon` recusado por privilégio; um JWT `authenticated` **sem
+`sub`** devolve 0 linhas, sem erro; um `sub` sem perfil devolve 1 linha com nome nulo e papéis vazios
+(a identidade vem do JWT, não do perfil). Asserções `LL` do smoke.
+
+**Célula nova: «o `finance` não escreve o aviso operacional» (item 80).** Provado pelas mesmas
+instruções antes e depois: 1 → 0 linhas no update e no delete, e o renomear de outra chave para o
+aviso passa de «passou a RLS» a `RECUSADO`. Os limiares mantêm-se 1 → 1: a app depende deles.
+
+**Célula nova: «ninguém em `authenticated`/`anon` tem `TRUNCATE`».** 30 concessões → 0, em todas as
+tabelas e vistas de `tmsi`; `service_role` mantém as 26 dele; as `SELECT/INSERT/UPDATE/DELETE` de
+`authenticated` ficaram em 121 → 121. `ALTER DEFAULT PRIVILEGES` retira-o também das tabelas futuras.
+
+**Smoke: 129 → 164**, verde nos três modos (omissão, `login`, `jwt` sem credenciais).
+
+**NÃO EXECUTADOS — para o Pedro, no browser:** ver `docs/HANDOVER.md` §3 (o `/prices` com uma só
+carga, `contar-pedidos.sh`, o menu da página inicial, o `finance.test` em `/config`, o export de
+`finance.test`/`sales.sa`, a coluna `Alert` do `/products/[id]` como `sales.sa`).
+
+---
+
 ### Execução n.º 6 — 2026-09-23 (migrações 0001–0020)
 
 **Porquê:** a **0020** mexe nas vistas de preço — o gate manda repetir. E mexe na camada de
