@@ -21,6 +21,34 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
 
+## Implantado (2026-09-24) — e as três tentativas que falharam antes
+
+**Revisão `b4eced0`, digest `sha256:2e638227…`, `healthy`, smoke 118/118 nos três modos.**
+
+**Três ciclos de CI falharam antes deste, todos pela mesma causa, e a causa era uma linha:**
+
+```
+src/lib/branding.ts(73,28): error TS2552: Cannot find name 'cache'.
+```
+
+Ao envolver o `getBranding()` em `cache()` do React, a substituição procurou a linha de `import`
+por `from '@/lib/supabase-server'` e o ficheiro tem `from './supabase-server'`. **O `replace` não
+casou, não fez nada, e não disse nada** — o `cache()` ficou a ser usado sem estar importado. Foi
+a única edição da sessão sem `assert`, e foi precisamente a que falhou.
+
+**O que agravou, e é a parte que interessa:** seguiram-se dois palpites sobre inferência de tipos
+(o `.select()` dinâmico, os tuplos do `Map`), **ambos errados**. O `typecheck` reporta *todos* os
+erros e só havia aquele. Ler o log à primeira teria poupado três ciclos de minutos cada — e não
+havia forma de o ler do VPS, o que deu origem ao `scripts/ci-log.sh` e ao PAT do `DEPLOY.md §9b`.
+
+As alterações feitas por palpite ficaram (são mais explícitas e reverter custava outro ciclo), mas
+**não corrigiram nada**.
+
+**Três regras novas no `CLAUDE.md`, todas desta falha:** nenhuma alteração a `app/src` sem ler o
+resultado da CI; commits de app pequenos, um assunto cada (o lote devia ter sido quatro, não um);
+e **uma substituição que não casa é um no-op silencioso** — toda a edição por `replace`/`sed` leva
+asserção.
+
 ## Latência fixa por página: o que a instrumentação do nginx mostrou (2026-09-23)
 
 **A instrumentação.** Um `log_format` próprio (`tmsi_timing`) com `$request_time`,
