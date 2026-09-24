@@ -684,6 +684,53 @@ sofre com concorrência (medido: 0,141 s isolado, 1,232 s sob a tempestade de *p
 crítico (corre dentro do `Promise.all`, em paralelo com a consulta de preços, que é mais lenta),
 logo já não custa relógio — mas continua a ser uma chamada ao GoTrue por carregamento.
 
+**75. Nome do artigo na consulta de preços — precisa de migração** — **MEDIDO 2026-09-24**, e
+as duas vias sem migração **não existem**:
+
+| Via | Resultado, medido |
+|---|---|
+| `v_branch_prices` já expor `name`/`category` | **não expõe** — 20 colunas, nenhuma delas |
+| *Embed* do PostgREST, `products(name,category_id)` | **`http_400`**: `Could not find a relationship between 'v_branch_prices' and 'products' in the schema cache` |
+
+O *embed* precisa de uma relação inferível. A vista é um `UNION ALL` de dois
+`CROSS JOIN LATERAL` sobre uma função — **não há chave estrangeira para detectar**, e declarar
+uma relação computada é criar objectos na BD, ou seja migração.
+
+**A RLS não é o obstáculo:** a 0003 concede a `authenticated` exactamente `name` e `category_id`
+entre as colunas seguras de `products`, logo `sales` e `agent` podiam lê-las. É só a vista não as
+projectar.
+
+**A migração seria pequena:** `p.name` e `p.category_id` na projecção de cada braço, com o alias
+`p` já em âmbito. Arrasta o que a 0020 ensinou — `WITH (security_invoker = true)` obrigatório,
+guarda das `reloptions`, execução do protocolo. **Impressão digital idêntica**, que é a condição
+de aceitação: só se acrescentam colunas.
+
+**Custo de não fazer:** um pedido por carregamento (o `v_products`, um dos oito). Barato — tabela
+e RLS, sem `compute_price`.
+
+**76. O `/auth/v1/user` duplicado: a via do middleware foi avaliada e REJEITADA** — **2026-09-24**,
+substitui a opção 1 do item 74.
+
+Passar a identidade por cabeçalho obriga a construir o `NextResponse` com
+`{ request: { headers } }` em **dois** sítios: na criação inicial **e dentro do `setAll`** — que é
+onde o `@supabase/ssr` reconstrói a resposta ao refrescar o token.
+
+**O modo de falha é o pior possível:** injectar o cabeçalho só na construção inicial fá-lo
+**desaparecer exactamente nos pedidos em que há refresh de sessão**. Não falha nos testes, não
+falha no smoke, falha de vez em quando a um utilizador real — e o sintoma seria um logout
+inexplicável. E como o `getUser()` só corre depois de o cliente estar construído, injectar o valor
+exigiria reconstruir a resposta uma terceira vez e reaplicar à mão os cookies que o `setAll` já
+tinha posto: reimplementar o fluxo de refresh.
+
+**O ganho não o justifica.** São 2 pedidos de 8, e em **tempo de relógio ~zero** — desde
+2026-09-23 esses dois correm dentro do `Promise.all`, em paralelo com a consulta de preços, que é
+mais lenta. O ganho é de **carga** no GoTrue (0,141 s isolado, **1,232 s sob concorrência**), que
+é real mas não paga o risco.
+
+**Fica a opção 2 do item 74:** `tmsi.me()`, uma função que devolve o perfil de quem chama. Não
+toca no middleware, e substitui `getUser()` **e** o `profiles` da página por uma chamada — **8 →
+7**. É migração.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de
