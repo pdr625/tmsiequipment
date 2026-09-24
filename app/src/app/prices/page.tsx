@@ -10,11 +10,12 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getBranding, footerLines } from '@/lib/branding';
 import { PrintButton } from './print-button';
 import { FilterButton } from './filter-button';
+import { alertaDe } from '@/lib/alert';
 
 type Branch = { id: string; name: string };
 type Channel = { id: string; name: string };
 
-type MetaProduto = { id: string; name: string; category_id: string | null; status: string };
+type MetaProduto = { id: string; name: string; category_id: string | null; status: string; item_type: string };
 
 // A forma que as duas vistas têm em comum, mais o que cada uma acrescenta. O
 // ecrã trata as linhas por esta forma e faz o estreitamento onde precisa.
@@ -101,7 +102,7 @@ export default async function PricesPage({
   // parte (tabela + RLS, sem compute_price: é barata) e cruzam-se em memória.
   // A alternativa era acrescentar colunas à vista, e isso é migração.
   const catalogo: PromiseLike<{ data: MetaProduto[] | null }> = canReadCosts
-    ? (supabase.schema('tmsi').from('v_products').select('id, name, category_id, status') as unknown as PromiseLike<{
+    ? (supabase.schema('tmsi').from('v_products').select('id, name, category_id, status, item_type') as unknown as PromiseLike<{
         data: MetaProduto[] | null;
       }>)
     : Promise.resolve({ data: null });
@@ -330,7 +331,7 @@ export default async function PricesPage({
                 <td className="py-2 pr-4 text-right tabular-nums">{pct(r.margin)}</td>
                 <td className="py-2 pr-4 text-right tabular-nums">{eur(r.min_price)}</td>
                 <td className="py-2 pr-4 text-right tabular-nums">{eur(r.ref_price)}</td>
-                <td className="py-2 pr-4">{r.alert ?? '—'}</td>
+                <td className="py-2 pr-4">{alertaDe(r.alert, meta.get(r.product_id)?.item_type) ?? '—'}</td>
               </tr>
             ))}
           </tbody>

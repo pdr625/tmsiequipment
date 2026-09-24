@@ -1859,6 +1859,72 @@ def block_presentation_contract(tokens):
         )
 
 
+def block_alert_rule():
+    """JJ — item 67: o Alert não circula fora dos papéis de custos, e serviços
+    e opções não são classificados.
+
+    Decisão do Pedro, 2026-09-24: (a) `item_type` em (service, option) fica com
+    a célula VAZIA — nem `critical`, nem `ok`; (b) a coluna `Alert` não existe
+    no export dos papéis sem custos (sales, agent, logistics).
+
+    O ficheiro .xlsx só se gera com sessão de browser (cookies do Next.js —
+    regra §4 do ~/atelier-vps/CLAUDE.md), logo esta prova é ESTÁTICA sobre a
+    rota + BD, e declara-o. O que fica para o Pedro é abrir os dois ficheiros.
+
+    Contra o "0 = 0": exige que existam de facto linhas activas de serviço ou
+    opção COM alerta no motor — senão a regra não teria nada a esconder e a
+    asserção passaria por vazio."""
+    import re as _re
+    import pathlib as _pathlib
+
+    raiz = _pathlib.Path(__file__).resolve().parent.parent / "app" / "src"
+    rota = raiz / "app" / "prices" / "export" / "route.ts"
+    regra = raiz / "lib" / "alert.ts"
+    if not rota.is_file() or not regra.is_file():
+        check("JJ: regra do Alert (item 67)", False, "route.ts ou lib/alert.ts ausente")
+        return
+
+    texto = rota.read_text()
+    # Os dois ramos: tudo até ao `if (canReadCosts) {` fechar é o de custos;
+    # o resto é o dos papéis sem custos. Cada ramo tem exactamente um `headers:`.
+    corte = texto.find("if (canReadCosts) {")
+    fim_custos = texto.find("return respond(buffer, filename);", corte)
+    ramo_custos, ramo_sem = texto[corte:fim_custos], texto[fim_custos:]
+    cab = lambda t: _re.findall(r"headers:\s*\[([^\]]*)\]", t)
+    h_custos, h_sem = cab(ramo_custos), cab(ramo_sem)
+    check(
+        "JJ: export dos papéis SEM custos não tem coluna Alert (item 67b)",
+        corte > 0 and len(h_sem) == 1 and "'Alert'" not in h_sem[0],
+        f"cabeçalhos do ramo sem custos: {h_sem[0] if h_sem else '?'}",
+    )
+    check(
+        "JJ: export dos papéis COM custos mantém Alert, e passa pela regra",
+        len(h_custos) == 1 and "'Alert'" in h_custos[0] and "alertaDe(r.alert" in ramo_custos,
+        "Alert no cabeçalho e alertaDe() nas linhas" if len(h_custos) == 1 else "cabeçalho não encontrado",
+    )
+
+    # O conjunto não classificado, lido do código e confrontado com o enum.
+    m = _re.search(r"new Set\(\[([^\]]*)\]\)", regra.read_text())
+    conjunto = sorted(_re.findall(r"'([a-z_]+)'", m.group(1))) if m else []
+    enum = {r[0] for r in psql_rows("select unnest(enum_range(null::tmsi.item_type))::text;")}
+    check(
+        "JJ: a regra isenta exactamente service e option, ambos valores reais do enum",
+        conjunto == ["option", "service"] and set(conjunto) <= enum,
+        f"conjunto={conjunto} · enum={sorted(enum)}",
+    )
+
+    # Há alguma coisa do outro lado? (CLAUDE.md, "0 = 0 não prova nada")
+    n = psql_rows(
+        "select count(*) from tmsi.v_branch_prices b join tmsi.products p on p.id = b.product_id "
+        "where p.status = 'active' and p.item_type in ('service','option') and b.alert is not null;"
+    )[0][0]
+    check(
+        "JJ: existem linhas activas de serviço/opção com alerta no motor — a regra tem o que esconder",
+        int(n) > 0,
+        f"{n} linhas que o export passa a mostrar vazias",
+    )
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -2036,6 +2102,7 @@ def main():
     block_docs_guard()
     block_scope_filter_pushdown()
     block_presentation_contract(tokens)
+    block_alert_rule()
 
     delete_smoke_fixture_product()
 

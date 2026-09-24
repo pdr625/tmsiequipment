@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { buildXlsx } from '@/lib/xlsx-export';
+import { alertaDe } from '@/lib/alert';
 import { getBranding, getBrandingLogoBuffer, footerLines, slugify } from '@/lib/branding';
 
 type BranchPriceRow = {
@@ -149,16 +150,17 @@ export async function GET(request: NextRequest) {
     }
     const [{ data: rows, error }, { data: catalogo }] = await Promise.all([
       query.overrideTypes<BranchPriceRow[], { merge: false }>(),
-      supabase.schema('tmsi').from('v_products').select('id, name, category_id, status'),
+      supabase.schema('tmsi').from('v_products').select('id, name, category_id, status, item_type'),
     ]);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    const meta = new Map<string, { name: string; category_id: string | null; status: string }>(
-      ((catalogo ?? []) as { id: string; name: string; category_id: string | null; status: string }[])
-        .map((p): [string, { name: string; category_id: string | null; status: string }] => [
+    type Meta = { name: string; category_id: string | null; status: string; item_type: string };
+    const meta = new Map<string, Meta>(
+      ((catalogo ?? []) as ({ id: string } & Meta)[])
+        .map((p): [string, Meta] => [
           p.id,
-          { name: p.name, category_id: p.category_id, status: p.status },
+          { name: p.name, category_id: p.category_id, status: p.status, item_type: p.item_type },
         ]),
     );
     // Ordem de apresentação: categoria -> código -> âmbito (ordem comercial
@@ -197,7 +199,10 @@ export async function GET(request: NextRequest) {
         r.margin,
         r.min_price,
         r.ref_price,
-        r.alert,
+        // item 67: serviços e opções não são classificados — célula vazia.
+        // O ramo SEM custos (abaixo) nunca teve a coluna Alert: a margem não
+        // circula fora dos papéis de custos.
+        alertaDe(r.alert, meta.get(r.product_id)?.item_type),
       ]),
       footerLines: footerLines(branding),
       primaryColor: branding.primaryColor,

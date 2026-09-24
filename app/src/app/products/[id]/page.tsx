@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageProducts } from '@/lib/auth-guard';
 import { overrideStatus } from '@/lib/override-status';
+import { alertaDe } from '@/lib/alert';
 import { EditProductForm } from './edit-form';
 
 // Safe/ungated columns (tmsi.v_products, E3-0003/0004): id, name,
@@ -308,7 +309,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                           {r.errors.join(', ')}
                         </span>
                       ) : (
-                        (r.alert ?? '—')
+                        (alertaDe(r.alert, product.item_type) ?? '—')
                       )}
                     </td>
                     <td className="py-2 pr-4">
