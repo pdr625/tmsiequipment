@@ -2192,6 +2192,32 @@ def block_product_alert_column():
           "(canReadCosts === true ? 1 : 0)" in t and "colSpan={seesCosts ? 6 : 4}" not in t, "colSpan dinâmico")
 
 
+def block_retention_text():
+    """OO — item 77: o que a /privacy e a nota de tratamento de dados dizem
+    dos registos de acesso é o que o logrotate faz. Dinâmico: lê o `rotate N`
+    de /etc/logrotate.d/nginx em vez de fixar 90 — se o valor mudar outra vez,
+    o texto tem de acompanhar, e é isto que o obriga."""
+    import re as _re
+    import pathlib as _pl
+    raiz = _pl.Path(__file__).resolve().parent.parent
+    cfg = _pl.Path("/etc/logrotate.d/nginx")
+    m = _re.search(r"^\s*rotate\s+(\d+)", cfg.read_text(), _re.M) if cfg.exists() else None
+    if not m:
+        check("OO: retenção dos registos de acesso", True, "SKIP — /etc/logrotate.d/nginx ilegível ou sem `rotate`")
+        return
+    n = m.group(1)
+    pagina = (raiz / "app" / "src" / "app" / "privacy" / "page.tsx").read_text()
+    nota = (raiz / "docs" / "DATA-PROCESSING-NOTICE.md").read_text()
+    check(f"OO: a /privacy diz {n} dias de registos de acesso (o logrotate faz rotate {n})",
+          f"access logs ({n} days)" in pagina, "texto igual ao logrotate")
+    check(f"OO: a nota de tratamento de dados diz {n} dias de registos de acesso",
+          f"**{n} dias** (rotação diária" in nota, "texto igual ao logrotate")
+    t = _pl.Path("/etc/logrotate.d/tmsi-timing")
+    mt = _re.search(r"^\s*rotate\s+(\d+)", t.read_text(), _re.M) if t.exists() else None
+    check("OO: o registo de tempos tem a mesma retenção que a nota declara",
+          mt is not None and mt.group(1) == n, f"tmsi-timing rotate={mt.group(1) if mt else '?'} nginx rotate={n}")
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -2374,6 +2400,7 @@ def main():
     block_me_and_settings(tokens, claims)
     block_home_menu()
     block_product_alert_column()
+    block_retention_text()
 
     delete_smoke_fixture_product()
 

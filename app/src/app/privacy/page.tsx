@@ -64,7 +64,7 @@ export default async function PrivacyPage() {
             table has no automatic deletion today, see below).
           </li>
           <li>
-            <strong>Server and container logs</strong> — access logs (14 days), container logs
+            <strong>Server and container logs</strong> — access logs (90 days), container logs
             (kept by size, not by a fixed number of days). Not reachable from inside the app.
           </li>
           <li>

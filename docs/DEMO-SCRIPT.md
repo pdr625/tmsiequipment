@@ -203,8 +203,8 @@ Está tudo em `Data processing notice` (`/privacy`, na página inicial). Em resu
 piloto, num **servidor pessoal meu**, com domínio pessoal, enquanto a licença com a empresa é
 negociada. Guarda nome, email, papel, a password só como *hash* (ninguém a consegue ler, nem eu),
 e o registo de quem alterou o quê. Cópias de segurança nocturnas, 30 dias.
-⚠️ A página diz que os registos de acesso ficam **14 dias**; desde 20/09 ficam **90** (item 66).
-Se a pergunta for ao detalhe, dizer 90 — a página ainda não foi corrigida (item 77).
+Os registos de acesso ficam **90 dias** (item 66); a página e a nota de tratamento de dados dizem 90
+desde 24/09 (item 77).
 
 **«Quando posso usar a sério?»** *(provável, mesmo que não esteja na lista)*
 Quando o despachante confirmar os direitos, os `draft` estiverem completos e a licença estiver
