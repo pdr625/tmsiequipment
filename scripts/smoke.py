@@ -2135,6 +2135,15 @@ def block_me_and_settings(tokens, claims):
     restam = psql_rows("select count(*) from tmsi.settings;")[0][0]
     check("LL: zero resíduo — settings continua com linhas", int(restam) > 0, f"linhas={restam}")
 
+    # O contrato da página (item 76/75): uma chamada de identidade, sem cruzar
+    # com v_products. Leitura estática do fonte, como o KK/II.
+    import pathlib as _pl
+    pagina = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "prices" / "page.tsx").read_text()
+    check("LL: /prices usa me() e já não pede getUser, profiles, can_read_costs nem v_products",
+          "getMe(" in pagina and "auth.getUser" not in pagina and "'profiles'" not in pagina
+          and "can_read_costs')" not in pagina and "v_products" not in pagina,
+          "getMe presente, sem os quatro pedidos antigos")
+
 
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
