@@ -11,6 +11,7 @@ import { getBranding, footerLines } from '@/lib/branding';
 import { PrintButton } from './print-button';
 import { FilterButton } from './filter-button';
 import { alertaDe } from '@/lib/alert';
+import { getPriceNotice } from '@/lib/price-notice';
 
 type Branch = { id: string; name: string };
 type Channel = { id: string; name: string };
@@ -190,7 +191,7 @@ export default async function PricesPage({
   // for scope, and no on-screen use for the rest).
   const generatedAt = new Date();
   const currencies = [...new Set(visiveis.map((r) => (r as LinhaPreco).currency))].sort();
-  const branding = await getBranding();
+  const [branding, aviso] = await Promise.all([getBranding(), getPriceNotice()]);
   const footer = footerLines(branding);
 
   return (
@@ -225,6 +226,14 @@ export default async function PricesPage({
           </Link>
         </div>
       </div>
+
+      {/* Item 32: preços operacionais até o despachante confirmar a base do
+          direito aduaneiro. Sem print:hidden — sai também na impressão. */}
+      {aviso && (
+        <p role="note" className="mb-4 text-xs text-amber-800">
+          ⓘ {aviso}
+        </p>
+      )}
 
       <div className="mb-6 flex flex-wrap gap-2 print:hidden">
         {/* Botões, não <Link>. A 23/09 os <Link> destes filtros eram

@@ -1925,6 +1925,72 @@ def block_alert_rule():
     )
 
 
+def block_price_notice(sales_uuid):
+    """KK — item 32: o aviso «Prices are operational…» chega a quem vende.
+
+    Uma chave de tmsi.settings (`operational_price_notice`), sem migração.
+    AUSENTE = LIGADO (lib/price-notice.ts): só some quando vale `false`.
+
+    A parte que pode falhar em silêncio é a leitura: se `sales` não conseguir
+    ler a chave, a app não sabe que o admin a desligou — e se o dia chegar em
+    que a política config_read mude, o aviso ficaria preso num estado. Prova
+    VIVA, em transacção revertida: a chave é criada com `false` e lida como
+    `sales` pelo caminho real da RLS. Zero resíduo, verificado a seguir."""
+    import pathlib as _pathlib
+
+    raiz = _pathlib.Path(__file__).resolve().parent.parent / "app" / "src"
+    modulo = (raiz / "lib" / "price-notice.ts").read_text()
+    chave_m = __import__("re").search(r"PRICE_NOTICE_KEY = '([a-z_]+)'", modulo)
+    chave = chave_m.group(1) if chave_m else None
+    check(
+        "KK: a chave do aviso não é margin_* (config_read mostra-a a todos os papéis)",
+        chave is not None and not chave.startswith("margin_"),
+        f"chave={chave}",
+    )
+    check(
+        "KK: ausente = ligado — o aviso só some com o valor false",
+        "!== false" in modulo,
+        "isPriceNoticeOn compara com false" if "!== false" in modulo else "comparação não encontrada",
+    )
+
+    pagina = (raiz / "app" / "prices" / "page.tsx").read_text()
+    rota = (raiz / "app" / "prices" / "export" / "route.ts").read_text()
+    i = pagina.find("{aviso && (")
+    bloco_aviso = pagina[i:pagina.find(")}", i)] if i >= 0 else ""
+    check(
+        "KK: o aviso aparece no /prices e na impressão (sem print:hidden)",
+        bool(bloco_aviso) and "print:hidden" not in bloco_aviso,
+        "presente, sem print:hidden" if bloco_aviso else "bloco do aviso não encontrado",
+    )
+    check(
+        "KK: o aviso abre o rodapé do export nos dois ramos",
+        rota.count("footerLines: rodape,") == 2 and "footerLines: footerLines(branding)" not in rota,
+        f"{rota.count('footerLines: rodape,')} ramos com o rodapé do aviso",
+    )
+
+    if not chave or not sales_uuid:
+        check("KK: sales lê a chave", True, "SKIP — sem chave ou sem conta sales")
+        return
+    antes = psql_rows(f"select count(*) from tmsi.settings where key = '{chave}';")[0][0]
+    rc, out, err = psql(
+        "begin;\n"
+        f"insert into tmsi.settings (key, value, note) values ('{chave}', 'false'::jsonb, 'smoke KK') "
+        "on conflict (key) do update set value = excluded.value;\n"
+        "do $$ begin perform set_config('request.jwt.claims', "
+        f"'{{\"sub\":\"{sales_uuid}\",\"role\":\"authenticated\"}}', true); end $$;\n"
+        "set local role authenticated;\n"
+        f"select value::text from tmsi.settings where key = '{chave}';\n"
+        "rollback;"
+    )
+    depois = psql_rows(f"select count(*) from tmsi.settings where key = '{chave}';")[0][0]
+    check(
+        "KK: sales lê a chave do aviso pela RLS real (transacção revertida)",
+        rc == 0 and out.strip().splitlines()[-1:] == ["false"],
+        f"rc={rc} lido={out.strip().splitlines()[-1:] if out else '—'}" + (f" err={err[:100]}" if rc else ""),
+    )
+    check("KK: zero resíduo da prova", antes == depois, f"linhas com a chave: antes={antes} depois={depois}")
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -2103,6 +2169,7 @@ def main():
     block_scope_filter_pushdown()
     block_presentation_contract(tokens)
     block_alert_rule()
+    block_price_notice(sell_side.get("sales"))
 
     delete_smoke_fixture_product()
 

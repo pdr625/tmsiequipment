@@ -8,7 +8,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { canManageFinanceConfig, canManageOperationalConfig, pricingConfigReadAccess } from '@/lib/auth-guard';
+import { canManageFinanceConfig, canManageOperationalConfig, isAdmin, pricingConfigReadAccess } from '@/lib/auth-guard';
+import { PRICE_NOTICE_KEY, PRICE_NOTICE_TEXT, isPriceNoticeOn } from '@/lib/price-notice';
 import { pickActive } from '@/lib/pick-active';
 import {
   ExchangeRateForm,
@@ -17,6 +18,7 @@ import {
   MarginGridRow,
   BranchPricingParamsRow,
   SettingRow,
+  PriceNoticeToggle,
 } from './forms';
 
 type ExchangeRate = {
@@ -91,10 +93,12 @@ function PendingBadge({ count }: { count: number }) {
 export default async function ConfigPage() {
   const supabase = await createSupabaseServerClient();
 
-  const [{ readCosts, readLogistics }, canWriteFinance, canWriteOperational] = await Promise.all([
+  const [{ readCosts, readLogistics }, canWriteFinance, canWriteOperational, admin, noticeOn] = await Promise.all([
     pricingConfigReadAccess(),
     canManageFinanceConfig(),
     canManageOperationalConfig(),
+    isAdmin(),
+    isPriceNoticeOn(),
   ]);
 
   if (!readCosts && !readLogistics) {
@@ -353,6 +357,17 @@ export default async function ConfigPage() {
         </section>
       )}
 
+      {admin && (
+        <section className="mb-10">
+          <h2 className="mb-2 text-sm font-semibold text-gray-700">Operational price notice</h2>
+          <p className="mb-2 text-xs text-gray-500">
+            Shown on the price list, its print view and the Excel export until the customs-duty basis is
+            confirmed. Admin only.
+          </p>
+          <PriceNoticeToggle enabled={noticeOn} text={PRICE_NOTICE_TEXT} />
+        </section>
+      )}
+
       <section className="mb-10">
         <h2 className="mb-2 text-sm font-semibold text-gray-700">Settings</h2>
         <table className="w-full border-collapse text-sm">
@@ -366,7 +381,11 @@ export default async function ConfigPage() {
           </thead>
           <tbody>
             {settings?.map((s) => (
-              <SettingRow key={s.key} setting={s} canWrite={canWriteFinance} />
+              <SettingRow
+                key={s.key}
+                setting={s}
+                canWrite={canWriteFinance && (s.key !== PRICE_NOTICE_KEY || admin)}
+              />
             ))}
           </tbody>
         </table>

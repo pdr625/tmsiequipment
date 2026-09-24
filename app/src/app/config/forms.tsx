@@ -16,6 +16,7 @@ import {
   updateMarginGrid,
   updateBranchPricingParams,
   updateSetting,
+  setPriceNotice,
   type ConfigActionState,
 } from './actions';
 
@@ -619,5 +620,28 @@ export function SettingRow({
         </td>
       )}
     </tr>
+  );
+}
+
+// Item 32: o aviso "Prices are operational…". Um botão que inverte o estado
+// actual — só é desenhado para o admin (page.tsx), e o action volta a
+// verificar, porque um Server Action é invocável independentemente da UI.
+export function PriceNoticeToggle({ enabled, text }: { enabled: boolean; text: string }) {
+  const [state, formAction, pending] = useActionState<ConfigActionState, FormData>(setPriceNotice, undefined);
+  return (
+    <form action={formAction} className="flex flex-wrap items-center gap-3 text-sm">
+      <input type="hidden" name="enabled" value={enabled ? 'false' : 'true'} />
+      <span>
+        {enabled ? 'Shown' : 'Hidden'}: <span className="italic text-gray-600">“{text}”</span>
+      </span>
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+      >
+        {pending ? '…' : enabled ? 'Hide notice' : 'Show notice'}
+      </button>
+      <ErrorText state={state} />
+    </form>
   );
 }

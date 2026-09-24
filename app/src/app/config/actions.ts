@@ -9,7 +9,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { canManageFinanceConfig, canManageOperationalConfig } from '@/lib/auth-guard';
+import { canManageFinanceConfig, canManageOperationalConfig, isAdmin } from '@/lib/auth-guard';
+import { PRICE_NOTICE_KEY } from '@/lib/price-notice';
 import { proposeChange } from '@/lib/propose-change';
 import type { ActionState } from '@/lib/action-state';
 
@@ -177,6 +178,9 @@ export async function updateSetting(_prevState: ConfigActionState, formData: For
   const rawValue = String(formData.get('value') ?? '');
   const note = String(formData.get('note') ?? '') || null;
 
+  // O aviso de preços operacionais é do admin (setPriceNotice, abaixo).
+  if (key === PRICE_NOTICE_KEY && !(await isAdmin())) return { error: 'Forbidden' };
+
   let value: unknown;
   try {
     value = JSON.parse(rawValue);
@@ -190,5 +194,37 @@ export async function updateSetting(_prevState: ConfigActionState, formData: For
   if (error) return { error: error.message };
 
   revalidatePath('/config');
+  return { success: true };
+}
+
+// Item 32: ligar/desligar o aviso "Prices are operational…" (lib/price-notice.ts).
+// Só o admin — decisão do Pedro. ⚠️ A RLS de tmsi.settings (config_write) deixa
+// escrever admin E finance em qualquer chave; restringir esta chave ao admin
+// na base de dados seria migração, e não foi feita. O limite aqui é o da app:
+// este action e o updateSetting acima recusam a quem não é admin.
+//
+// Upsert, não update: a chave nasce na primeira vez que o admin a muda, com a
+// autoria dele no audit_log. Até lá está ausente, e ausente = aviso ligado.
+export async function setPriceNotice(_prevState: ConfigActionState, formData: FormData): Promise<ConfigActionState> {
+  if (!(await isAdmin())) return { error: 'Forbidden' };
+
+  const enabled = String(formData.get('enabled') ?? '') === 'true';
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .schema('tmsi')
+    .from('settings')
+    .upsert(
+      {
+        key: PRICE_NOTICE_KEY,
+        value: enabled,
+        note: 'Item 32: "Prices are operational" notice on /prices, print and export. Admin-only.',
+      },
+      { onConflict: 'key' },
+    );
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/config');
+  revalidatePath('/prices');
   return { success: true };
 }

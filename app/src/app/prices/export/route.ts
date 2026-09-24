@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { buildXlsx } from '@/lib/xlsx-export';
 import { alertaDe } from '@/lib/alert';
+import { getPriceNotice } from '@/lib/price-notice';
 import { getBranding, getBrandingLogoBuffer, footerLines, slugify } from '@/lib/branding';
 
 type BranchPriceRow = {
@@ -121,8 +122,10 @@ export async function GET(request: NextRequest) {
 
   const { data: canReadCosts } = await supabase.schema('tmsi').rpc('can_read_costs');
   const generatedAt = new Date();
-  const branding = await getBranding();
+  const [branding, aviso] = await Promise.all([getBranding(), getPriceNotice()]);
   const logo = await getBrandingLogoBuffer(branding.logoId);
+  // Item 32: o aviso de preços operacionais abre o rodapé, nos dois ramos.
+  const rodape = [...(aviso ? [aviso] : []), ...footerLines(branding)];
   const filename = `${slugify(branding.displayName)}-prices-${branch ?? 'all'}-${generatedAt.toISOString().slice(0, 10)}.xlsx`;
 
   // A vista de custos não traz nome, categoria nem estado — só `product_id`.
@@ -204,7 +207,7 @@ export async function GET(request: NextRequest) {
         // circula fora dos papéis de custos.
         alertaDe(r.alert, meta.get(r.product_id)?.item_type),
       ]),
-      footerLines: footerLines(branding),
+      footerLines: rodape,
       primaryColor: branding.primaryColor,
       fontFamily: branding.fontFamily,
       logo,
@@ -254,7 +257,7 @@ export async function GET(request: NextRequest) {
       r.ref_price,
       r.lead_time_days,
     ]),
-    footerLines: footerLines(branding),
+    footerLines: rodape,
     primaryColor: branding.primaryColor,
     fontFamily: branding.fontFamily,
     logo,
