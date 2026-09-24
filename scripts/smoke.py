@@ -1991,6 +1991,151 @@ def block_price_notice(sales_uuid):
     check("KK: zero resíduo da prova", antes == depois, f"linhas com a chave: antes={antes} depois={depois}")
 
 
+def block_me_and_settings(tokens, claims):
+    """LL — 0021: `tmsi.me()`, as colunas novas de v_branch_prices, o aviso
+    admin-only em `settings` e a ausência de TRUNCATE.
+
+    O esperado de `me()` é a MATRIZ do protocolo escrita à mão (papéis,
+    custos, operacional), não `can_read_costs()`: comparar a função com ela
+    própria não provava nada. Os papéis vêm de `user_roles` (dinâmico), o
+    resto da matriz."""
+    # papel -> (custos, operacional): VERIFICATION-PROTOCOL.md §3, linhas 56 e 58.
+    MATRIZ = {
+        "finance": (True, True), "product_manager": (True, True), "branch_manager": (True, True),
+        "logistics": (False, True), "sales": (False, False), "agent": (False, False),
+    }
+
+    # (c) 1. anon: recusado por privilégio, como toda a função de tmsi.
+    status, _ = http("POST", f"{REST}/rpc/me", token=None, body={})
+    check("LL: me() recusado sem credencial", status in (401, 403), f"http_{status}")
+
+    # (c) 2. cada papel com sessão: UMA linha, a sua, com o que a matriz diz.
+    for role, (cc, co) in MATRIZ.items():
+        status, rows = http("POST", f"{REST}/rpc/me", token=tokens[role], body={})
+        ok = status == 200 and isinstance(rows, list) and len(rows) == 1
+        linha = rows[0] if ok else {}
+        papeis_bd = [r[0] for r in psql_rows(
+            f"select role::text from tmsi.user_roles where user_id = '{claims[role]}' order by 1;")]
+        check(
+            f"LL: me() de {role} — uma linha, a própria, custos/operacional como a matriz",
+            ok and linha.get("user_id") == claims[role] and sorted(linha.get("roles", [])) == papeis_bd
+            and papeis_bd != [] and linha.get("can_read_costs") is cc and linha.get("can_read_operational") is co,
+            f"http_{status} linhas={len(rows) if isinstance(rows, list) else '?'}",
+        )
+
+    # (c) 3. âmbito de filial e de canal, medido no papel que os tem (0 = 0 não prova nada).
+    st, rows = http("POST", f"{REST}/rpc/me", token=tokens["branch_manager"], body={})
+    check("LL: me() do branch_manager traz a sua filial",
+          st == 200 and isinstance(rows, list) and len(rows) == 1 and len(rows[0].get("branches", [])) > 0,
+          f"filiais={rows[0].get('branches') if st == 200 and rows else '?'}")
+    st, rows = http("POST", f"{REST}/rpc/me", token=tokens["agent"], body={})
+    check("LL: me() do agent traz o seu canal",
+          st == 200 and isinstance(rows, list) and len(rows) == 1 and len(rows[0].get("channels", [])) > 0,
+          f"canais={rows[0].get('channels') if st == 200 and rows else '?'}")
+
+    # (c) 4. a fronteira: um admin vê TODOS os perfis pela RLS (a política
+    # profiles_self acrescenta OR admin) e mesmo assim me() devolve só o próprio.
+    admin = psql_rows("select user_id from tmsi.user_roles where role = 'admin' order by id limit 1;")
+    if admin:
+        uid = admin[0][0]
+        rc, out, err = psql(
+            "begin;\n"
+            f"select set_config('request.jwt.claims', '{{\"sub\":\"{uid}\",\"role\":\"authenticated\"}}', true) \\g /dev/null\n"
+            "set local role authenticated;\n"
+            "select (select count(*) from tmsi.profiles) || '|' || (select count(*) from tmsi.me()) "
+            "|| '|' || (select count(*) from tmsi.me() where user_id <> auth.uid());\n"
+            "rollback;"
+        )
+        partes = out.strip().splitlines()[-1].split("|") if rc == 0 and out.strip() else []
+        check("LL: admin vê vários perfis pela RLS e me() devolve só o próprio (fronteira não vazia)",
+              len(partes) == 3 and int(partes[0]) > 1 and partes[1] == "1" and partes[2] == "0",
+              f"perfis_visiveis={partes[0] if partes else '?'} me={partes[1] if partes else '?'}" + (f" err={err[:80]}" if rc else ""))
+    else:
+        check("LL: fronteira do me() no admin", True, "SKIP — sem conta admin")
+
+    # (c) 5. sem identidade no JWT: zero linhas, nunca erro.
+    rc, out, err = psql(
+        "begin;\n"
+        "select set_config('request.jwt.claims', '{\"role\":\"authenticated\"}', true) \\g /dev/null\n"
+        "set local role authenticated;\n"
+        "select count(*) from tmsi.me();\n"
+        "rollback;"
+    )
+    check("LL: me() sem sub no JWT devolve zero linhas, sem erro",
+          rc == 0 and out.strip().splitlines()[-1:] == ["0"], f"rc={rc} lido={out.strip().splitlines()[-1:] if out else '—'}")
+
+    # (b3) as colunas novas: chegam, e chegam iguais às de products.
+    st, rows = http("GET", f"{REST}/v_branch_prices?select=product_id,name,category_id,status,item_type&limit=200",
+                    token=tokens["finance"])
+    check("LL: v_branch_prices traz name/category_id/status/item_type (a app deixa de pedir v_products)",
+          st == 200 and isinstance(rows, list) and len(rows) > 0
+          and all(r.get("name") for r in rows) and all(r.get("status") for r in rows) and all(r.get("item_type") for r in rows),
+          f"http_{st} linhas={len(rows) if isinstance(rows, list) else '?'}")
+    st, rows = http("GET", f"{REST}/v_branch_prices?select=product_id,name,status&limit=200", token=tokens["sales"])
+    check("LL: o sales vê as colunas novas só das linhas que já via (sem custos)",
+          st == 200 and isinstance(rows, list) and len(rows) > 0 and all(r.get("name") for r in rows)
+          and all(r.get("status") == "active" for r in rows),
+          f"http_{st} linhas={len(rows) if isinstance(rows, list) else '?'}")
+
+    # (d) settings: o finance escreve os limiares e NÃO o aviso. Transacção
+    # revertida; a linha do aviso é criada se faltar, para o 0 não vir de a linha não existir.
+    fin = claims["finance"]
+    chave = "operational_price_notice"
+    def n_linhas(quem_uuid, dml):
+        rc, out, err = psql(
+            "begin;\n"
+            f"insert into tmsi.settings (key, value, note) values ('{chave}', 'true'::jsonb, 'smoke LL') on conflict (key) do nothing;\n"
+            f"select set_config('request.jwt.claims', '{{\"sub\":\"{quem_uuid}\",\"role\":\"authenticated\"}}', true) \\g /dev/null\n"
+            "set local role authenticated;\n"
+            f"with u as ({dml} returning 1) select count(*) from u;\n"
+            "rollback;"
+        )
+        return (out.strip().splitlines()[-1:] or ["?"])[0] if rc == 0 else f"erro:{err[:60]}"
+    upd_aviso = f"update tmsi.settings set value = value where key = '{chave}'"
+    upd_lim = "update tmsi.settings set value = value where key = 'margin_min'"
+    del_aviso = f"delete from tmsi.settings where key = '{chave}'"
+    if admin:
+        check("LL: o admin escreve o aviso (a linha existe: 1 ≠ 0)", n_linhas(admin[0][0], upd_aviso) == "1",
+              f"linhas={n_linhas(admin[0][0], upd_aviso)}")
+    check("LL: o finance NÃO altera o aviso operacional (item 80)", n_linhas(fin, upd_aviso) == "0",
+          f"linhas={n_linhas(fin, upd_aviso)}")
+    check("LL: o finance NÃO apaga o aviso operacional", n_linhas(fin, del_aviso) == "0",
+          f"linhas={n_linhas(fin, del_aviso)}")
+    check("LL: o finance continua a escrever os limiares de margem (a app depende disso)",
+          n_linhas(fin, upd_lim) == "1", f"linhas={n_linhas(fin, upd_lim)}")
+    rc, out, err = psql(
+        "begin;\n"
+        f"select set_config('request.jwt.claims', '{{\"sub\":\"{fin}\",\"role\":\"authenticated\"}}', true) \\g /dev/null\n"
+        "set local role authenticated;\n"
+        f"update tmsi.settings set key = '{chave}' where key = 'review_days';\n"
+        "rollback;"
+    )
+    check("LL: o finance não pode renomear outra chave para o aviso (WITH CHECK)",
+          rc != 0 and "row-level security" in err, f"rc={rc} err={err[:70]}")
+
+    # TRUNCATE: nem authenticated nem anon, em nenhuma tabela ou vista de tmsi.
+    _rc, _out, _err = psql(
+        "select coalesce(string_agg(distinct c.relname, ', ' order by c.relname), '') "
+        "from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+        "cross join lateral aclexplode(c.relacl) a "
+        "where n.nspname = 'tmsi' and c.relkind in ('r','p','v','m','f') and a.privilege_type = 'TRUNCATE' "
+        "and (a.grantee = 0 or a.grantee = 'authenticated'::regrole or a.grantee = 'anon'::regrole);"
+    )
+    abertas = _out.strip() if _rc == 0 else f"erro:{_err[:60]}"
+    check("LL: nenhuma tabela de tmsi tem TRUNCATE a authenticated/anon/PUBLIC", abertas == "", f"abertas={abertas or 'nenhuma'}")
+    rc, out, err = psql(
+        "begin;\n"
+        f"select set_config('request.jwt.claims', '{{\"sub\":\"{fin}\",\"role\":\"authenticated\"}}', true) \\g /dev/null\n"
+        "set local role authenticated;\n"
+        "truncate tmsi.settings;\n"
+        "rollback;"
+    )
+    check("LL: TRUNCATE tmsi.settings recusado ao finance (prova viva)",
+          rc != 0 and "permission denied" in err, f"rc={rc} err={err[:60]}")
+    restam = psql_rows("select count(*) from tmsi.settings;")[0][0]
+    check("LL: zero resíduo — settings continua com linhas", int(restam) > 0, f"linhas={restam}")
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -2170,6 +2315,7 @@ def main():
     block_presentation_contract(tokens)
     block_alert_rule()
     block_price_notice(sell_side.get("sales"))
+    block_me_and_settings(tokens, claims)
 
     delete_smoke_fixture_product()
 
