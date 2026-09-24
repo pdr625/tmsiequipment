@@ -1803,12 +1803,25 @@ def block_presentation_contract(tokens):
         # render completo no servidor, com o seu /auth/v1/user. Medido: quatro
         # links = 12 pedidos extra por visita, e o auth passava de 0,14 s para
         # 1,2 s por fila de espera no GoTrue.
-        links = len(_re.findall(r"<Link\b", texto))
-        sem_prefetch = len(_re.findall(r"prefetch=\{false\}", texto))
+        #
+        # 2026-09-24: `prefetch={false}` não chega — o App Router continua a
+        # pré-carregar ao HOVER. Os filtros passaram a <FilterButton>
+        # (router.push só ao clique). A invariante passa a ser: nenhum
+        # elemento <Link> real (não comentário) aponta para /prices, e os que
+        # sobram têm prefetch={false}.
+        elementos = _re.findall(r"<Link\s[^>]*>", texto)
+        para_prices = [e for e in elementos if "/prices" in e]
+        sem_prefetch = [e for e in elementos if "prefetch={false}" not in e]
+        botoes = len(_re.findall(r"<FilterButton\b", texto))
         check(
-            "II: todos os <Link> de /prices têm prefetch={false}",
-            links > 0 and sem_prefetch >= links,
-            f"{sem_prefetch} prefetch={{false}} para {links} <Link>",
+            "II: os filtros de /prices não são <Link> (sem prefetch ao hover)",
+            not para_prices and botoes > 0,
+            f"{botoes} <FilterButton> · <Link> para /prices: {len(para_prices)}",
+        )
+        check(
+            "II: os <Link> que restam em /prices têm prefetch={false}",
+            not sem_prefetch,
+            f"{len(elementos)} <Link>, {len(sem_prefetch)} sem prefetch={{false}}",
         )
 
     # As colunas novas têm de existir e chegar de facto — `v_products` é a

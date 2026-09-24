@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getBranding, footerLines } from '@/lib/branding';
 import { PrintButton } from './print-button';
+import { FilterButton } from './filter-button';
 
 type Branch = { id: string; name: string };
 type Channel = { id: string; name: string };
@@ -225,40 +226,38 @@ export default async function PricesPage({
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2 print:hidden">
-        {/* prefetch={false}: medido a 23/09 no log de timing do nginx — cada
-            <Link> destes era pré-carregado pelo Next.js assim que entrava no
-            ecrã, e cada pré-carregamento é um render completo no servidor com
-            o seu próprio /auth/v1/user + profiles + branding. Quatro links =
-            12 pedidos extra por visita, todos a bater no GoTrue ao mesmo
-            tempo: o /auth/v1/user passava de 0,14 s para 1,2 s por fila de
-            espera. São links de filtro, clicados um de cada vez — não há nada
-            a ganhar em pré-carregá-los todos. */}
-        <Link
+        {/* Botões, não <Link>. A 23/09 os <Link> destes filtros eram
+            pré-carregados pelo Next.js ao entrar no ecrã (quatro links = 12
+            pedidos extra por visita, o /auth/v1/user de 0,14 s para 1,2 s).
+            `prefetch={false}` tirou o de viewport mas NÃO o de hover (log de
+            24/09): passar o rato pelos filtros continuava a custar um render
+            completo no servidor por botão. FilterButton navega só ao clique. */}
+        <FilterButton
           href="/prices"
-          prefetch={false}
+          active={!branch}
           className={`rounded-md border px-3 py-1 text-sm ${!branch ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
         >
           All branches
-        </Link>
+        </FilterButton>
         {branches?.map((b) => (
-          <Link
+          <FilterButton
             key={b.id}
             href={`/prices?branch=${b.id}`}
-            prefetch={false}
+            active={branch === b.id}
             className={`rounded-md border px-3 py-1 text-sm ${branch === b.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
           >
             {b.name}
-          </Link>
+          </FilterButton>
         ))}
         {channels?.map((c) => (
-          <Link
+          <FilterButton
             key={c.id}
             href={`/prices?branch=${c.id}`}
-            prefetch={false}
+            active={branch === c.id}
             className={`rounded-md border px-3 py-1 text-sm ${branch === c.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
           >
             {c.name} (channel)
-          </Link>
+          </FilterButton>
         ))}
       </div>
 
@@ -266,14 +265,14 @@ export default async function PricesPage({
         <div className="mb-4 flex items-center gap-2 text-sm print:hidden">
           <span className="text-gray-500">Status:</span>
           {(['active', 'draft', 'review', 'all'] as const).map((e) => (
-            <Link
+            <FilterButton
               key={e}
               href={`/prices?${new URLSearchParams({ ...(branch ? { branch } : {}), status: e }).toString()}`}
-              prefetch={false}
+              active={estadoPedido === e}
               className={`rounded-md border px-2 py-0.5 ${estadoPedido === e ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
             >
               {e}
-            </Link>
+            </FilterButton>
           ))}
           <span className="text-gray-400">
             ({visiveis.length} of {rows?.length ?? 0})
