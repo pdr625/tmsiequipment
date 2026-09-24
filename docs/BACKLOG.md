@@ -156,7 +156,9 @@ dados; será, na segunda importação. Duas leituras possíveis e opostas (o dad
 a CORP usa mesmo um código para três artigos e a constraint é que está errada) — decisão do
 Pedro, não desenhada aqui.
 
-**54. `limit_req_zone` do rate limit vive fora do repo** — **REGISTADO 2026-09-19**, lacuna do
+~~**54. `limit_req_zone` do rate limit vive fora do repo**~~ ✅ **FECHADO — feito em `482bb4f`
+(`deploy/nginx/tmsi-rate-limits.conf`), riscado 2026-09-24** depois de confirmar que o vhost vivo é
+igual ao do repo (`diff`) e a zona está em `/etc/nginx/conf.d/`. Texto original: — **REGISTADO 2026-09-19**, lacuna do
 kit de desastre achada ao verificar o ⚠️ do relatório de auditoria. O vhost versionado traz
 `limit_req zone=tmsi_auth burst=5 nodelay` (`deploy/nginx/tmsiequipment.conf:34`,
 `location = /auth/v1/token`), mas a zona correspondente — `limit_req_zone $binary_remote_addr
@@ -408,7 +410,11 @@ O `-d` é ensaio (debug): mostra o que faria sem mexer em ficheiro nenhum. Confi
 `rotate 90` e que não acusa erro de sintaxe. A alteração só produz efeito na rotação seguinte;
 os ficheiros já apagados não voltam.
 
-**67. Regra do `Alert` para serviços de margem plana — decisão do Pedro** — **REGISTADO
+~~**67. Regra do `Alert` para serviços de margem plana — decisão do Pedro**~~ ✅ **FECHADO
+2026-09-24** (revisão `392770f`). Decisão do Pedro: (a) `item_type` em (`service`, `option`) não é
+classificado — célula **vazia**, nem `critical` nem `ok`, no `/prices`, no export e em
+`/products/[id]` (`lib/alert.ts`; o `compute_price` não muda); (b) a coluna `Alert` não sai nos
+exports dos papéis sem custos — já não saía, ficou fixado. Smoke `JJ`. Texto original: — **REGISTADO
 2026-09-20**, ao activar os três CONDATLINK. As **15 linhas** de `T-1050`/`T-1051`/`T-1052`
 aparecem com `alert = 'critical'`, e **desde hoje isso é visível no export** — antes não era,
 porque nada estava `active`.
@@ -662,6 +668,10 @@ Pedro em `/prices?branch=APAC` como `finance.test`.
 **O que fica por decidir (item 74):** o `/auth/v1/user` **duplicado**. O middleware já validou a
 sessão; a página chama outra vez. As duas saídas têm custo próprio e a escolha é do Pedro.
 
+**2026-09-24 — a causa 2 não estava fechada:** `prefetch={false}` só desliga o pré-carregamento
+por viewport, e o de **hover** continuava (log de 24/09, 10:10). Os filtros passaram a
+`<FilterButton>` (`router.push` ao clique, sem `<Link>`); smoke `II` actualizado.
+
 **74. O `/auth/v1/user` duplicado por pedido — decisão pendente** — **2026-09-23**. O middleware
 corre `auth.getUser()` em **todos** os pedidos (matcher `/((?!_next/static|…))`) e a página corre
 outra vez. São dois *round-trips* ao GoTrue por carregamento, e o GoTrue é o serviço que mais
@@ -730,6 +740,35 @@ mais lenta. O ganho é de **carga** no GoTrue (0,141 s isolado, **1,232 s sob co
 **Fica a opção 2 do item 74:** `tmsi.me()`, uma função que devolve o perfil de quem chama. Não
 toca no middleware, e substitui `getUser()` **e** o `profiles` da página por uma chamada — **8 →
 7**. É migração.
+
+**77. O `/privacy` diz que os registos de acesso ficam 14 dias; ficam 90** — **REGISTADO
+2026-09-24**, ao escrever as respostas da demo. O item 66 passou o `logrotate` a `rotate 90` a
+20/09, e a página (`app/src/app/privacy/page.tsx`, «access logs (14 days)») e o
+`docs/DATA-PROCESSING-NOTICE.md` não foram actualizados. Uma nota de tratamento de dados que
+subdeclara a retenção é o erro no sentido errado. Correcção de texto, um commit de app. O
+`DEMO-SCRIPT.md` avisa para dizer 90 de viva voz até lá.
+
+**78. A guarda de documentos ignora ficheiros apagados e renomeados** — **REGISTADO
+2026-09-24.** `scripts/hooks/commit-msg` só avalia entradas `M` do `git diff --cached
+--name-status`: um `git rm docs/X.md`, ou um `git mv` que substitua um ficheiro por outro,
+**passam sem verificação** — e perder um documento inteiro é o caso extremo do que a guarda existe
+para apanhar. Visto ao promover o roadmap (a proposta saiu como `D`). Proposta: tratar `D` como
+perda de 100%, e `R` comparando com o conteúdo do destino que existia em `HEAD`. Acrescentar ao
+bloco `GG` o caso do `git rm`.
+
+**79. `/products/[id]` desenha a coluna `Alert` a todos os papéis** — **REGISTADO 2026-09-24**,
+cosmético. Custo e margem são condicionais a `canReadCosts`; o `Alert` não. **Não é fuga**
+(medido por claims: `compute_price` devolve 0 alertas a `sales` e a `logistics`, 46 linhas cada),
+mas é uma coluna sempre vazia para os papéis sem custos — e é o papel que vai ver a app na demo.
+Um `canReadCosts &&` no `<th>` e no `<td>`.
+
+**80. O aviso operacional é admin-only na app, não na BD** — **REGISTADO 2026-09-24.** A política
+`config_write` de `tmsi.settings` deixa **admin e finance** escrever qualquer chave. O
+`setPriceNotice`/`updateSetting` recusam a quem não é admin, mas um `finance` com o token dele e um
+pedido directo ao PostgREST consegue desligar o aviso. Risco baixo (o finance já escreve a política
+de margem, que é mais grave), mas é a distância entre o pedido («admin-only») e o que existe.
+Fechar na BD = uma política por chave, ou `operational_price_notice` fora de `settings` — migração.
+**Decisão do Pedro.**
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
@@ -1170,6 +1209,10 @@ o Excel hoje (direitos incidem só sobre o preço interco, sem o transporte na b
 há forma de a app ter uma base diferente por zona se um dia for preciso. Sem urgência — só
 decidir depois de confirmar com quem trata de alfândega. Detalhe completo:
 `docs/MODEL-GAP-ANALYSIS.md`, item 7.
+**2026-09-24:** enquanto estiver aberto, a app mostra «Prices are operational, pending customs-duty
+basis confirmation» no `/prices`, na impressão e no rodapé do export
+(`tmsi.settings.operational_price_notice`, admin-only em `/config`, ausente = ligado). **Fecha
+quando o despachante responder — e o admin desliga o aviso.**
 
 ~~**33. Zona "CH" do Excel sem correspondência no enum de zonas do schema**~~ ✅ **fechado
 2026-09-09 — falso alarme, resolvido pelo Pedro sem tocar em código.** `CH` no Excel

@@ -3,7 +3,14 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: catálogo real activo e PROVADO ponta a ponta — 2026-09-23.** O export de um papel
+**Etapa actual: E6, apresentação à equipa PREPARADA — 2026-09-24.** Revisão `392770f` em produção
+(digest `sha256:345a31c92f01…`), smoke **129/129** nos três modos. Os filtros do `/prices` deixaram de
+pré-carregar ao hover, o item 67 foi decidido e feito, o aviso «preços operacionais» (item 32) está
+vivo, o onboarding e o README descrevem o estado real, há guião da demo (`docs/DEMO-SCRIPT.md`) e o
+roadmap v6 passou a ser o `ROADMAP.md`. O que falta é a apresentação em si, o despachante e a
+licença. Detalhe: secção seguinte.
+
+**Etapa anterior: catálogo real activo e PROVADO ponta a ponta — 2026-09-23.** O export de um papel
 sem custos foi gerado e verificado no browser (46 linhas, só SA, sem custos) — a fronteira de custo
 no export deixou de ser "estruturalmente defendida" e passou a ter um ficheiro que o demonstra. Com
 isso, a §3 do roadmap v6 fecha por inteiro: **os dados reais são utilizáveis.** O que resta são
@@ -20,6 +27,92 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## E6, parte 1 — preparar a apresentação à equipa (2026-09-24)
+
+**Implantado:** revisão `392770f`, digest `sha256:345a31c92f013931abed18af27d2dacb0ff93212fb8fe06068ac501668689c65`,
+`healthy`, `/api/health` 200. **Smoke 118 → 129**, verde nos três modos (omissão, `login`, `jwt`).
+
+### Bloco A — um commit por assunto, cada um com a CI lida antes do seguinte
+
+| Commit | Assunto | CI |
+|---|---|---|
+| `1d50d47` | Filtros do `/prices` navegam só ao clique | ✅ verde (#53) |
+| `79540c5` | Item 67 — serviços/opções sem classificação | ✅ verde |
+| `392770f` | Item 32 — aviso «preços operacionais» | ✅ verde |
+| `6557082` | `PILOT-ONBOARDING.md` reescrito (⚠️4) | — só docs |
+| `e3c45f5` | `README.md` (⚠️5) | — fora de `app/**` |
+| `ccccaee` | Digest em produção | — |
+
+**1. Prefetch ao hover.** `prefetch={false}` no App Router só desliga o pré-carregamento por
+*viewport*; o de hover continuava (log de 24/09 às 10:10). Os seis botões de âmbito **e os quatro
+de estado** passaram a `<FilterButton>`, um componente cliente que faz `router.push` no `onClick`
+— não há `<Link>`, logo não há nada para o router pré-carregar. Os de estado entraram no mesmo
+commit por terem o mesmo defeito na mesma página; o `Back` continua `<Link prefetch={false}>` (um
+só, para `/`). O bloco `II` do smoke, que contava `<Link` por texto, dispararia com o comentário
+novo — passou a verificar **elementos** `<Link>` reais: nenhum aponta para `/prices`. **Provado a
+falhar contra a versão anterior** (4 `<Link>` para `/prices`). **Prova de browser:** ver abaixo.
+
+**2. Item 67.** Decisão do Pedro: (a) `item_type` em (`service`, `option`) → célula **vazia**,
+nem `critical` nem `ok`; (b) `Alert` fora dos exports sem custos. **(b) já era verdade no código**
+— o ramo sem custos da rota nunca teve a coluna; ficou fixado por asserção. (a) feito em
+`lib/alert.ts`, usado pelo `/prices`, pelo export e **também pelo `/products/[id]`** (mostra o
+mesmo alerta; deixá-lo de fora contradizia a lista). Na apresentação, não no motor: o
+`compute_price` não muda (seria migração). Bloco **`JJ`** (4): cabeçalhos dos dois ramos por
+leitura estática da rota; o conjunto isento lido do código e confrontado com o enum; e **15 linhas
+activas de serviço com alerta no motor** — a regra tem o que esconder, não é "0 = 0".
+
+**3. Aviso «Prices are operational, pending customs-duty basis confirmation».** Chave
+`tmsi.settings.operational_price_notice` — **sem migração**, a tabela aceita chaves livres e a
+política `config_read` mostra-a a todos os autenticados (não começa por `margin_`). **Ausente =
+ligado:** só some com `false`; uma chave apagada ou uma leitura falhada voltam a mostrá-lo.
+**A chave não foi criada nesta sessão:** o único admin é a conta real do Pedro, e escrevê-la por
+psql daria autoria nula ou emprestada. Nasce no primeiro clique do admin em `/config` (upsert, com
+a autoria dele). Aparece no `/prices` (sem `print:hidden`, logo também na impressão) e abre o
+rodapé do export nos dois ramos. **Admin-only é limite de app, não de BD:** a RLS de `settings`
+deixa admin **e** finance escrever qualquer chave; o `setPriceNotice` e o `updateSetting` recusam
+a quem não é admin, e o `/config` só desenha o botão ao admin. Fechar na BD seria migração — não
+feita, registado. Bloco **`KK`** (6): chave legível a todos, ausente = ligado, sem `print:hidden`,
+rodapé nos dois ramos, e **leitura viva como `sales`** da chave a `false` em transacção revertida,
+**zero resíduo** verificado antes/depois. Fora do âmbito, de propósito: o export de produtos (traz
+EXW, que não depende do direito aduaneiro).
+
+**4. `PILOT-ONBOARDING.md`**, reescrito em inglês. Deixa de fixar um digest (foi isso que o
+envelheceu). Âmbitos **medidos por claims** antes de os escrever: `logistics` vê as quatro filiais
+e nenhum canal; `branch_manager` só a CORP.
+
+**5. `README.md`:** checklist substituída por três linhas de estado e ponteiros; corrigidos também
+o diagrama (não há Kong; nginx → `tmsi-app`/GoTrue/PostgREST) e o layout.
+
+### Verificado nesta sessão, sem alteração
+
+- **`/products/[id]` desenha a coluna `Alert` para todos os papéis** (só custo e margem são
+  condicionais). **Não é fuga:** medido por claims, `compute_price` devolve **0** alertas, 0
+  margens e 0 custos a `sales` (46 linhas) e a `logistics` (46). A coluna fica sempre vazia para
+  esses papéis — cosmético, item 79.
+- **Item 54 estava feito e por riscar:** a zona do rate limit está versionada desde `482bb4f`, e o
+  vhost vivo é **igual** ao do repo (`diff`); `nosniff` servido.
+
+### Bloco B — `docs/DEMO-SCRIPT.md`
+
+Guião de 20 minutos, em português. **Achado que mudou a demo:** uma proposta de câmbio não tem
+filial, e `decide_price_proposal` só deixa o **admin** aprová-la — o único admin é a conta real
+do Pedro. E aprovar um câmbio move os preços de **todos** os artigos nessa moeda, reais incluídos:
+não há moeda fictícia. Logo o câmbio é **proposto e rejeitado** ao vivo (mostra que o pendente é
+invisível ao motor), e a aprovação completa faz-se num artigo fictício — `T-0004`, CORP, override
+de margem proposto por `finance.test` e aprovado por `branch_manager.test`. Verificado antes de o
+escrever: o `T-0004` é visível ao `branch_manager.test` e calcula sem erros.
+
+### Bloco C
+
+`ROADMAP-PROPOSTA-v6.md` actualizada e promovida a `docs/ROADMAP.md`; a v5 inteira em
+`docs/archive/ROADMAP-v5.md` com a linha de substituição no topo (commit com `rewrite`).
+
+### Achado sobre a guarda de documentos (item 78)
+
+O `commit-msg` só olha para entradas `M`: **apagar** ou **renomear** um ficheiro de `docs/` passa
+sem verificação. Viu-se ao promover o roadmap — a `ROADMAP-PROPOSTA-v6.md` saiu como `D` e o hook
+não a considerou. Aqui foi deliberado e está no `rewrite`; um `git rm` por engano não seria.
 
 ## Implantado (2026-09-24) — e as três tentativas que falharam antes
 

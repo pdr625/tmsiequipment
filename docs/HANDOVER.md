@@ -2,172 +2,90 @@
 
 Copyright © 2026 Pedro Alexandre. Proprietary — see ../LICENSE.
 
-**Escrito:** 2026-09-23, no fim da sessão da latência de página (itens 72/73, lote de
-apresentação).
-**Estado:** catálogo real activo e provado no browser. O `/prices` deixou de calcular o catálogo
-inteiro a cada pedido (0020) **e** deixou de fazer os pedidos em cadeia e de pré-carregar quatro
-páginas por visita.
+**Escrito:** 2026-09-24, no fim da sessão «E6, parte 1 — preparar a apresentação à equipa».
+**Estado:** a app está pronta para ser mostrada. O que falta é a apresentação, o despachante
+(item 32) e a licença. A versão anterior deste ficheiro (latência, 23/09) está no git
+(`git show a258215:docs/HANDOVER.md`); o essencial dela passou para o `STATE.md` e o `ROADMAP.md`.
 
 ---
 
 ## 1. Onde isto está
 
-**Produção:** revisão `24c8a70`, digest `sha256:83c4a4f7…`. Migrações **0001–0020**. Smoke
-**114 asserções**, verde nos três modos. Execução n.º 6 do protocolo feita.
+**Produção:** revisão `392770f`, digest `sha256:345a31c92f01…`, `healthy`. Migrações **0001–0020**.
+Smoke **129/129**, verde nos três modos. Execução n.º 6 do protocolo (23/09) — **esta sessão não
+tocou em RLS, vistas nem privilégios**, logo não pede execução nova.
 
 | | |
 |---|---|
 | Artigos reais | 49 carregados · **46 `active`** · 3 `draft` (`T-1002`, `T-1020`, `T-1025`) |
-| `sales` (SA) · `agent` (APAC) | vêem 46, sem custo |
-| Ficheiro-fonte do catálogo | `tmsi-catalogo-completo-2026-09-16-v6.csv` (`sha256 5377a0c9…`), fora do repo |
-| Contas de teste | seis `@example.test`, password única partilhada — ver `docs/TEST-ACCOUNTS.md` |
+| Contas de teste | seis `@example.test`, password única partilhada até à produção — `docs/TEST-ACCOUNTS.md` |
+| Roadmap | **`docs/ROADMAP.md` é agora a v6**; a v5 está em `docs/archive/ROADMAP-v5.md` |
+| Guião da demo | `docs/DEMO-SCRIPT.md` |
+| Onboarding | `docs/PILOT-ONBOARDING.md` (inglês, reescrito contra o estado real) |
 
 ---
 
-## 2. A primeira coisa a fazer: os três cliques de aceitação
+## 2. Coisas vivas que a sessão seguinte tem de saber
 
-**Com o host calmo** (`ps -C claude` vazio), como `finance.test`, e depois confirmar no
-`/var/log/tmsi/tmsi-timing.log` (legível sem sudo):
-
-| Clique | O que observar |
-|---|---|
-| `/prices?branch=APAC` | 54 linhas · **bem abaixo de 1 s** |
-| `/prices?branch=SA` | idem |
-| `/prices` (All branches) | 283 linhas · continua a ser o pedido caro, **por desenho** |
-
-**A prova não é o tempo, é a contagem.** Antes: **8 pedidos ao backend por carregamento**, mais
-**12 de pré-carregamento** a cada visita. Depois devem ser **6 e zero**. O comando:
-
-```bash
-awk '$1 > "2026-09-23T<hora do clique>"' /var/log/tmsi/tmsi-timing.log | grep 172.20.40.5 | wc -l
-```
-
-**Se o tempo não melhorar mas a contagem descer, a correcção funcionou** e o que resta é o
-`/auth/v1/user` duplicado (item 74, decisão tua) ou o host sob pressão.
+- **O aviso «preços operacionais» não tem linha em `settings` até o admin lhe tocar.** Ausente =
+  ligado, por desenho. Não criar a chave por psql: a autoria seria nula ou emprestada.
+- **Depois da demo, o `T-0004` fica com um override de margem aprovado** (artigo fictício, CORP)
+  **e há uma proposta de câmbio rejeitada** no histórico. A proposta fica — é registo. O override
+  remove-se: `select id, kind, valid_from from tmsi.price_overrides where product_id = 'T-0004'
+  order by id;` — o de maior `id` com motivo «demo». Transacção, contagem antes/depois.
+  *Só se a demo tiver acontecido — confirmar com o Pedro.*
+- **Um câmbio nunca se aprova numa demo.** Só o admin aprova (proposta sem filial), e aprovar move
+  os preços reais da moeda inteira. Está no guião; não reinventar.
 
 ---
 
-## ⚠️ ESTADO EM ABERTO AO FECHAR A SESSÃO (2026-09-23)
+## 3. O que fica para o Pedro — lista de browser, por ordem
 
-**O código está no git e NÃO está em produção.** Commits `0c8bff6` (lote de apresentação) e
-`b189984` (fixar a inferência de tipos) empurrados; **a CI não publicou imagem para nenhum dos
-dois**. Verificado: as tags `sha-0c8bff6` e `sha-b189984` não existem no GHCR ao fim de ~20
-minutos.
-
-**A produção não foi tocada e está sã:** contentor `healthy` na revisão `24c8a70`
-(digest `83c4a4f7…`), `/api/health` 200, smoke **118/118**. O que está no ecrã hoje é o código
-anterior ao lote de apresentação.
-
-**Não consegui ler o porquê.** O VPS não tem `gh` instalado, e o PAT que aqui existe tem apenas
-`read:packages` — não dá para ler os *logs* das Actions. **Primeiro passo da sessão seguinte:**
-abrir o separador Actions do repositório e ver o erro.
-
-**A hipótese mais provável, e o que já se fez contra ela:** o `/prices` passou a escolher a lista
-de colunas em tempo de execução, e o `postgrest-js` deriva o tipo do resultado da **string
-literal** do `.select()` — com um ternário a inferência colapsa. O commit `b189984` declara os
-tipos à mão (`LinhaPreco`, `MetaProduto`) exactamente para remover essa superfície. **Se a CI
-falhou nos dois, o erro pode ser outro e o log é a única forma de saber.**
-
-**Não há Node no VPS, por desenho** (961 MB de RAM; construir aqui causa OOM — regra do
-`~/atelier-vps/CLAUDE.md`). O `typecheck` é da CI e esta sessão não o podia correr localmente.
-
-**Reverter não é preciso:** nada foi implantado. Corrigir o erro e empurrar é suficiente.
-
-## 2b. Medir no browser: onde está o segundo que o nginx não vê
-
-O `tmsi-timing.log` mede **só o que o nginx serve**: do primeiro byte do pedido ao último da
-resposta. Tudo o que acontece **depois** — descarregar os *chunks* de JavaScript, executar,
-hidratar — é invisível para ele. Num `~2 s` sentido, é normal que **metade** esteja aí.
-
-**DevTools → Network**, com **"Disable cache"** ligado e recarga forçada (`Ctrl+Shift+R`).
-
-**Passo 1 — isolar o documento.** Filtrar por **Doc**, clicar na linha do `/prices?branch=APAC`,
-separador **Timing**:
-
-| O que ler | O que significa |
-|---|---|
-| **Waiting for server response (TTFB)** | É **isto** que o nginx regista como `rt`. Se bater com o log, o servidor não é o problema |
-| **Content Download** | A transferência do HTML. Grande = HTML pesado, não servidor lento |
-| Queueing / Stalled | Espera do browser, não do servidor — ignora-se |
-
-**Se o TTFB for ~0,4 s e o total sentido for 2 s, o servidor está inocente** e o segundo está nos
-passos 2 e 3.
-
-**Passo 2 — o JavaScript.** Filtrar por **JS**. Somar `Transferred` e olhar à coluna `Time`. O
-Next.js serve os *chunks* do `/_next/static/…`, que o `tmsi-timing.log` **não regista** (o
-`matcher` do middleware exclui `_next/static`). É o ponto cego maior.
-
-**Passo 3 — a hidratação.** Separador **Performance**, gravar durante a recarga. Procurar o bloco
-longo de *Scripting* **depois** do último pedido de rede terminar: é o React a hidratar a tabela.
-Com 54 linhas × 9 colunas deve ser curto; se for centenas de milissegundos, o problema é o volume
-de DOM, e a resposta é paginação — não menos pedidos.
-
-**A soma que interessa:** `TTFB` + `download` + `hidratação` ≈ o tempo sentido. Saber **qual das
-três** domina decide o que se corrige a seguir, e as três pedem correcções diferentes.
-
-⚠️ **Com uma sessão de agente aberta neste VPS os números não valem** (regra dos recursos do
-`~/atelier-vps/CLAUDE.md`) — a sessão chega a ocupar 30% da RAM. Medir com `ps -C claude` vazio.
-
-## 3. O que fica para o Pedro
-
-1. **Lista de browser da execução n.º 5**, em `docs/VERIFICATION-PROTOCOL.md`: exports como
-   `logistics.test`; as 15 linhas `critical` dos serviços (**item 67**); vista de impressão;
-   branding no `.xlsx`; fluxos de email; password única e dashboard.
-2. **Item 67 — a regra do `Alert`** nos três serviços CONDATLINK. Três saídas escritas.
-3. **Os três `draft`** — `hs_code` do `T-1020`, SAP de origem dele e do `T-1002`, peso do
-   `T-1025`. Nenhum peso foi inventado.
-4. **Item 53** — `sap_code_us` duplicado.
-5. **Item 32** — direito aduaneiro por zona, externo. **Até lá os preços são operacionais, não
-   definitivos.**
-6. ~~Lote de apresentação~~ ✅ **feito 2026-09-23** — colunas explícitas, duas casas no custo,
-   margem em percentagem, nome ao lado do código, coluna e filtro de estado (`active` por
-   omissão), ordenação categoria → código → âmbito, rótulo "All branches and channels", e
-   "Generated by" só com o nome. **Falta ver no browser e no `.xlsx`.**
-7. **O `nginx -t` e o `reload` do formato de timing já foram feitos (2026-09-24)** — as linhas
-   novas trazem `rsc=`, `pf=` e `purpose=`. **A primeira coisa a olhar:** correr
-   `scripts/contar-pedidos.sh 10` depois de navegares, e ver se a linha `PREFETCH` é mesmo zero.
-   ⚠️ **`prefetch={false}` no App Router não desliga o prefetch** — desliga o automático por
-   *viewport*, mas o Next.js continua a pré-carregar **ao passar o rato**. O log de 24/09 às
-   10:10 mostra `LTD` e `CORP` pedidos no mesmo segundo, e 7 `_rsc` a custarem 7 `auth/v1/user`
-   com **zero** carregamentos completos. Isso não é navegação.
-8. **Item 74 — o `/auth/v1/user` duplicado.** Duas saídas escritas no BACKLOG, ambas com custo:
-   cabeçalho do middleware (mexe onde vivem os *cookies* de sessão) ou função `tmsi.me()` na BD
-   (é migração). **Decisão tua.**
+1. **Agora, nesta sessão:** passar o rato pelos seis botões de âmbito do `/prices`, **zero
+   cliques** → `scripts/contar-pedidos.sh 5` deve dar `PREFETCH: 0` (ou nenhuma linha
+   `PREFETCH`).
+2. **Como admin** → `Pricing configuration` → *Operational price notice*: **Hide notice** → abrir
+   `/prices` (o aviso sumiu) → **Show notice** → volta. É a prova do interruptor e deixa a chave
+   criada com a tua autoria.
+3. **Como `finance.test`** → `/config`: a secção *Operational price notice* **não** aparece; na
+   tabela Settings a linha `operational_price_notice` está **só de leitura**.
+4. **Como `sales.sa`** → `/prices`: aviso no topo · clicar **TBM** → «No prices visible…» ·
+   **Export**: sem `Alert`, sem custos, aviso no rodapé · **Print**: aviso na pré-visualização.
+5. **Como `finance.test`** → `/prices?branch=SA` → **Export**: coluna `Alert` presente, e
+   **vazia** nos `T-1050`/`T-1051`/`T-1052` · filtro **draft** → os três, sem erro, a âmbar.
+6. **Como `finance.test`** → `Products` → `T-1050`: `Alert` vazio.
+7. **Checklist dos 10 minutos** antes da reunião: `DEMO-SCRIPT.md` §0.
+8. Ainda em aberto da execução n.º 5 (`VERIFICATION-PROTOCOL.md`): exports como `logistics.test`,
+   branding no `.xlsx`, fluxos de email, dashboard (passo V).
 
 ---
 
-## 4. O que NÃO fazer já
+## 4. Decisões que são tuas — só as novas desta sessão
 
-**Item 71 — `price_cache`.** Está proposto com gatilhos calculados: **X = 4 s** no "All branches"
-com host calmo, ou **N = 200 artigos reais**. Hoje estamos em 62 artigos e ~285 chamadas. Fazê-lo
-agora é construir uma cache para um problema que uma projecção resolveu.
-
----
-
-## 5. Leituras obrigatórias antes de escrever código
-
-**`CLAUDE.md`** (raiz do repo). Seis regras, todas nascidas de defeitos reais. As duas mais
-recentes, ambas de 2026-09-23:
-
-- **`CREATE OR REPLACE VIEW` reinicia as `reloptions`** — toda a migração que recrie uma vista
-  termina com um bloco `DO` que verifica o mapa, **nos dois sentidos**;
-- **antes de escrever um ficheiro, olhar para o que lá está** — e o hook `commit-msg` que o
-  verifica (`git config core.hooksPath scripts/hooks`, passo obrigatório num clone novo,
-  `DEPLOY.md §5a`).
+1. **Item 80 — o aviso é admin-only na app, não na BD.** A RLS de `settings` deixa `finance`
+   escrever qualquer chave; com um pedido directo, um `finance` consegue desligar o aviso. Aceitar
+   (risco baixo), ou fechar na BD (migração).
+2. **A demo do câmbio** vai **até à rejeição**, não até à aprovação (§2 acima, e o porquê no
+   `DEMO-SCRIPT.md` §4). Se quiseres mesmo mostrar um câmbio aprovado, é com a tua conta admin e
+   mexe nos preços reais dessa moeda — não recomendo.
+3. **Itens 77–79**, pequenos, sem pressa mas antes de haver colegas reais: `/privacy` diz 14 dias
+   de registos de acesso e são 90 (77); a guarda de documentos não vê `git rm`/`git mv` (78); a
+   coluna `Alert` vazia no `/products/[id]` para quem não lê custos (79).
 
 ---
 
-## 6. O fio que atravessa estas sessões
+## 5. O que NÃO fazer já
 
-**Cinco defeitos foram encontrados na própria coisa que os estava a verificar.** A `0014` (um
-`REVOKE` de coluna que era no-op), a `0016` (o default-deny que não existia), a
-`prova-guarda-anon` (um "0 = 0"), um diagnóstico sobre defaults que inferia de um efeito causado
-por mim, e agora a `0020` (o `security_invoker` perdido).
+- **Item 71 (`price_cache`)** — só com gatilho: 4 s no «All branches» com host calmo, ou 200
+  artigos reais.
+- **§4.3 do roadmap** (renome de infra, CPI, EOP) — suspenso até à licença.
+- **Desactivar as contas `.test`** — só na fase de produção.
 
-O da 0020 é o mais instrutivo: **o ensaio comparava impressões digitais e elas ficaram idênticas.**
-Uma prova que só olha para o *resultado* não vê uma mudança em *como* o resultado é protegido.
-Ao mexer numa vista, comparar também `reloptions`, dono e ACL.
+---
 
-E a regra que a 0019 e a 0020 juntas ensinam: **a impressão digital não é sempre a prova certa.**
-Na 0019 ela *tinha* de mudar (alargava visibilidade); na 0020 *tinha* de ficar igual (só
-desempenho). Escolher a invariante antes de medir, não depois.
+## 6. Leituras obrigatórias antes de escrever código
+
+**`CLAUDE.md`** (raiz do repo) — todas as regras nasceram de defeitos reais. As que mais pesaram
+nesta sessão: **nenhuma alteração a `app/src` sem ler a CI** (`scripts/ci-log.sh`), **um assunto
+por commit**, e **toda a substituição com asserção** — uma parou hoje uma substituição cuja
+contagem estava errada (uma substring contida noutra), antes de escrever o ficheiro.
