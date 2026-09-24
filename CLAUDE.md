@@ -264,6 +264,21 @@ PAT *fine-grained* com `Actions: Read-only`, em `~/tmp/tmsi-sudo/github-actions-
 **O ciclo, e não é negociável:** empurrar → `scripts/ci-log.sh` → **ler** → só depois implantar ou
 continuar a escrever.
 
+### Uma substituição de texto que não casa é um no-op silencioso
+
+**Toda a edição por `replace`/`sed` leva uma asserção de que casou.** Em Python,
+`assert s.count(alvo) == 1` antes de substituir; em `sed`, verificar o resultado a seguir.
+
+A 2026-09-23 as **três** falhas de CI tiveram uma causa só: ao envolver o `getBranding()` em
+`cache()`, procurei a linha de `import` por `from '@/lib/supabase-server'` e o ficheiro tem
+`from './supabase-server'`. O `replace` não casou, **não fez nada, e não disse nada** — o
+`cache()` ficou a ser usado sem estar importado. Foi a única edição da sessão sem `assert`, e foi
+precisamente a que falhou.
+
+O que agrava: seguiram-se dois palpites sobre inferência de tipos, ambos errados. O `typecheck`
+reporta **todos** os erros e só havia aquele — se eu tivesse lido o log em vez de adivinhar,
+tinha-o visto à primeira.
+
 ### Commits de app: pequenos, um assunto cada
 
 **Para a CI poder dizer qual deles parte.** A 2026-09-23 o lote de apresentação foi **um** commit
