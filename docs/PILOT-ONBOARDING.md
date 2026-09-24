@@ -1,96 +1,149 @@
-# Guião — onboarding do piloto (2-3 colegas)
+# Pilot onboarding — TMSI Equipment Price Listing
 
-**Estado:** pré-requisitos satisfeitos 2026-09-05. Digest em produção
-`sha256:8b466fa373f473ef9ac94cb720e9110ea02170bf7908f94271fa220a2c77346a` (migrações
-0001–0006). Mecanismo testado ao vivo ponta-a-ponta com uma conta descartável antes deste
-guião ser escrito — ver `docs/STATE.md`, secção "Piloto — preparação do onboarding", e a
-adenda correspondente em `docs/VERIFICATION-PROTOCOL.md`.
+Copyright © 2026 Pedro Alexandre. Proprietary — see ../LICENSE.
 
-Este é o fluxo que **funciona hoje**, não o desenho original — foi corrigido um bloqueio real
-(reset de admin não confirmava o email de um convite fresco) antes deste documento existir.
+**Written against the real state on 2026-09-24:** migrations **0001–0020**, real catalogue
+active (**46 articles**), smoke suite green, protocol run no. 6. The exact image digest in
+production is not repeated here — it changes with every deploy and a copy here goes stale (the
+previous version of this file pinned `8b466fa3…`, nine migrations behind). The current one is in
+`deploy/supabase/docker-compose.yml` and at the top of `docs/STATE.md`.
+
+**Pilot status:** real colleagues are **not** onboarded yet — decision of 2026-09-05, still in
+force. Until the final deployment, the app is used with the six fictitious `@example.test`
+accounts (`docs/TEST-ACCOUNTS.md`). This guide is what a colleague reads, and what the admin
+does, **when** that changes.
+
+Part 1 is for the colleague. Part 2 is for the admin.
 
 ---
 
-## Antes de começares
+# Part 1 — for the colleague
 
-- **A password de cada colega nunca deve ser escrita em chat, email ou qualquer ficheiro.**
-  Aparece uma única vez no ecrã do passo 3 — decora-a ou aponta-a à mão nesse momento, e
-  comunica-a ao colega directamente (pessoalmente ou por telefone), nunca por escrito num
-  canal que fique gravado.
-- Cada colega precisa de: um email (usado como identificador de login, não recebe
-  necessariamente nada — a entrega de email neste projecto não é garantida, é por isso que
-  este mecanismo existe) e um papel (tabela abaixo).
-- Fazes tudo isto autenticado como admin, em `/admin/users`, no browser.
+## Signing in
 
-## Papéis disponíveis (resumo — matriz completa em `VERIFICATION-PROTOCOL.md` secção 3)
+1. Open **https://tmsiequipment.duckdns.org** and sign in with your work email and the
+   temporary password the admin gave you **in person or by phone** (never in writing).
+2. The app sends you straight to **Change password**. Choose your own; the temporary one stops
+   working from that moment.
+3. You land on the home page. It only shows the screens your role can use.
 
-| Papel | Vê custos/margens? | Precisa de filial/canal? | Uso típico |
+Forgot your password? Ask the admin for a reset — you get a new temporary password the same way.
+Email delivery from this system is not guaranteed, so don't wait for an email.
+
+## What each role sees
+
+The boundary is enforced by the **database**, not by hiding buttons: a role without cost access
+gets no cost value from any screen, export or direct request.
+
+| Role | Price list shows | Scope | Other screens |
 |---|---|---|---|
-| `finance` | ✅ tudo | não | financeiro, sem restrição de filial |
-| `product_manager` | ✅ tudo | não | gere produtos, sem custos de config |
-| `admin` | ✅ tudo | não | administração completa — atribui com cautela |
-| `viewer` | ✅ tudo, só leitura | não | visão total, zero escrita |
-| `branch_manager` | ◐ só a sua filial | **sim — filial** | gestor de uma filial (SA/LTD/CORP/TBM) |
-| `logistics` | ❌ nunca custos | não | operações (HS, peso, transporte) |
-| `sales` | ❌ nunca custos | **sim — filial** | vendas de uma filial, sem custos |
-| `agent` | ❌ nunca custos | **sim — canal** | agente de um canal (só existe `APAC`→`TBM` hoje) |
+| `sales` | Min price · Ref price · Lead time | **Own branch**, active articles only | Products, Overrides, Proposals |
+| `agent` | Min price · Ref price · Lead time | **Own channel** (today: `APAC`), active only | as `sales` |
+| `logistics` | Min price · Ref price · Lead time | All four branches (not channels), **no costs** | Products (HS code, weight, dimensions), Pricing configuration (transport, customs) |
+| `branch_manager` | Total cost · Margin · Min · Ref · Alert · Status | **Own branch** | Dashboard, Pricing configuration, Audit log |
+| `finance` | Total cost · Margin · Min · Ref · Alert · Status | All branches and channels | Dashboard, Pricing configuration (proposes and approves), Audit log |
+| `product_manager` | as `finance` | All | Products (create/edit), Bulk import |
+| `viewer` | as `finance`, **read only** | All | Dashboard, Audit log |
+| `admin` | everything | All | Users, Branches & channels, Branding |
 
-Filiais existentes: `SA`, `LTD`, `CORP`, `TBM`. Canais existentes: `APAC` (ligado a `TBM`).
-Se o colega não se encaixa em `branch_manager`/`sales`/`agent`, deixa filial/canal em branco.
+What the columns mean:
 
-## Passo a passo, por colega
+- **Min price / Ref price** — the floor and the reference selling price for that branch or
+  channel, in its currency.
+- **Margin** — as a percentage of the selling price. **Alert** classifies it against the
+  company thresholds: `ok`, `warning`, `critical`. **Services and options are not classified** —
+  their margin is zero by design (it lives in the parent article's price), so the cell is empty.
+- **Status** — cost roles see `active` by default and can switch to `draft`/`review`/`all`.
+  Sales and agents only ever see `active`.
 
-1. **Convidar** — secção "Invite new user (email)", escreve o email real do colega, "Send
-   invite". Cria a conta; o email de convite pode não chegar (não interessa, o resto do fluxo
-   não depende dele).
-2. **Atribuir papel** — na linha do utilizador acabado de criar, escolhe o "Role" da tabela
-   acima e, se for `branch_manager`/`sales`, a "Branch"; se for `agent`, o "Channel". "Add
-   role".
-3. **Reset password** — na mesma linha, deixa marcada a opção por omissão "Generate temporary
-   password" (não "Set manually" — é a gerada, forte, única, que este mecanismo existe para
-   produzir) e carrega em "Reset password". **A password aparece uma única vez**, numa caixa
-   amarela — copia-a/decora-a imediatamente, um refresh da página perde-a para sempre (terás
-   de repetir este passo, o que gera uma nova, se isso acontecer).
-4. **Comunicar** — entrega a password ao colega directamente (voz, não escrito).
-5. **Primeiro login do colega** — o colega entra em `/login` com o email + a password
-   temporária. A app força-o de imediato para `/account/password`: aí define a password dele
-   próprio (a temporária deixa de servir a partir desse momento). Depois disso, acesso normal
-   ao que o papel dele permitir.
+## Export and print
 
-Repete os passos 1–4 para cada um dos 2–3 colegas.
+- **Export to Excel** gives you exactly what your screen shows, for the branch you filtered —
+  never more. Numbers are real numbers (you can sum and sort). The file says who generated it by
+  **name**, never by email, because it may travel outside the company.
+- **Print / Save as PDF** prints the same list with the company header.
+- The Alert column exists only in the cost roles' file. It never circulates in the sales files.
 
-## Checklist (uma linha por colega)
+## The notice at the top of the price list
 
-| Nome | Email | Papel | Filial/Canal | Password comunicada | 1º login confirmado |
+> ⓘ Prices are operational, pending customs-duty basis confirmation
+
+This is deliberate and stays until the admin removes it. Customs duty per destination zone is
+still being confirmed with the customs broker; until then the prices are **operational, not
+final**. It also appears in the print view and at the bottom of every Excel export. Don't quote
+a price to a customer as final while this notice is showing.
+
+## If something looks wrong
+
+A price that looks off, an article you expected and can't see, a column you think you shouldn't
+see, an error message — **tell the admin: Pedro Alexandre, pedroalexandre625@gmail.com.**
+
+Please include: the page (copy the address bar), the branch filter, the article code, and what
+you expected. A screenshot helps. **Don't** forward an export to show the problem if it contains
+prices — describe it instead.
+
+What you can't break: prices are only changed through **proposals** that someone else approves,
+and every change is kept in the audit log with who and when.
+
+## Your data
+
+The **Data processing notice** link on the home page (`/privacy`) says what the app keeps about
+you (name, email, role, a hashed password, the audit trail of changes you make), where it runs
+(a personal server during this pilot phase, under a personal domain) and what you can ask for.
+
+---
+
+# Part 2 — for the admin
+
+## Before you start
+
+- **A colleague's password is never written in chat, email or any file.** It appears once on
+  screen (step 3); pass it on by voice.
+- **Real accounts never share the test accounts' password.** The shared password of the six
+  `.test` accounts is a decision for fictitious identities only (`docs/TEST-ACCOUNTS.md`).
+- Everything happens in the browser, signed in as admin, at **User administration**
+  (`/admin/users`).
+- Branches: `SA`, `LTD`, `CORP`, `TBM`. Channels: `APAC` (linked to `TBM`).
+
+## Step by step, per colleague
+
+1. **Invite** — enter the colleague's work email, send the invite. The account is created;
+   whether the email arrives doesn't matter.
+2. **Assign the role** — on the new user's row, pick the role. `sales` and `branch_manager` need
+   a **Branch**; `agent` needs a **Channel**. The rest leave both empty.
+3. **Reset password** — keep **Generate temporary password** (the default) and confirm. The
+   password is **shown once** — "Shown once — copy it now". A page refresh loses it; if that
+   happens, repeat this step (a new one is generated, the old one is never stored).
+4. **Hand it over** — by voice, together with the address and a pointer to `/privacy`.
+5. **First login** — the colleague is forced to change the password before seeing anything.
+
+## Checklist
+
+| Name | Email | Role | Branch / channel | Password handed over | First login confirmed |
 |---|---|---|---|---|---|
 | | | | | ☐ | ☐ |
 | | | | | ☐ | ☐ |
 | | | | | ☐ | ☐ |
 
-## Se algo correr mal
+## If something goes wrong
 
-- **Colega não consegue entrar, "Email not confirmed" ou password recusada:** não deveria
-  acontecer com o mecanismo actual (achado corrigido antes deste guião) — se acontecer, é uma
-  regressão real, não um passo em falta desta lista. Pára e regista, não tentes contornar por
-  fora do `/admin/users`.
-- **Perdeste a password gerada antes de a entregar:** repete o passo 3 — cada "Reset
-  password" gera um valor novo, não há forma de recuperar o anterior (por desenho, nunca
-  fica guardado em lado nenhum).
-- **Colega banido por engano, ou precisas de o desactivar:** botão "Disable"/"Reactivate" na
-  linha do utilizador — se a leitura do estado de ban ao GoTrue falhar, a página mostra um
-  aviso "Ban status unavailable" em vez de assumir "activo" (achado #2, tarefa 6).
+- **"Email not confirmed" or password refused on first login** — shouldn't happen (fixed before
+  the first version of this guide, `email_confirm` on reset). If it does, it's a regression:
+  stop and record it, don't work around it outside `/admin/users`.
+- **Lost the generated password before handing it over** — repeat step 3.
+- **Need to cut someone's access** — **Disable** on the user's row (reversible, **Reactivate**).
+  If the ban status can't be read, the page says "Ban status unavailable" rather than assuming
+  the account is active.
 
-## Nota de tratamento de dados (item 42, 2026-09-16)
+## The operational-price notice
 
-A app tem agora uma página `/privacy` (inglês, ligada da home) com a nota de tratamento de
-dados pessoais — o que é guardado, para quê, quem acede, quanto tempo, e o que um colega pode
-pedir. Vale a pena apontar para lá no passo 4 (comunicar), junto da password — "a app também
-tem uma página que explica que dados guarda sobre ti, em `/privacy`, depois de entrares".
-Fonte completa, em português: `docs/DATA-PROCESSING-NOTICE.md`.
+**Pricing configuration → Operational price notice**, admin only. "Hide notice" removes it from
+the price list, the print view and the export footer at once; "Show notice" brings it back.
+Remove it only when item 32 (customs-duty basis per zone) is closed.
 
-## Depois do onboarding
+If the setting is ever deleted, the notice **comes back** — absent means shown, on purpose.
 
-Recolhe feedback de cada colega (o que confundiu, o que faltou, o que não bateu certo com o
-que esperavam do papel) — informa a L2 (`docs/BACKLOG.md` item 9) e as próximas iterações.
-Quando os 2-3 estiverem a usar a app com regularidade, o item 8 do `docs/BACKLOG.md` pode ser
-riscado.
+## After onboarding
+
+Collect feedback from each colleague — what confused them, what was missing, what didn't match
+what they expected from their role — and record it in `docs/BACKLOG.md`.
