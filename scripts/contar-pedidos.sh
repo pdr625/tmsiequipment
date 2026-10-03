@@ -102,8 +102,12 @@ if [ "${COMPLETOS:-0}" -gt 0 ]; then
   echo "  ⚠️ a média abaixo divide TODOS os pedidos ao backend pelos carregamentos"
   echo "     completos — se houve navegações ou prefetch na janela, ela inflaciona."
   echo "     Para a medida limpa: uma janela com UM carregamento e mais nada."
-  printf '  média por carregamento:       %s   (eram 8; o objectivo é 6 ou menos)\n' \
+  printf '  média por carregamento:       %s   (eram 11 — medido no log, não os 8 que esta\n' \
     "$((TOTAL_BACKEND / COMPLETOS))"
+  echo "                                        linha dizia antes de 2026-10-03; o middleware"
+  echo "                                        (2) e o aviso operacional (1) não entravam na"
+  echo "                                        conta. Alvo com o middleware intacto: 8 —"
+  echo "                                        medido em produção a 2026-10-03, item 85.)"
 else
   echo "  (sem carregamentos completos na janela — a média não é calculável)"
 fi
