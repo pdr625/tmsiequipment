@@ -65,7 +65,10 @@ export function LoginForm() {
       </form>
 
       <p className="mt-4 text-center text-sm">
-        <Link href="/forgot-password" className="text-gray-600 underline">
+        {/* Item 96: sem sessão nenhuma para pré-carregar — a página de login
+            não paga a tempestade dos itens 73/81 (um só link), mas não há
+            razão para pagar nenhum pedido especulativo aqui. */}
+        <Link href="/forgot-password" prefetch={false} className="text-gray-600 underline">
           Forgot password?
         </Link>
       </p>

@@ -2252,6 +2252,19 @@ def block_retention_text():
           mt is not None and mt.group(1) == n, f"tmsi-timing rotate={mt.group(1) if mt else '?'} nginx rotate={n}")
 
 
+def block_login_link_prefetch():
+    """PP — item 96: o <Link> de "Forgot password?" na página de login tem
+    prefetch={false}. Pequeno (um só link, sem sessão) mas sem razão para
+    pagar um pedido especulativo."""
+    import re as _re
+    import pathlib as _pl
+    raiz = _pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "login"
+    forma = (raiz / "form.tsx").read_text()
+    links = _re.findall(r"<Link\s[^>]*>", forma)
+    check("PP: form.tsx tem exactamente um <Link>, o de forgot-password", len(links) == 1, f"{len(links)} <Link>")
+    check("PP: esse <Link> tem prefetch={false}", bool(links) and "prefetch={false}" in links[0], links[0] if links else "sem <Link>")
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -2434,6 +2447,7 @@ def main():
     block_me_and_settings(tokens, claims)
     block_home_menu()
     block_product_alert_column()
+    block_login_link_prefetch()
     block_retention_text()
 
     delete_smoke_fixture_product()
