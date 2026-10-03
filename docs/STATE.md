@@ -143,6 +143,9 @@ Pedido do Pedro, por ser a sessão que mexeu em `/config`, `/products/[id]` e no
   operacional em `/prices`, export `sales.sa` (sem custo/Alert) e `finance.test` (com
   custo/margem/Alert, serviços vazios), `/proposals` sem pendentes de ensaios anteriores —
   **confirmado, «5-10 ok».**
+- **Fora do checklist, também confirmado pelo Pedro no browser:** o "Saved" a verde do Save de
+  `Settings` (item 97) e os números a duas casas / margem em `%` do `/products/[id]` (item 89) —
+  até aqui só provados por smoke, agora vistos.
 
 ## Sessão 0021 — `me()`, colunas de artigo, aviso admin-only, sem TRUNCATE (2026-09-24)
 

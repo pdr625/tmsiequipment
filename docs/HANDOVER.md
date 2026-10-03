@@ -60,9 +60,8 @@ política de backup mudou e está activa no host (diário com purga + semanal, s
 1. ~~Repetir o ensaio da demonstração~~ ✅ **FEITO, 2026-10-03.** Terminal (1–4): smoke 170/170,
    app viva — confirmado pelo agente. Browser (5–10): contas a entrar, aviso operacional, os
    dois exports, `/proposals` limpas — **confirmado pelo Pedro** («5-10 ok»).
-2. Confirmar visualmente o Save de `Settings` («Saved» a verde) e os números do
-   `/products/[id]` (duas casas, margem em `%`) — provados por smoke, não vistos ainda no
-   browser por ninguém.
+2. ~~Confirmar visualmente o Save de `Settings` («Saved» a verde) e os números do
+   `/products/[id]`~~ ✅ **FEITO, 2026-10-03 — confirmado pelo Pedro.**
 
 ---
 

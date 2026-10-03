@@ -930,7 +930,8 @@ Prova: `scripts/contar-pedidos.sh` num «Back» → ≤ 3 pedidos.
 
 ~~**89. `/products/[id]`: `Total cost (EUR)` com até 14 decimais**~~ ✅ **FECHADO
 2026-10-03 — `a5961a7`.** Mesmos `eur()`/`pct()` do `/prices` (item 72), aplicados a
-`total_cost_eur`, `margin`, `min_price`, `ref_price`. Bloco `RR` do smoke.
+`total_cost_eur`, `margin`, `min_price`, `ref_price`. Bloco `RR` do smoke. **Confirmado no
+browser pelo Pedro, 2026-10-03.**
 
 **90. `/products/[id]`: a tabela de overrides repete o motivo completo do lote de importação em
 cada linha** — **REGISTADO 2026-10-03**, achado do Pedro. Um lote com um motivo longo (HS/duty em
@@ -981,7 +982,8 @@ uma correcção técnica — fica registado, sem acção.
 `cc964be`.** Achado ao verificar o item 86 (`margin_min=-5` só se viu pela auditoria, porque o
 ecrã não disse nada). `updateSetting()` já devolvia `{success:true}`; faltava mostrá-lo —
 `SettingRow` passa a ler "Saved" antes do `ErrorText`. Bloco `QQ` do smoke, scope preso ao
-`SettingRow` (o ficheiro já usa este padrão noutro formulário).
+`SettingRow` (o ficheiro já usa este padrão noutro formulário). **Confirmado no browser pelo
+Pedro, 2026-10-03.**
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
