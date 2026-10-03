@@ -605,6 +605,15 @@ export function SettingRow({
         ) : (
           (setting.note ?? '—')
         )}
+        {/* Item 97 (2026-10-03): o Save não dava feedback nenhum — nem erro
+            nem confirmação. O achado do item 86 só se viu pela auditoria
+            (dois valores inválidos aceites e em vigor, sem aviso nenhum).
+            updateSetting() já devolvia { success: true }; faltava mostrá-lo. */}
+        {state && 'success' in state && (
+          <p role="status" className="mt-1 text-xs text-green-600">
+            Saved
+          </p>
+        )}
         <ErrorText state={state} />
       </td>
       {canWrite && (

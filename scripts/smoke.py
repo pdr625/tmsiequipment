@@ -2265,6 +2265,22 @@ def block_login_link_prefetch():
     check("PP: esse <Link> tem prefetch={false}", bool(links) and "prefetch={false}" in links[0], links[0] if links else "sem <Link>")
 
 
+def block_settings_save_feedback():
+    """QQ — item 97: o Save de Settings mostra "Saved" em sucesso (antes não
+    dava feedback nenhum — nem confirmação nem erro; só se via pela
+    auditoria, item 86). O ficheiro já usa este padrão noutro formulário
+    (a proposta de câmbio) — o scope tem de ser SÓ o SettingRow."""
+    import pathlib as _pl
+    t = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "config" / "forms.tsx").read_text()
+    i0 = t.find("export function SettingRow")
+    i1 = t.find("\nexport function", i0 + 1)
+    trecho = t[i0:i1 if i1 > 0 else None]
+    i = trecho.find("'success' in state")
+    j = trecho.find("ErrorText state={state}")
+    check("QQ: SettingRow mostra 'Saved' antes do ErrorText, condicionado a success",
+          0 < i < j and "Saved" in trecho[i:j], "'success' in state ... Saved ... ErrorText" if 0 < i < j else "não encontrado no SettingRow")
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -2448,6 +2464,7 @@ def main():
     block_home_menu()
     block_product_alert_column()
     block_login_link_prefetch()
+    block_settings_save_feedback()
     block_retention_text()
 
     delete_smoke_fixture_product()
