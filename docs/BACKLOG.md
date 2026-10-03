@@ -799,10 +799,11 @@ de margem, que é mais grave), mas é a distância entre o pedido («admin-only�
 Fechar na BD = uma política por chave, ou `operational_price_notice` fora de `settings` — migração.
 **Decisão do Pedro.**
 
-~~**81. A página inicial pré-carrega os 12 ecrãs do menu a cada visita**~~ ✅ **FEITO 2026-09-24 —
-`cea1947`, prova de browser pendente.** Os 13 `<Link>` passaram a `<MenuButton>` (`router.push`);
-bloco `MM` do smoke. Falta a prova do Pedro: `contar-pedidos.sh` com «Back» e rato pelo menu →
-`PREFETCH: 0`.
+~~**81. A página inicial pré-carrega os 12 ecrãs do menu a cada visita**~~ ✅ **FECHADO
+2026-10-03 — `cea1947` + prova de browser.** Os 13 `<Link>` passaram a `<MenuButton>`
+(`router.push`); bloco `MM` do smoke. **Provado pelo Pedro, 2026-10-03:** «Back» para a página
+inicial e rato pelo menu sem clicar → `PREFETCH: 0` (antes: 12). O único `pf=1` da janela medida
+foi o `<Link>` de «Forgot password?» da página de login — item 96, baixa prioridade.
 
 *Original — **DECIDIDO pelo Pedro 2026-09-24: botões com `router.push`** (zero também no hover). — **MEDIDO
 2026-09-24, 12:19:57–59**, na prova de browser do prefetch dos filtros (que deu zero para o
@@ -837,26 +838,140 @@ corridas em modo `login` seguidas deram um `http_503` no login (à terceira, pas
 diagnosticado — o palpite é o limite de pedidos do nginx da zona de auth, item 54, mas não foi
 verificado).
 
-**84. A `/privacy` e a nota de dados dizem «cópias nocturnas, 30 dias» — a realidade é outra** —
-**REGISTADO 2026-09-24**, ao verificar o item 77. Existem dois serviços de cópia: `tmsi-backup-window`
-(diário, «janela de carga do catálogo real», sem purga visível) e `tmsi-backup-weekly`
-(`tail -n +9`: guarda as 8 semanais mais recentes, ~56 dias). Nenhum é «nocturno, 30 dias». Não
-mexido (fora do item 77): a declaração certa depende de qual dos dois é a política — **decisão do
-Pedro** — e de a `window` ter ou não fim. Igual à lição do 77: subdeclarar retenção é o erro no
-sentido errado.
+~~**84. A `/privacy` e a nota de dados dizem «cópias nocturnas, 30 dias» — a realidade é outra**~~
+✅ **FECHADO 2026-10-03.** Decisão do Pedro: a política passa a ser literalmente essa — diária, 30
+dias, **com purga** (`tmsi-backup-window.timer` nunca tinha tido nenhuma; é a causa directa da
+frase ter ficado falsa) **mais** semanal, 8 cópias, os dois SEMPRE activos (deixa de se alternar
+um pelo outro). `deploy/DEPLOY.md` §4 e `docs/DATA-PROCESSING-NOTICE.md` actualizados; a
+`/privacy` **não precisou de mudar** — o texto já dizia «30 days», e passa a ser verdade com a
+purga nova, não com um texto novo. **Nuance que fica registada, não corrigida:** as cópias
+*semanais* sobrevivem aos 30 dias (até ~56), e a frase da `/privacy` só descreve a cadência
+diária — imprecisão residual, aceite pelo Pedro.
 
-**85. Pedidos por carregamento que sobram no `/prices`** — **REGISTADO 2026-09-24. O «antes» (11) está
-medido no log; o «depois» é PREVISTO por leitura do código até o Pedro o medir** (ver STATE, métrica
-da sessão). Depois da 0021 e do deploy, devem ficar: **middleware** (`auth/v1/user` + `profiles` de
-`must_change_password`, 2), `me`, `v_branch_prices`, `branches`, `channels`, `v_current_branding` e
-`settings` (o aviso operacional, item 32). O prompt da sessão contava 5; o número real é maior
-porque o middleware (2) e o aviso (1) não estavam na conta. (O 8 do item 73 tinha o middleware e não tinha
-`v_products`, o nome de quem gera nem o aviso: 8 → 11 no lote de 23–24/09 → 8 com a 0021.) **Próximas oportunidades, nenhuma
-feita:** (a) o `profiles` do middleware pede o mesmo que `me()` devolve (`must_change_password`) —
-mexe no middleware, que o item 76 mandou não tocar; (b) `getPriceNotice()` e `getBranding()` são
-duas leituras pequenas por página que podiam viajar juntas; (c) a página inicial faz `getUser()` +
-`has_role` ×2 + `pricingConfigReadAccess` + `canReadAuditLog` + branding — `me()` cobre quase
-tudo. Só com gatilho de medição.
+*Original — **REGISTADO 2026-09-24**, ao verificar o item 77. Existem dois serviços de cópia:
+`tmsi-backup-window` (diário, «janela de carga do catálogo real», sem purga visível) e
+`tmsi-backup-weekly` (`tail -n +9`: guarda as 8 semanais mais recentes, ~56 dias). Nenhum é
+«nocturno, 30 dias». Não mexido (fora do item 77): a declaração certa depende de qual dos dois é
+a política — decisão do Pedro — e de a `window` ter ou não fim. Igual à lição do 77: subdeclarar
+retenção é o erro no sentido errado.*
+
+~~**85. Pedidos por carregamento que sobram no `/prices`**~~ ✅ **FECHADO 2026-10-03 — medido
+pelo Pedro, host limpo.** `/prices` por URL directo, como admin: **8 pedidos ao backend, 1
+carregamento completo** — exactamente o previsto (`me`, `v_branch_prices`, `v_current_branding`,
+`settings`, `branches`, `channels` + os 2 do middleware). **11 → 8.** `scripts/contar-pedidos.sh`
+corrigido (dizia «eram 8», o número real era 11). As três oportunidades (a)/(b)/(c) ficam — (c)
+é agora o item 88 (página inicial pesada, achado novo e maior do que qualquer uma das três).
+
+*Original — **REGISTADO 2026-09-24. O «antes» (11) está medido no log; o «depois» é PREVISTO por
+leitura do código até o Pedro o medir** (ver STATE, métrica da sessão). Depois da 0021 e do
+deploy, devem ficar: middleware (`auth/v1/user` + `profiles` de `must_change_password`, 2), `me`,
+`v_branch_prices`, `branches`, `channels`, `v_current_branding` e `settings` (o aviso
+operacional, item 32). O prompt da sessão contava 5; o número real é maior porque o middleware
+(2) e o aviso (1) não estavam na conta. (O 8 do item 73 tinha o middleware e não tinha
+`v_products`, o nome de quem gera nem o aviso: 8 → 11 no lote de 23–24/09 → 8 com a 0021.)
+Próximas oportunidades, nenhuma feita: (a) o `profiles` do middleware pede o mesmo que `me()`
+devolve (`must_change_password`) — mexe no middleware, que o item 76 mandou não tocar; (b)
+`getPriceNotice()` e `getBranding()` são duas leituras pequenas por página que podiam viajar
+juntas; (c) a página inicial faz `getUser()` + `has_role` ×2 + `pricingConfigReadAccess` +
+`canReadAuditLog` + branding — `me()` cobre quase tudo. Só com gatilho de medição.*
+
+**86. `tmsi.settings` não valida nada — valores negativos aceites e em vigor** — **REGISTADO
+2026-10-03, achado do Pedro (sessão de 03/10).** Como `finance.test`, `margin_min = -5` e
+`review_days = -5` foram **aceites pela app e pela BD** e ficaram em vigor (auditoria 19:09–19:10,
+`finance.test` como autor); repostos a `0,15` e `90` a seguir (a reposição também está na
+auditoria). Não há `CHECK` nenhum em `tmsi.settings` e `updateSetting`/`setPriceNotice` não
+validam a forma do valor, só o `JSON.parse`. **Base para a migração 0022 (bloco C, depois da
+reunião de 13/10):**
+- `margin_good`, `margin_min`, `margin_target` ∈ ]0, 1[, e `margin_min < margin_target <
+  margin_good` (três números, uma ordem — a mesma que o `Alert` do motor assume sem verificar).
+- `review_days` inteiro > 0.
+- `fx_tolerance` ∈ ]0, 1[.
+- `fx_source` texto não vazio.
+- `operational_price_notice` booleano.
+
+Por `CHECK` por chave (ou trigger, se `value` continuar `jsonb` solto — um `CHECK` não lê o
+*conteúdo* de um `jsonb` sem uma função, por isso é provavelmente trigger `BEFORE INSERT OR
+UPDATE`, um `CASE key WHEN ...`). Ensaio em transacção revertida com os valores inválidos de
+hoje (os dois `-5`) a serem recusados e os válidos de hoje aceites; asserção de smoke com o ramo
+negado. **Mostrar o ficheiro ao Pedro antes de aplicar** — é migração, arrasta execução do
+protocolo.
+
+~~**87. O `postrotate` do `tmsi-timing` ficou dois dias sem reabrir o ficheiro**~~ ✅ **FECHADO
+2026-10-03.** Rodou a 01/10 00:00; `tmsi-timing.log` ficou a 0 bytes dois dias, nginx continuou a
+escrever no `.1`; resolvido à mão com `systemctl reload nginx` a 03/10 19:52. **Diagnóstico:** a
+ordem das stanzas (`nginx` antes de `tmsi-timing`, alfabética) está correcta — reproduzida num
+logrotate descartável (3.21.0, ordena o `include`) — e o `/etc/logrotate.d/nginx` do sistema
+nunca falhou com o mesmo `invoke-rc.d nginx rotate` (23 dias sem falha, auditado). **A causa
+exacta dessa noite não foi reproduzida** (precisava do journal root da altura — sem `adm`, sem
+`sudo` sem password/TTY nesta sessão). **O que se corrigiu, independente da causa exacta:**
+`/etc/init.d/nginx`'s `rotate_logs()` devolve `0` sempre, sem olhar ao código de saída do
+`start-stop-daemon` que envia o `USR1`, e o stanza escondia tudo com `>/dev/null 2>&1` — uma
+falha de sinal fica invisível, e foi isso que deixou passar dois dias sem ninguém dar por nada.
+`deploy/logrotate/tmsi-timing` passa a enviar `kill -USR1` directo ao PID do nginx, com o
+resultado (sucesso ou falha) registado em `/var/log/tmsi/logrotate-postrotate.err` em vez de
+descartado. **A purga dos dumps de backup tem a MESMA CLASSE** (`ls | tail | xargs` num pipe cujo
+código de saída só reflecte o último comando) — mas o sentido do erro aí é seguro: na pior
+hipótese não purga (acumula), nunca apaga a mais. Registado no item 84, não corrigido (não
+precisa).
+
+**88. A página inicial é pesada: 16× `has_role`, 8× `v_current_branding` por «Back»** —
+**REGISTADO 2026-10-03, achado do Pedro.** O menu decide a visibilidade item a item
+(`isAdmin`/`canManageProducts`/`pricingConfigReadAccess`/`canReadAuditLog`, cada uma com o seu
+`has_role` próprio) em vez de uma só chamada a `tmsi.me()`, e `getBranding()` não está
+deduplicado nesse caminho (ao contrário do `/prices`, onde o item 73 já o envolveu em `cache()`).
+**Bloco C (depois da reunião):** página inicial com `me()` e `getBranding()` em `cache()`.
+Prova: `scripts/contar-pedidos.sh` num «Back» → ≤ 3 pedidos.
+
+**89. `/products/[id]`: `Total cost (EUR)` com até 14 decimais** — **REGISTADO 2026-10-03**,
+achado do Pedro. O `/prices` já formata (`eur()`/`pct()`, item 72); `/products/[id]` mostra o
+número bruto do `compute_price()`. **Bloco B desta sessão.**
+
+**90. `/products/[id]`: a tabela de overrides repete o motivo completo do lote de importação em
+cada linha** — **REGISTADO 2026-10-03**, achado do Pedro. Um lote com um motivo longo (HS/duty em
+massa) imprime a mesma frase em todas as linhas que ele tocou. **Bloco C:** abreviar com o texto
+completo em `title` (hover), ou trocar por um id do lote com link para `/import`. Cosmético, sem
+migração.
+
+**91. `/products/[id]`: a coluna `Overridden` mostra «—» a quem não lê custos** — **REGISTADO
+2026-10-03**, achado do Pedro, da mesma família do item 79 (a `Alert` já ficou condicionada a
+`canReadCosts`). `Overridden` não devolve dados de custo em si (é só uma etiqueta — "margin",
+"transport", "coef"), mas aparecer sempre vazia para `sales`/`agent`/`logistics` é o mesmo
+defeito cosmético do 79. **Bloco C:** `canReadCosts &&` no `<th>` e no `<td>`, como o 79.
+
+**92. Pergunta de negócio: APAC fica `warning` sempre que a margem do canal (0,2) é inferior ao
+`margin_target` global (0,25)** — **REGISTADO 2026-10-03**, pergunta do Pedro, só a registar — não
+é defeito. O motor está a fazer exactamente o que o limiar global manda; a pergunta é se um canal
+devia ter o seu próprio limiar de alerta em vez de ser julgado pelo global. Decisão do Pedro,
+sem prazo.
+
+**93. `/config`: `fx_source` aparece como `"SAP"`, com aspas** — **REGISTADO 2026-10-03**,
+achado do Pedro, cosmético. `tmsi.settings.value` é `jsonb`; o campo mostra o `JSON.stringify`
+em bruto (é também o que o utilizador tem de escrever de volta — ver item 86, sem validação
+nenhuma hoje). Um valor que é string por natureza (`fx_source`) não precisa de aspas visíveis
+num campo de texto. Sem prioridade.
+
+**94. `tmsi.audit_log` tem 2669 linhas (de 5249) com `actor` nulo — não só duas** —
+**REGISTADO 2026-10-03.** O Pedro viu duas (`products T-9698`, `price_proposals 1142`, ambas de
+24/09); **medido, a extensão real é muito maior**: 1865 `DELETE` + 804 de outras acções, de
+2026-09-05 a 2026-09-24, quase todas das próprias rotinas de manutenção (`scripts/smoke.py` a
+limpar o seu fixture e as suas próprias transacções de prova, como superuser/sem claims — é o que
+o próprio `smoke.py` já documenta: «a plain superuser DELETE, no claims»). **Não é fuga** (são
+escritas directas por quem já tem acesso de superuser ao host, nunca por HTTP), mas degrada o
+`/audit` para quem o lê a sério (`admin`/`finance`/`branch_manager`/`viewer`): mais de metade das
+linhas não diz quem fez o quê. **Bloco C (A6/item 4):** as rotinas de manutenção passam a assinar
+com uma identidade `system` reconhecível (um UUID fixo documentado, nunca `null`), em vez de
+correrem como `postgres` sem claims nenhumas.
+
+**95. Histórico de `exchange_rates` com linhas de teste de Setembro** — **REGISTADO
+2026-10-03**, achado do Pedro, confirmado: 4 das 16 linhas têm `source` a conter `test`/`smoke`.
+Todas `superseded`/históricas, sem efeito nos preços correntes (`tmsi.fx_rate()` só lê a mais
+recente por moeda). **Decisão, não código:** uma eventual limpeza é decisão de dados do Pedro, não
+uma correcção técnica — fica registado, sem acção.
+
+**96. O `<Link>` de «Forgot password?» na página de login pré-carrega** — **REGISTADO
+2026-10-03**, achado na prova de browser do item 81 (único `pf=1` da janela). Baixa prioridade:
+a página de login não tem sessão, logo o custo é pequeno e não tem o efeito de tempestade dos
+itens 73/81 (um só link, não doze). **Bloco B desta sessão:** `prefetch={false}`.
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
