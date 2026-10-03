@@ -922,9 +922,9 @@ deduplicado nesse caminho (ao contrário do `/prices`, onde o item 73 já o envo
 **Bloco C (depois da reunião):** página inicial com `me()` e `getBranding()` em `cache()`.
 Prova: `scripts/contar-pedidos.sh` num «Back» → ≤ 3 pedidos.
 
-**89. `/products/[id]`: `Total cost (EUR)` com até 14 decimais** — **REGISTADO 2026-10-03**,
-achado do Pedro. O `/prices` já formata (`eur()`/`pct()`, item 72); `/products/[id]` mostra o
-número bruto do `compute_price()`. **Bloco B desta sessão.**
+~~**89. `/products/[id]`: `Total cost (EUR)` com até 14 decimais**~~ ✅ **FECHADO
+2026-10-03 — `a5961a7`.** Mesmos `eur()`/`pct()` do `/prices` (item 72), aplicados a
+`total_cost_eur`, `margin`, `min_price`, `ref_price`. Bloco `RR` do smoke.
 
 **90. `/products/[id]`: a tabela de overrides repete o motivo completo do lote de importação em
 cada linha** — **REGISTADO 2026-10-03**, achado do Pedro. Um lote com um motivo longo (HS/duty em
@@ -968,10 +968,14 @@ Todas `superseded`/históricas, sem efeito nos preços correntes (`tmsi.fx_rate(
 recente por moeda). **Decisão, não código:** uma eventual limpeza é decisão de dados do Pedro, não
 uma correcção técnica — fica registado, sem acção.
 
-**96. O `<Link>` de «Forgot password?» na página de login pré-carrega** — **REGISTADO
-2026-10-03**, achado na prova de browser do item 81 (único `pf=1` da janela). Baixa prioridade:
-a página de login não tem sessão, logo o custo é pequeno e não tem o efeito de tempestade dos
-itens 73/81 (um só link, não doze). **Bloco B desta sessão:** `prefetch={false}`.
+~~**96. O `<Link>` de «Forgot password?» na página de login pré-carrega**~~ ✅ **FECHADO
+2026-10-03 — `fc50d88`.** `prefetch={false}`. Bloco `PP` do smoke.
+
+**97. `/config`: o Save de Settings não dava feedback nenhum** — ✅ **FECHADO 2026-10-03 —
+`cc964be`.** Achado ao verificar o item 86 (`margin_min=-5` só se viu pela auditoria, porque o
+ecrã não disse nada). `updateSetting()` já devolvia `{success:true}`; faltava mostrá-lo —
+`SettingRow` passa a ler "Saved" antes do `ErrorText`. Bloco `QQ` do smoke, scope preso ao
+`SettingRow` (o ficheiro já usa este padrão noutro formulário).
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,

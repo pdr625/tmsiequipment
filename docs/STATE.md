@@ -3,12 +3,17 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: sessão 0021 — `me()`, vista de preços com nome/categoria/estado/tipo, aviso operacional
-só do admin, sem `TRUNCATE` — 2026-09-24.** Revisão `3fcf3f8` em produção (digest
+**Etapa actual: sessão 03/10 — medições do Pedro registadas, logrotate e backups corrigidos,
+lote de app pequeno — 2026-10-03.** Revisão `a5961a7` em produção (digest
+`sha256:477e01f146cb…`), migrações **ainda 0001–0021** (sem migração nesta sessão), smoke
+**170/170** nos três modos. Os itens 81/84/85/87/89/96/97 fecharam; 86/88/90-95 ficam para o
+bloco C, depois da reunião com a direcção de **2026-10-13**. Detalhe: secção seguinte.
+
+**Etapa anterior: sessão 0021 — `me()`, vista de preços com nome/categoria/estado/tipo, aviso
+operacional só do admin, sem `TRUNCATE` — 2026-09-24.** Revisão `3fcf3f8` em produção (digest
 `sha256:3f5be0e1f424…`), migrações 0001–0021, smoke **164/164** nos três modos, execução n.º 7 do
 protocolo. A página `/prices` e os dois exports pedem a identidade uma vez (`tmsi.me()`), a página
-inicial deixou de pré-carregar o menu, e os itens 75–81 fecharam (o 81 aguarda a prova de browser).
-Detalhe: secção seguinte. **Ainda por medir com o Pedro:** os pedidos por carregamento, depois.
+inicial deixou de pré-carregar o menu, e os itens 75–81 fecharam (o 81 aguardava a prova de browser).
 
 **Etapa anterior: E6, apresentação à equipa PREPARADA — 2026-09-24.** Revisão `392770f` em produção
 (digest `sha256:345a31c92f01…`), smoke **129/129** nos três modos. Os filtros do `/prices` deixaram de
@@ -34,6 +39,100 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 03/10 — medições registadas, logrotate e backups corrigidos, lote pequeno (2026-10-03)
+
+**Implantado:** revisão `a5961a7`, digest
+`sha256:477e01f146cb0935de55b0c68dc927b65917ab4bafb29ba396bbc4bb97b9f2bb`, `healthy`,
+`/api/health` 200. **Smoke 164 → 170**, verde nos três modos. **Sem migração** — 0001–0021
+continua a ser o estado da BD; a 0022 (validação de `settings`, item 86) fica esboçada para o
+bloco C, depois da reunião com a direcção de **2026-10-13**.
+
+### Bloco A — medições do Pedro, registo (sem deploy de app)
+
+**O número que fecha o item 85:** `/prices` por URL directo, como admin, host limpo —
+**8 pedidos ao backend, 1 carregamento completo** (middleware 2 + `me`, `v_branch_prices`,
+`v_current_branding`, `settings`, `branches`, `channels`). Exactamente o previsto na sessão
+0021. **Mas o "antes" estava mal contado desde o item 73** (23/09): o 8 original já tinha o
+middleware e ainda não tinha `v_products`/o nome de quem gera/o aviso — passou para **11** com
+o lote de 23–24/09 sem que ninguém refizesse a conta. `scripts/contar-pedidos.sh` corrigido
+(`5afed94`).
+
+**Item 81 fechado com prova real:** menu da página inicial, rato sem clicar → `PREFETCH: 0`
+(antes 12). O único `pf=1` da janela foi o `<Link>` de «Forgot password?» do login — item 96.
+
+**Item 87 — o `postrotate` do `tmsi-timing` ficou dois dias sem reabrir o ficheiro**
+(01/10–03/10, resolvido à mão pelo Pedro com `systemctl reload nginx` a 03/10 19:52).
+Diagnóstico desta sessão: a ordem das stanzas (`nginx` antes de `tmsi-timing`, alfabética) está
+correcta — reproduzida num logrotate descartável (3.21.0, ordena o `include`) — e o
+`/etc/logrotate.d/nginx` do sistema nunca falhou com o mesmo `invoke-rc.d nginx rotate` (23 dias
+auditados, sem falha). **A causa exacta dessa noite não foi reproduzida** (precisava do journal
+root da altura; sem `adm`, sem `sudo` sem password/TTY nesta sessão). Corrigido independente da
+causa: `/etc/init.d/nginx`'s `rotate_logs()` devolve `0` sempre, sem olhar ao
+`start-stop-daemon`, e o stanza escondia tudo com `>/dev/null 2>&1` — uma falha de sinal ficava
+invisível. `deploy/logrotate/tmsi-timing` passa a `kill -USR1` directo ao PID, com o resultado
+em `/var/log/tmsi/logrotate-postrotate.err` (`d172759`). **Comandos sudo para o host, por fazer
+pelo Pedro** (`deploy/DEPLOY.md` §0 e §4):
+```bash
+sudo cp deploy/logrotate/tmsi-timing /etc/logrotate.d/tmsi-timing
+sudo nginx -t && sudo systemctl reload nginx
+sudo logrotate -f /etc/logrotate.d/tmsi-timing
+curl -s -o /dev/null https://tmsiequipment.duckdns.org/api/health
+sleep 1 && sudo tail -c 200 /var/log/tmsi/tmsi-timing.log   # tem de ter a linha do curl
+cat /var/log/tmsi/logrotate-postrotate.err                   # tem de estar vazio
+
+sudo sed -i "/chmod 600 .*-window.dump/a ExecStart=/usr/bin/find /home/pedro/backups/tmsi -maxdepth 1 -name 'tmsi-*-window.dump' -mtime +30 -delete" \
+  /etc/systemd/system/tmsi-backup-window.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now tmsi-backup-weekly.timer
+systemctl list-timers 'tmsi-backup-*'   # os dois têm de aparecer
+```
+**Veredicto sobre os dumps:** mesma classe de falha silenciosa (a purga semanal corre num pipe
+`ls | tail | xargs`, cujo código de saída só reflecte o `xargs`), mas o sentido do erro é seguro
+— na pior hipótese não purga (acumula), nunca apaga a mais. Registado (item 84), não corrigido.
+
+**Item 84 — política de backup, decisão do Pedro:** diário 30 dias com purga (nova — não tinha
+nenhuma desde o item 43) **mais** semanal 8, os dois sempre activos. `deploy/DEPLOY.md` §4 e
+`docs/DATA-PROCESSING-NOTICE.md` reescritos (`d59b599`). A `/privacy` não precisou de editar-se
+— já dizia «30 days», e passa a ser verdade com a purga, não com texto novo.
+
+**Achados registados para o bloco C** (`docs/BACKLOG.md` tem o detalhe de cada um): 86
+(`settings` sem validação — base da 0022), 88 (página inicial pesada, 16× `has_role` + 8×
+`v_current_branding`), 90/91 (overrides do `/products/[id]`: motivo repetido, `Overridden`
+visível a quem não lê custos), 92 (pergunta de negócio: limiar de alerta por canal vs global),
+93 (`fx_source` com aspas), 94 (`audit_log`: **2669 de 5249 linhas com `actor` nulo**, não só as
+duas que o Pedro viu — quase todas das próprias rotinas de manutenção, de 05/09 a 24/09; não é
+fuga, é hygiene do `/audit`), 95 (histórico de câmbios com linhas de teste — decisão de dados).
+
+### Bloco B — três commits de app, CI lida entre cada um
+
+| Commit | Assunto | CI |
+|---|---|---|
+| `fc50d88` | Item 96 — `prefetch={false}` no link de login | ✅ #62 |
+| `cc964be` | Item 97 — Save de Settings mostra "Saved" | ✅ #63 |
+| `a5961a7` | Item 89 — `/products/[id]` a 2 casas / margem em % | ✅ #64 |
+
+Nenhuma CI vermelha nesta sessão. Smoke 164 → 170 (blocos `PP`, `QQ`, `RR`), cada asserção nova
+provada a falhar contra a versão anterior.
+
+### Bloco C — fica para depois da reunião (2026-10-13), só a lista
+
+1. **Migração 0022 — validação de `tmsi.settings`** (item 86): `margin_*` ∈ ]0,1[ e
+   `margin_min < margin_target < margin_good`; `review_days` inteiro > 0; `fx_tolerance` ∈
+   ]0,1[; `fx_source` não vazio; `operational_price_notice` booleano. Por `CHECK`/trigger;
+   ensaio com os dois valores negativos de hoje a serem recusados; **não escrita nem ensaiada
+   nesta sessão** — só esboçada no item 86.
+2. Página inicial com `me()` e `getBranding()` em `cache()` (item 88). Prova: `contar-pedidos.sh`
+   num «Back» → ≤ 3 pedidos.
+3. Itens 90/91 (`/products/[id]`, cosmético).
+4. Identidade `system` para as rotinas de manutenção, em vez de `actor` nulo (item 94).
+5. Execução n.º 8 do protocolo, sobre 0001–0022, depois da 0022 estar aplicada.
+
+### Pedidos por carregamento — a métrica fecha
+
+| | Antes (item 73, 23/09) | Lote 23–24/09 | 0021 (previsto) | 2026-10-03 (medido) |
+|---|---|---|---|---|
+| `/prices`, 1 carga | 8 | 11 | 8 | **8** |
 
 ## Sessão 0021 — `me()`, colunas de artigo, aviso admin-only, sem TRUNCATE (2026-09-24)
 
