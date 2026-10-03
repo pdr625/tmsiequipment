@@ -3,9 +3,11 @@
 Copyright © 2026 Pedro Alexandre. Proprietary — see ../LICENSE.
 
 **Escrito:** 2026-10-03, no fim da sessão «registo das medições, achados do browser, correcções
-antes/depois da reunião». **Estado:** a app está estável, sem migração pendente de aplicar. O
-bloco grande (migração 0022 + página inicial + protocolo n.º 8) fica para depois da **reunião
-com a direcção, 2026-10-13**. A versão anterior deste ficheiro (sessão 0021) está no git
+antes/depois da reunião», **actualizado no mesmo dia depois de o Pedro aplicar os dois comandos
+sudo no host** (ambos confirmados em produção — ver §2). **Estado:** a app está estável, sem
+migração pendente de aplicar e sem nenhum comando por correr no host. O bloco grande (migração
+0022 + página inicial + protocolo n.º 8) fica para depois da **reunião com a direcção,
+2026-10-13**. A versão anterior deste ficheiro (sessão 0021) está no git
 (`git show 3371131:docs/HANDOVER.md`).
 
 ---
@@ -19,23 +21,26 @@ com a direcção, 2026-10-13**. A versão anterior deste ficheiro (sessão 0021)
 |---|---|
 | Pedidos por `/prices` (1 carga) | **8**, medido em produção — fechou o item 85 |
 | Reunião com a direcção | **2026-10-13** |
-| Dumps | diário 30 dias (purga nova) + semanal 8, os dois sempre activos (item 84) |
-| `logrotate` do `tmsi-timing` | corrigido no repo (`kill -USR1` directo); **falta reaplicar no host** — ver §3.1 |
+| Dumps | diário 30 dias (purga nova) + semanal 8, os dois sempre activos — **aplicado e confirmado no host, item 84** |
+| `logrotate` do `tmsi-timing` | `kill -USR1` directo; **aplicado e confirmado no host, item 87** (`logrotate-postrotate.err` existe, 0 bytes) |
 
 **O que mudou nesta sessão, em três linhas:** três commits pequenos de app (link de login sem
 prefetch, Save de `Settings` com feedback, `/products/[id]` com os números formatados); a
-política de backup mudou (diário com purga + semanal, sempre os dois); o `logrotate` do
-`tmsi-timing` foi corrigido no repo. Nenhuma migração.
+política de backup mudou e está activa no host (diário com purga + semanal, sempre os dois); o
+`logrotate` do `tmsi-timing` foi corrigido e aplicado no host. Nenhuma migração.
 
 ---
 
 ## 2. Coisas vivas que a sessão seguinte tem de saber
 
-- **O `logrotate` corrigido está no repo mas falta aplicar no host** (precisa de `sudo`, que
-  esta sessão não tinha sem TTY). Comandos exactos em `deploy/DEPLOY.md` §0 (bloco do item 87) e
-  repetidos no `STATE.md` desta sessão.
-- **A purga nova do `tmsi-backup-window` também falta aplicar** (idem, `sudo sed -i` + `systemctl
-  enable --now tmsi-backup-weekly.timer`) — comandos no mesmo sítio.
+- **Os dois comandos sudo (logrotate, backup) já foram corridos pelo Pedro, no mesmo dia.**
+  `/etc/logrotate.d/tmsi-timing` no host é idêntico ao do repo (`diff`, confirmado);
+  `/var/log/tmsi/logrotate-postrotate.err` existe e tem 0 bytes. `tmsi-backup-window.service`
+  tem a linha de purga nova; `tmsi-backup-weekly.timer` ficou `enabled` e, por `Persistent=true`
+  ter perdido a corrida de segunda-feira, disparou de imediato — `tmsi-2026-10-03-weekly.dump`
+  (633 KB, os 4 passos `status=0/SUCCESS`). **Primeira tentativa falhou** (o `cp` com caminho
+  relativo, correndo de `~` em vez do repo) e correu sem querer contra o stanza antigo — sem
+  dano, mas é a razão de isto estar escrito duas vezes no histórico de commits/sessão.
 - **`audit_log` tem 2669 linhas (de 5249) com `actor` nulo**, quase todas das próprias rotinas de
   manutenção (`smoke.py` a limpar-se a si próprio, como superuser). Não é fuga — é hygiene do
   `/audit`. Item 94, fica para o bloco C.
@@ -50,15 +55,7 @@ política de backup mudou (diário com purga + semanal, sempre os dois); o `logr
 
 ## 3. O que fica para o Pedro
 
-### 3.1 — No host, com `sudo` (comandos exactos em `deploy/DEPLOY.md` §0 e §4)
-
-1. Reaplicar o `logrotate` do `tmsi-timing` (item 87) e provar com `logrotate -f` + um pedido
-   real — a linha nova tem de cair no ficheiro certo, e `logrotate-postrotate.err` tem de ficar
-   vazio.
-2. Acrescentar a purga ao `tmsi-backup-window.service` e activar o `tmsi-backup-weekly.timer`
-   em permanência (item 84) — os dois têm de aparecer em `systemctl list-timers`.
-
-### 3.2 — No browser, antes da reunião de 2026-10-13
+### 3.1 — No browser, antes da reunião de 2026-10-13
 
 1. **Repetir o ensaio da demonstração** (`DEMO-SCRIPT.md` §0) — mexeu-se em `/config` (Settings),
    em `/products/[id]` (números) e no login; nenhuma delas é o que a demo mostra directamente,
@@ -98,7 +95,8 @@ política de backup mudou (diário com purga + semanal, sempre os dois); o `logr
 **`CLAUDE.md`** (raiz do repo). Esta sessão não precisou de migração nem de correr a convenção
 de guardas de BD — os três commits de app foram todos pequenos, cada um lido pela CI antes do
 seguinte, nenhum vermelho. O que pesou foi fora do repo: **sudo sem password/TTY nesta sessão**
-bloqueou dois diagnósticos/correcções no host (logrotate, backup) que ficaram prontos no repo
-mas por aplicar — ver §3.1. Para a sessão que escrever a 0022 (item 86): é migração, corpo de
-produção, ensaio em transacção revertida com os valores inválidos de hoje, **mostrar o ficheiro
-ao Pedro antes de aplicar**.
+deixou dois comandos para o Pedro correr à parte (logrotate, backup) — ambos aplicados e
+confirmados por ele no mesmo dia, incluindo uma primeira tentativa que falhou por caminho
+relativo (`cp` corrido de `~`, não do repo) e teve de se repetir com caminho absoluto. Para a
+sessão que escrever a 0022 (item 86): é migração, corpo de produção, ensaio em transacção
+revertida com os valores inválidos de hoje, **mostrar o ficheiro ao Pedro antes de aplicar**.

@@ -846,7 +846,10 @@ um pelo outro). `deploy/DEPLOY.md` §4 e `docs/DATA-PROCESSING-NOTICE.md` actual
 `/privacy` **não precisou de mudar** — o texto já dizia «30 days», e passa a ser verdade com a
 purga nova, não com um texto novo. **Nuance que fica registada, não corrigida:** as cópias
 *semanais* sobrevivem aos 30 dias (até ~56), e a frase da `/privacy` só descreve a cadência
-diária — imprecisão residual, aceite pelo Pedro.
+diária — imprecisão residual, aceite pelo Pedro. **Aplicado e confirmado no host pelo Pedro,
+mesmo dia, 21:07**: `tmsi-backup-window.service` com a linha de purga nova;
+`tmsi-backup-weekly.timer` `enabled` e disparado de imediato pelo `Persistent=true` (corrida de
+segunda-feira em atraso), `tmsi-2026-10-03-weekly.dump` com os 4 passos `status=0/SUCCESS`.
 
 *Original — **REGISTADO 2026-09-24**, ao verificar o item 77. Existem dois serviços de cópia:
 `tmsi-backup-window` (diário, «janela de carga do catálogo real», sem purga visível) e
@@ -909,7 +912,10 @@ exacta dessa noite não foi reproduzida** (precisava do journal root da altura �
 falha de sinal fica invisível, e foi isso que deixou passar dois dias sem ninguém dar por nada.
 `deploy/logrotate/tmsi-timing` passa a enviar `kill -USR1` directo ao PID do nginx, com o
 resultado (sucesso ou falha) registado em `/var/log/tmsi/logrotate-postrotate.err` em vez de
-descartado. **A purga dos dumps de backup tem a MESMA CLASSE** (`ls | tail | xargs` num pipe cujo
+descartado. **Aplicado e confirmado no host pelo Pedro, mesmo dia, 21:09** (`logrotate-postrotate.err`
+existe, 0 bytes; stanza instalado idêntico ao do repo, `diff` vazio) — a primeira tentativa (21:07)
+falhou por caminho relativo (`cp` corrido de `~`) e correu sem querer contra o stanza antigo, sem
+dano. **A purga dos dumps de backup tem a MESMA CLASSE** (`ls | tail | xargs` num pipe cujo
 código de saída só reflecte o último comando) — mas o sentido do erro aí é seguro: na pior
 hipótese não purga (acumula), nunca apaga a mais. Registado no item 84, não corrigido (não
 precisa).

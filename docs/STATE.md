@@ -71,22 +71,15 @@ root da altura; sem `adm`, sem `sudo` sem password/TTY nesta sessão). Corrigido
 causa: `/etc/init.d/nginx`'s `rotate_logs()` devolve `0` sempre, sem olhar ao
 `start-stop-daemon`, e o stanza escondia tudo com `>/dev/null 2>&1` — uma falha de sinal ficava
 invisível. `deploy/logrotate/tmsi-timing` passa a `kill -USR1` directo ao PID, com o resultado
-em `/var/log/tmsi/logrotate-postrotate.err` (`d172759`). **Comandos sudo para o host, por fazer
-pelo Pedro** (`deploy/DEPLOY.md` §0 e §4):
-```bash
-sudo cp deploy/logrotate/tmsi-timing /etc/logrotate.d/tmsi-timing
-sudo nginx -t && sudo systemctl reload nginx
-sudo logrotate -f /etc/logrotate.d/tmsi-timing
-curl -s -o /dev/null https://tmsiequipment.duckdns.org/api/health
-sleep 1 && sudo tail -c 200 /var/log/tmsi/tmsi-timing.log   # tem de ter a linha do curl
-cat /var/log/tmsi/logrotate-postrotate.err                   # tem de estar vazio
+em `/var/log/tmsi/logrotate-postrotate.err` (`d172759`). **Aplicado no host pelo Pedro, mesmo
+dia, 21:09.** A primeira tentativa (21:07) falhou — `cp deploy/logrotate/tmsi-timing ...` corrido
+de `~`, caminho relativo, `No such file or directory` — e tudo o resto da linha correu sem querer
+contra o stanza **antigo** (sem dano: `logrotate -f` com o mecanismo antigo ainda reabriu bem
+desta vez, intermitente como já se suspeitava). Repetido com caminho absoluto: **confirmado** —
+`diff /home/pedro/atelier-vps/tmsiequipment/deploy/logrotate/tmsi-timing /etc/logrotate.d/tmsi-timing`
+vazio, `/var/log/tmsi/logrotate-postrotate.err` existe e tem **0 bytes**, o pedido de prova caiu
+no ficheiro novo (132 bytes, uma linha só).
 
-sudo sed -i "/chmod 600 .*-window.dump/a ExecStart=/usr/bin/find /home/pedro/backups/tmsi -maxdepth 1 -name 'tmsi-*-window.dump' -mtime +30 -delete" \
-  /etc/systemd/system/tmsi-backup-window.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now tmsi-backup-weekly.timer
-systemctl list-timers 'tmsi-backup-*'   # os dois têm de aparecer
-```
 **Veredicto sobre os dumps:** mesma classe de falha silenciosa (a purga semanal corre num pipe
 `ls | tail | xargs`, cujo código de saída só reflecte o `xargs`), mas o sentido do erro é seguro
 — na pior hipótese não purga (acumula), nunca apaga a mais. Registado (item 84), não corrigido.
@@ -94,7 +87,12 @@ systemctl list-timers 'tmsi-backup-*'   # os dois têm de aparecer
 **Item 84 — política de backup, decisão do Pedro:** diário 30 dias com purga (nova — não tinha
 nenhuma desde o item 43) **mais** semanal 8, os dois sempre activos. `deploy/DEPLOY.md` §4 e
 `docs/DATA-PROCESSING-NOTICE.md` reescritos (`d59b599`). A `/privacy` não precisou de editar-se
-— já dizia «30 days», e passa a ser verdade com a purga, não com texto novo.
+— já dizia «30 days», e passa a ser verdade com a purga, não com texto novo. **Aplicado no host
+pelo Pedro, mesmo dia, 21:07.** `systemctl cat tmsi-backup-window.service` tem a linha
+`ExecStart=/usr/bin/find ... -mtime +30 -delete`; `tmsi-backup-weekly.timer` ficou `enabled` e,
+por `Persistent=true` ter perdido a corrida de segunda-feira, disparou de imediato —
+`tmsi-2026-10-03-weekly.dump` (633 KB, os 4 passos `status=0/SUCCESS`). Os dois timers aparecem
+em `systemctl list-timers 'tmsi-backup-*'`.
 
 **Achados registados para o bloco C** (`docs/BACKLOG.md` tem o detalhe de cada um): 86
 (`settings` sem validação — base da 0022), 88 (página inicial pesada, 16× `has_role` + 8×
