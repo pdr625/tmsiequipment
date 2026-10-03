@@ -132,6 +132,18 @@ provada a falhar contra a versão anterior.
 |---|---|---|---|---|
 | `/prices`, 1 carga | 8 | 11 | 8 | **8** |
 
+### Ensaio da demonstração — repetido depois do deploy de `a5961a7`
+
+Pedido do Pedro, por ser a sessão que mexeu em `/config`, `/products/[id]` e no login. Checklist
+`docs/DEMO-SCRIPT.md` §0, as duas metades:
+- **Terminal (1–4), feito pelo agente:** smoke **170/170**, `/api/health` → `200`. (2 e 3 —
+  host calmo / memória — não aplicáveis durante uma sessão de agente, por definição; ficam para
+  o Pedro correr depois de sair do CLI.)
+- **Browser (5–10), feito pelo Pedro:** contas a entrar sem pedir troca de password, aviso
+  operacional em `/prices`, export `sales.sa` (sem custo/Alert) e `finance.test` (com
+  custo/margem/Alert, serviços vazios), `/proposals` sem pendentes de ensaios anteriores —
+  **confirmado, «5-10 ok».**
+
 ## Sessão 0021 — `me()`, colunas de artigo, aviso admin-only, sem TRUNCATE (2026-09-24)
 
 **Implantado:** revisão `3fcf3f8`, digest `sha256:3f5be0e1f4242a9d29ba0fd2aece29ea42a639a86dcfde6b83d9af23cc0774c3`,
