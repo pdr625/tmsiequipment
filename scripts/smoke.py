@@ -2281,6 +2281,18 @@ def block_settings_save_feedback():
           0 < i < j and "Saved" in trecho[i:j], "'success' in state ... Saved ... ErrorText" if 0 < i < j else "não encontrado no SettingRow")
 
 
+def block_product_money_formatting():
+    """RR — item 89: /products/[id] formata total_cost/min_price/ref_price
+    a duas casas e a margem em percentagem, como o /prices (item 72). Antes
+    chegava o número bruto do compute_price() (até 14 decimais)."""
+    import pathlib as _pl
+    t = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "products" / "[id]" / "page.tsx").read_text()
+    check("RR: total_cost_eur passa por eur()", "eur(r.total_cost_eur)" in t, "eur(r.total_cost_eur) presente")
+    check("RR: margin passa por pct()", "pct(r.margin)" in t, "pct(r.margin) presente")
+    check("RR: min_price e ref_price passam por eur()",
+          "eur(r.min_price)" in t and "eur(r.ref_price)" in t, "eur(r.min_price) e eur(r.ref_price) presentes")
+
+
 def block_bulk_import(logistics_token, pm_token):
     status, _body = http(
         "POST", f"{REST}/rpc/run_import_hs_duty", token=logistics_token,
@@ -2465,6 +2477,7 @@ def main():
     block_product_alert_column()
     block_login_link_prefetch()
     block_settings_save_feedback()
+    block_product_money_formatting()
     block_retention_text()
 
     delete_smoke_fixture_product()

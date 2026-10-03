@@ -225,6 +225,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // here, matching what the engine itself does.
   const hsOverrideFor = (branchId: string) => hsOverrides?.find((h) => h.scope_type === 'branch' && h.scope_id === branchId);
 
+  // Item 89: o número bruto do compute_price() chegava com até 14 decimais
+  // (binário em float), onde o /prices já formatava (item 72). Mesmos
+  // helpers, mesma precisão — custo/preços a duas casas (é dinheiro), a
+  // margem em percentagem (está guardada como fracção).
+  const eur = (v: number | null | undefined) => (v === null || v === undefined ? '—' : Number(v).toFixed(2));
+  const pct = (v: number | null | undefined) =>
+    v === null || v === undefined ? '—' : `${(Number(v) * 100).toFixed(1)} %`;
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
@@ -295,15 +303,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     </td>
                     {seesCosts && (
                       <>
-                        <td className="py-2 pr-4">{r.total_cost_eur ?? '—'}</td>
-                        <td className="py-2 pr-4">{r.margin ?? '—'}</td>
+                        <td className="py-2 pr-4">{eur(r.total_cost_eur)}</td>
+                        <td className="py-2 pr-4">{pct(r.margin)}</td>
                       </>
                     )}
                     <td className="py-2 pr-4">
-                      {r.min_price ?? '—'} {r.currency}
+                      {eur(r.min_price)} {r.currency}
                     </td>
                     <td className="py-2 pr-4">
-                      {r.ref_price ?? '—'} {r.currency}
+                      {eur(r.ref_price)} {r.currency}
                     </td>
                     {canReadCosts === true && (
                       <td className="py-2 pr-4">
