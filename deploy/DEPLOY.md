@@ -176,39 +176,51 @@ variables unset, confirmed to exit rather than come up half-broken).
 
 ## 4. Backups
 
-**Cadence (item 43, 2026-09-16): two modes, one gesture to switch, never edit a unit by
-hand.** Retention is counted in **copies**, not days — a day-based cutoff quietly changes
-depth every time the cadence changes; a copy count doesn't.
+**Cadence até 2026-10-03 (item 43, 2026-09-16): two modes, mutually exclusive, one gesture to
+switch.** ~~Retention counted in copies, not days.~~ **Decisão do Pedro, 2026-10-03 (item 84):
+os dois regimes passam a correr SEMPRE, em permanência — já não se alterna.** O regime diário
+ganhou uma purga que nunca teve, e é ele que torna verdadeiro o que o `/privacy` e a
+`docs/DATA-PROCESSING-NOTICE.md` dizem («cópia nocturna, 30 dias»).
 
-- **`tmsi-backup-weekly.timer`/`.service`** — the permanent regime. `OnCalendar=Mon *-*-*
-  03:30:00`. Writes `~/backups/tmsi/tmsi-<date>-weekly.dump`, then rotates to keep the **8**
-  most recent (`ls -t ... | tail -n +9 | xargs -r rm -f` on that exact glob — never touches
-  `-window.dump` files). ~2 months of weekly history.
-- **`tmsi-backup-window.timer`/`.service`** — the loading-window regime, daily
-  (`OnCalendar=*-*-* 03:30:00`). Writes `~/backups/tmsi/tmsi-<date>-window.dump`. **No
-  rotation at all** — every window dump is kept for the whole window; disk cost is trivial
-  (measured 2026-09-16: 29 GB total, 56% used, ~373 KB/dump average — even 100 window dumps
-  is under 40 MB).
-- **Exactly one of the two timers is enabled at any time.** To switch (either direction, no
-  unit editing):
-  ```bash
-  sudo systemctl disable --now tmsi-backup-<current-mode>.timer
-  sudo systemctl enable --now tmsi-backup-<new-mode>.timer
+- **`tmsi-backup-weekly.timer`/`.service`** — inalterado. `OnCalendar=Mon *-*-* 03:30:00`.
+  Escreve `~/backups/tmsi/tmsi-<date>-weekly.dump`, mantém as **8** mais recentes (`ls -t ...
+  | tail -n +9 | xargs -r rm -f`, só no glob `-weekly.dump`). ~2 meses de histórico semanal.
+- **`tmsi-backup-window.timer`/`.service`** — o nome («window», da janela de carga do
+  catálogo real) é histórico; desde 2026-10-03 **é o regime diário permanente**, não uma fase
+  transitória. `OnCalendar=*-*-* 03:30:00`. Escreve `~/backups/tmsi/tmsi-<date>-window.dump`.
+  **Ganhou uma quarta linha `ExecStart`** (não tinha purga nenhuma até agora — é a causa
+  directa do item 84, achado a verificar a retenção que o `/privacy` prometia):
   ```
-  Confirm with `systemctl list-timers tmsi-backup-*` — the `NEXT` column changes cadence
-  immediately (weekly → next Monday 03:30; window → tomorrow 03:30).
-- **Exit condition, written down so this doesn't stay in window mode by inertia:** switch
-  back to `tmsi-backup-weekly.timer` once the real catalog (item 39's importer) has been
-  loaded **and verified** — not merely loaded. Until then, stay in window mode.
-  **State as of 2026-09-19 (updated; the 2026-09-16 line below was stale within hours):** window
-  mode, **real catalog loaded** — 49 articles `T-1001`–`T-1052`, 485 overrides, batch
-  `ee1db00c-…` on 16/09 19:53 (`docs/BACKLOG.md` item 51) — and **parity-verified** against the
-  source spreadsheet on 19/09: all 245 lines compared, zero unexplained (`docs/ENGINE-PARITY.md`
-  §9). The remaining half of "verified" is **operational, not arithmetic**: every one of the 49
-  is still `status='draft'`, so no sales-facing role can see a price yet. Deciding when this
-  flips back to weekly is the Pedro's call and the gesture is the one documented above — this
-  file just stops claiming the catalog isn't loaded.
-  ~~State as of 2026-09-16: window mode, real catalog not yet loaded.~~
+  ExecStart=/usr/bin/find /home/pedro/backups/tmsi -maxdepth 1 -name 'tmsi-*-window.dump' -mtime +30 -delete
+  ```
+  `find -mtime +30 -delete`, não `ls -t | tail -n +9 | xargs` como o semanal — aqui a retenção
+  é por **data**, não por contagem, porque é essa a promessa («30 dias»), e porque é o padrão
+  que o regime original de 2026-09-03 já usava (`~/tmp/tmsi-sudo/tmsi-backup.service`, anterior
+  ao item 43) antes de a divisão semanal/diário o ter perdido pelo caminho. **Nota de classe de
+  problema (item 87, mesma família):** o semanal usa `ls | tail | xargs` dentro de um `/bin/sh
+  -c`, cujo código de saída é só o do último comando do pipe — se o `ls` falhar (glob sem
+  correspondência), a purga falha **em silêncio** e simplesmente não apaga nada. É a mesma
+  classe de falha-silenciosa do `invoke-rc.d` do item 87, mas o sentido do erro aqui é seguro
+  (na pior hipótese acumula, nunca apaga a mais) — registado, não corrigido agora.
+  **Aplicar na instalação viva** (acrescenta só a linha nova, sem reescrever o ficheiro):
+  ```bash
+  sudo sed -i "/chmod 600 .*-window.dump/a ExecStart=/usr/bin/find /home/pedro/backups/tmsi -maxdepth 1 -name 'tmsi-*-window.dump' -mtime +30 -delete" \
+    /etc/systemd/system/tmsi-backup-window.service
+  sudo systemctl daemon-reload
+  systemctl cat tmsi-backup-window.service   # confirmar a linha nova, nada mais mudou
+  ```
+- **Os dois timers ficam ambos activos em permanência, a partir de 2026-10-03** (o semanal
+  estava `disabled` desde sempre — o host nunca tinha saído do modo único documentado acima):
+  ```bash
+  sudo systemctl enable --now tmsi-backup-weekly.timer
+  systemctl list-timers 'tmsi-backup-*'   # os dois têm de aparecer, cada um com o seu NEXT
+  ```
+- ~~Exactly one of the two timers is enabled at any time~~ — **superseded 2026-10-03, item
+  84.** A secção antiga (alternar com `disable --now`/`enable --now` entre os dois, e a
+  condição de saída do modo `window`) deixou de se aplicar: não há modo a que voltar, os dois
+  regimes são permanentes agora. Histórico, para contexto: o catálogo real foi carregado e
+  verificado a 19/09 e o host devia ter voltado ao semanal nessa altura — ficou em `window`
+  (sem purga) mais duas semanas, e foi aí que a retenção declarada («30 dias») se tornou falsa.
 - **Filenames are date-first, tag-last on purpose** (`tmsi-<date>-weekly.dump` /
   `tmsi-<date>-window.dump`, never `tmsi-weekly-<date>.dump`) — a plain alphabetical sort of
   `~/backups/tmsi/*.dump` still sorts chronologically regardless of which mode produced which
@@ -228,9 +240,10 @@ depth every time the cadence changes; a copy count doesn't.
   tracks a specific expected filename pattern rather than "latest by sort", it needs a
   matching update on the homelab side. Flagged in the dossier CHANGELOG for a homelab
   session to check; not fixed from here.
-- **On-VPS today:** `tmsi-backup-window.service`/`.timer`, `pg_dump -U postgres -Fc postgres`
-  inside `supabase-db`, copied out with `600` permissions (item 48), directory `~/backups/tmsi/`
-  at `700`.
+- **On-VPS today:** both `tmsi-backup-window.service`/`.timer` (daily, 30 copies) and
+  `tmsi-backup-weekly.service`/`.timer` (weekly, 8 copies) active — `pg_dump -U postgres -Fc
+  postgres` inside `supabase-db`, copied out with `600` permissions (item 48), directory
+  `~/backups/tmsi/` at `700`.
 - **Off-site:** the homelab pulls these dumps nightly over the WireGuard tunnel, via a
   dedicated, restricted SSH key (`homelab_to_vps`, `restrict,from="10.13.13.1"`, no
   pty/forwarding) — see the dossier's `CREDENTIALS-INVENTORY.md` 1.15. This VPS never pushes
