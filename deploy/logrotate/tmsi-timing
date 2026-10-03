@@ -1,3 +1,21 @@
+# Item 87 (2026-10-03): `invoke-rc.d nginx rotate` ficou DOIS DIAS a não reabrir este
+# ficheiro (01/10–03/10), e o nginx continuou a escrever no `.1` renomeado — resolvido à mão
+# com `systemctl reload nginx`. Diagnóstico: a ordem das stanzas (`nginx` antes de
+# `tmsi-timing`, alfabética — confirmada por reprodução num logrotate descartável, versão
+# 3.21.0, que ordena o directório de `include`) está correcta, e o `/var/log/nginx/*.log`
+# do sistema nunca falhou com o mesmo `invoke-rc.d nginx rotate` (23 dias sem falha,
+# auditado). A falha real não foi reproduzida ao vivo (precisava de acesso root ao journal
+# da noite exacta, que esta sessão não tinha) — mas o caminho tem uma falha de desenho
+# independente da causa: `invoke-rc.d nginx rotate` chama `/etc/init.d/nginx rotate`, cuja
+# `rotate_logs()` devolve `0` SEMPRE, **sem olhar ao código de saída** do
+# `start-stop-daemon` que envia o `USR1` — e o `>/dev/null 2>&1` aqui apaga o que sobrasse.
+# Uma falha de sinal fica invisível ao logrotate e a quem lê o cron — foi isso que deixou
+# passar dois dias sem ninguém dar por nada.
+#
+# Correcção: `kill -USR1` directo ao PID (sem a indirecção do `/etc/init.d/nginx`), com o
+# resultado registado — sucesso ou falha — num ficheiro próprio em vez de descartado. Não
+# prova que a causa de 01/10 não se repete, mas torna a próxima ocorrência visível no dia
+# em que acontece, não dois dias depois.
 /var/log/tmsi/tmsi-timing.log {
 	daily
 	missingok
@@ -7,6 +25,10 @@
 	notifempty
 	create 0640 www-data pedro
 	postrotate
-		invoke-rc.d nginx rotate >/dev/null 2>&1
+		if [ -s /run/nginx.pid ] && kill -USR1 "$(cat /run/nginx.pid)" 2>/var/log/tmsi/logrotate-postrotate.err; then
+			: > /var/log/tmsi/logrotate-postrotate.err
+		else
+			echo "$(date -Iseconds) FALHOU a reabrir tmsi-timing.log (kill -USR1 ao PID do nginx)" >> /var/log/tmsi/logrotate-postrotate.err
+		fi
 	endscript
 }

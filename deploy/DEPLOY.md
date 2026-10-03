@@ -52,6 +52,30 @@ Everything below is checked against the real running production, not assumed.
   sudo cp deploy/logrotate/tmsi-timing /etc/logrotate.d/tmsi-timing
   sudo nginx -t && sudo systemctl reload nginx
   ```
+
+  **⚠️ Item 87 (2026-10-03): o `postrotate` original (`invoke-rc.d nginx rotate`) ficou DOIS
+  DIAS a não reabrir o ficheiro** (01/10–03/10 — o nginx continuou a escrever no `.1`
+  renomeado; resolvido à mão com `systemctl reload nginx`). A causa exacta dessa noite não
+  foi reproduzida (precisava do journal root da altura), mas o caminho tinha uma falha de
+  desenho independente disso: `/etc/init.d/nginx`'s `rotate_logs()` devolve `0` sempre, sem
+  olhar ao código de saída do `start-stop-daemon` que envia o `USR1`, e o stanza escondia
+  qualquer erro com `>/dev/null 2>&1`. `deploy/logrotate/tmsi-timing` passou a enviar o
+  `USR1` directamente ao PID do nginx, com o resultado registado (sucesso ou falha) em
+  `/var/log/tmsi/logrotate-postrotate.err` em vez de descartado — a próxima falha fica
+  visível no próprio dia, não dois dias depois. **Reaplicar numa instalação já viva:**
+  ```bash
+  sudo cp deploy/logrotate/tmsi-timing /etc/logrotate.d/tmsi-timing
+  sudo nginx -t && sudo systemctl reload nginx
+  ```
+  **Prova, depois de reaplicar** (força a rotação de hoje, faz um pedido real, confirma que a
+  linha cai no ficheiro NOVO e não no `.1`):
+  ```bash
+  sudo logrotate -f /etc/logrotate.d/tmsi-timing
+  curl -s -o /dev/null https://tmsiequipment.duckdns.org/api/health
+  sleep 1
+  sudo tail -c 200 /var/log/tmsi/tmsi-timing.log      # tem de ter a linha do curl acima
+  cat /var/log/tmsi/logrotate-postrotate.err           # tem de estar vazio
+  ```
 - **Repo lives at `~/atelier-vps/tmsiequipment`** on the VPS (`pedro@vm7509`), a plain `git
   clone` — not `/opt/tmsiequipment`.
 - **The Supabase stack is this repo's own `deploy/supabase/docker-compose.yml`**, not a copy
