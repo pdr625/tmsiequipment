@@ -994,9 +994,25 @@ já dava ~1,5:1 sobre branco, e o Itinera é igual. Tocar nisto muda o aspecto d
 achado ao copiar a paleta para o TMSI. O TMSI usa `#5f6b7e` (4,86:1). Corrigir no Itinera
 (`public/css/tokens.css`) para as duas apps ficarem com o mesmo valor. Fora do repo do TMSI.
 
-**100. Seletor de tema provisório (botão flutuante)** — **REGISTADO 2026-10-04**, é intencional:
-passa para o rodapé do menu lateral na tarefa 2 do pacote de apresentação (menu lateral, depois
-acabamento por página). Se a tarefa 2 não avançar, o botão fica a flutuar sobre o conteúdo.
+~~**100. Seletor de tema provisório (botão flutuante)**~~ ✅ **FECHADO 2026-10-04 — `a8885bd`.**
+Passou para o rodapé do menu lateral; flutuante só nas páginas sem menu.
+
+**101. Páginas autenticadas que não usam `getMe()` pagam um pedido a mais** — **REGISTADO
+2026-10-04**, consequência assumida do menu lateral (o layout pede `me()`; só o `/prices` e os
+exports já o usam). As outras páginas (`products`, `config`, `dashboard`, `overrides`, `audit`…)
+continuam a fazer as suas chamadas a `getUser()`/`has_role()`/`can_read_costs()`. Migrá-las para
+`getMe()` **sem argumento** (partilhado com o layout) tira-lhes pedidos em vez de os somar. Medir
+antes e depois com `scripts/contar-pedidos.sh`.
+
+**102. Os links «Back» das páginas apontam para `/`, que agora redirecciona para `/prices`** —
+**REGISTADO 2026-10-04**, é a tarefa 3 (acabamento por página): com o menu lateral são redundantes e
+devem sair. Funcionam, só são estranhos.
+
+**103. Admin e `viewer` sem conta de teste: as entradas do menu deles só estão provadas por código** —
+**REGISTADO 2026-10-04**. A equivalência `me().roles` ≡ `has_role()` foi provada ao vivo para os 6
+papéis com conta de teste; para `admin` (conta pessoal do Pedro, fora do smoke por desenho) e
+`viewer` (papel que existe nas guardas mas sem utilizador) fica a leitura do código e a asserção
+estática `MM`. O Pedro confirma o menu de admin no browser.
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,

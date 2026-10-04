@@ -3,7 +3,12 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: tema — paleta do Itinera, modo escuro e Geist (tarefa 1 de 3 da apresentação) —
+**Etapa actual: menu lateral (tarefa 2 de 3 da apresentação) — 2026-10-04.** Revisão `a8885bd` em
+produção (digest `sha256:dc3ee589ca8a…`), migrações **ainda 0001–0021**, smoke **179/179** nos
+três modos (170 − 3 + 12: o bloco MM foi reescrito e nasceu o TT). Só frontend, sem migração. A
+tarefa 3 (acabamento por página) fica por fazer. Detalhe: primeira secção abaixo.
+
+**Etapa anterior: tema — paleta do Itinera, modo escuro e Geist (tarefa 1 de 3 da apresentação) —
 2026-10-04.** Revisão `7979a96` em produção (digest `sha256:4901a43c3807…`), migrações **ainda
 0001–0021**, smoke **170/170** nos três modos. Só frontend: nenhuma migração, nenhum pedido novo
 ao backend. Tarefas 2 (menu lateral) e 3 (acabamento por página) ficam por fazer. Detalhe: secção
@@ -45,6 +50,64 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 04/10 (tarde) — menu lateral no estilo do Itinera (2026-10-04)
+
+**Implantado:** revisão `a8885bd`, digest
+`sha256:dc3ee589ca8ad68b238effefe2acb7878b32205005e3789b1d0e9f3db4fdb138` (o label
+`org.opencontainers.image.revision` da imagem = o commit), `healthy`, `/api/health` 200. CI #66
+verde à primeira (build + typecheck). **Sem migração.** Rollback:
+`sha256:4901a43c380735a05286b245225460cdbce9c823e40dc00796a6c66a83498d49` (a do tema); backup do
+compose em `deploy/supabase/docker-compose.yml.<timestamp>.bak`.
+
+- **Dois grupos de rotas:** `app/(app)/` (tudo o que exige sessão: prices, products, config, dashboard,
+  overrides, proposals, audit, import, branches, admin, account, privacy) e `app/(public)/` (login,
+  forgot-password, reset-password, auth). **Os URLs não mudam.** Foi um grupo e não um layout de raiz
+  condicional porque um layout de raiz **não volta a renderizar** numa navegação suave: depois do login
+  (soft redirect) ficaria sem menu até um refresh.
+- **O menu** (`(app)/app-shell.tsx`, alimentado por `lib/nav.ts`): trilho azul-marinho de 232 px, «pílula»
+  coral antes da marca, item activo a coral (a entrada de href mais longo, para `/config/branding` não
+  acender também `/config`), secções Pricing / Setup / Administration / Account, rodapé com o nome de
+  quem está ligado, seletor de tema e Sign out. No telemóvel: cabeçalho com hambúrguer e gaveta
+  (fecha ao navegar, com Escape e ao tocar fora). Escondido na impressão.
+- **`/` redirecciona para `/prices`** — decisão desta sessão, **não confirmada pelo Pedro** (a pergunta
+  ficou sem resposta; assumida a recomendação). Reversível em `(app)/page.tsx`.
+- **As entradas por papel vêm de `me()`, sem pedidos a mais.** A página inicial antiga fazia 10+
+  chamadas a `has_role()`/`can_read_costs()`. `has_role(r)` é «existe linha em `user_roles` para
+  `auth.uid()`» e `me().roles` é o `array_agg` dessas linhas — equivalência **exacta**. Provado ao
+  vivo (transacção revertida, claims injectadas, sem passwords) para os 6 papéis de conta de teste:
+  0 divergências face às chamadas reais. **Admin e `viewer` não têm conta de teste — só por código.**
+  Escondido o menu a quem tem `must_change_password` (o middleware só deixa passar `/account/password`).
+- **`getMe()` sem argumento partilha o resultado no mesmo render** (`cache()` do React): layout e
+  página pedem `me()` uma só vez. O `/prices` passou a chamar `getMe()` sem argumento — **por desenho
+  continua nos 8 pedidos** (item 85). As outras páginas ganham **um** pedido (o `me`). **Não foi
+  medido** — a medição (`scripts/contar-pedidos.sh`) precisa de um carregamento de browser teu.
+- **Entradas são `<a href>` + `router.push`, não `<Link>`:** mantém o item 81 (zero prefetch — um `<a>`
+  simples não pré-carrega nada) e **ganha** o que o antigo `MenuButton` perdia: abrir num novo separador
+  com Ctrl/botão do meio. O `MenuButton` foi apagado.
+- **Seletor de tema:** inline no rodapé do menu; flutuante só nas páginas sem menu (grupo `(public)` e
+  troca forçada de password). Fecha o item 100.
+- **Contraste do trilho** medido nos dois temas (`scripts/contraste-tema.py` passou a cobrir os tokens
+  `nav-*`; o coral activo sobre o trilho tingido dá 5,06:1 no claro e 6,67:1 no escuro; no escuro o item
+  activo usa `#ff7a5c`, um coral mais claro).
+- **Smoke 170 → 179.** Bloco `MM` reescrito (8 asserções: `/` redirecciona; menu sem `<Link>`; navega
+  por `router.push`; ≥ 10 entradas; `getMe()` partilhado; e **as guardas do menu vs `auth-guard.ts`** —
+  auditoria, importação, configuração — comparadas por texto, para um papel não derivar em silêncio).
+  Bloco `TT` novo (4: nenhuma cor fixa do Tailwind no fonte; contraste dos dois temas; script
+  anti-piscar; nenhum tipo de letra de terceiros). **As 12 asserções foram provadas a falhar**, cada
+  uma com o seu estrago (cor fixa, contraste baixo, `<Link>`, papel a mais/a menos, `getMe(arg)`…),
+  restaurado o ficheiro depois. Caminhos das páginas movidas actualizados (11 referências).
+
+**Prova ao vivo (sem sessão):** os URLs não mudaram (`/login` 200, `/forgot-password` 200,
+`/auth/confirm` 307 sem parâmetros — **igual ao código anterior** — e 200 com eles); toda a página
+autenticada sem sessão dá 307 para `/login`; o `/login` não tem barra lateral e tem o seletor
+flutuante; o CSS publicado traz os tokens `--nav*` nos dois temas. **Por HTTP, não por browser:** o
+menu a render, a gaveta móvel, o item activo e o aspecto autenticado **ficam para o Pedro, no browser.**
+
+**A confirmar pelo Pedro:** menu em desktop e telemóvel (gaveta, hambúrguer, Escape); item activo a
+mudar ao navegar; que cada papel vê as entradas certas (sobretudo com a conta de admin); abrir uma
+entrada com Ctrl+clique; troca forçada de password sem menu; número de pedidos do `/prices` com
+`scripts/contar-pedidos.sh` (esperado 8) e de uma página que não use `getMe()` (esperado +1).
 
 ## Sessão 04/10 — tema: paleta do Itinera, modo escuro, Geist (2026-10-04)
 
