@@ -33,7 +33,16 @@ def block(css, selector):
     m = re.search(re.escape(selector) + r"\s*\{(.*?)\n\}", css, re.S)
     if not m:
         sys.exit(f"bloco não encontrado: {selector}")
-    return dict(re.findall(r"--([a-z-]+):\s*(#[0-9a-fA-F]{6})\s*;", m.group(1)))
+    t = dict(re.findall(r"--([a-z-]+):\s*(#[0-9a-fA-F]{6})\s*;", m.group(1)))
+    # Tokens rgba(r, g, b, a): fundem-se sobre o trilho (--nav) para medir o contraste real.
+    for nome, r, g, b, a in re.findall(
+        r"--([a-z-]+):\s*rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([0-9.]+)\s*\)\s*;", m.group(1)
+    ):
+        fundo = t["nav"].lstrip("#")
+        fb = [int(fundo[i:i + 2], 16) for i in (0, 2, 4)]
+        mix = [round(float(a) * int(c) + (1 - float(a)) * f) for c, f in zip((r, g, b), fb)]
+        t[nome] = "#%02x%02x%02x" % tuple(mix)
+    return t
 
 # (rótulo, texto, fundo, mínimo)
 PARES = [
@@ -48,6 +57,10 @@ PARES = [
     ("success / success-soft", "success", "success-soft", 4.5), ("success / surface", "success", "surface", 4.5),
     ("danger / danger-soft", "danger", "danger-soft", 4.5), ("danger / surface", "danger", "surface", 4.5),
     ("warning / warning-soft", "warning", "warning-soft", 4.5), ("warning / surface", "warning", "surface", 4.5),
+    # Menu lateral: texto do trilho, item activo (coral sobre o trilho já tingido).
+    ("nav-fg / nav", "nav-fg", "nav", 4.5), ("nav-fg-hover / nav", "nav-fg-hover", "nav", 4.5),
+    ("nav-active-fg / nav-active-bg (item activo)", "nav-active-fg", "nav-active-bg", 4.5),
+    ("nav-active-fg / nav", "nav-active-fg", "nav", 4.5),
     # O coral é identidade/realce (item activo, marca) — nunca texto pequeno.
     ("accent / surface (só texto grande/gráfico)", "accent", "surface", 3.0),
 ]

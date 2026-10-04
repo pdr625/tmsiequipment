@@ -49,6 +49,13 @@
   --danger-soft: #ffe4e6;
   --warning: #92400e;
   --warning-soft: #fef3c7;
+  /* Menu lateral — trilho azul-marinho do Itinera (tokens.css, «dark rail»). */
+  --nav: #0f172a;
+  --nav-line: #1e293b;
+  --nav-fg: #94a3b8;
+  --nav-fg-hover: #ffffff;
+  --nav-active-bg: rgba(255, 90, 54, 0.12);
+  --nav-active-fg: #ff5a36;
 }
 
 :root[data-theme='dark'] {
@@ -74,6 +81,13 @@
   --danger-soft: #2e1219;
   --warning: #fbbf24;
   --warning-soft: #2e2208;
+  /* Mais escuro que a página (#0b1020) para o trilho continuar a destacar-se. */
+  --nav: #070b16;
+  --nav-line: #182034;
+  --nav-fg: #94a3b8;
+  --nav-fg-hover: #ffffff;
+  --nav-active-bg: rgba(255, 90, 54, 0.14);
+  --nav-active-fg: #ff7a5c;
 }
 
 @theme inline {
@@ -98,6 +112,12 @@
   --color-danger-soft: var(--danger-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-nav: var(--nav);
+  --color-nav-line: var(--nav-line);
+  --color-nav-fg: var(--nav-fg);
+  --color-nav-fg-hover: var(--nav-fg-hover);
+  --color-nav-active-bg: var(--nav-active-bg);
+  --color-nav-active-fg: var(--nav-active-fg);
   --font-sans: var(--font-geist), system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', Consolas, monospace;
 }

@@ -9,7 +9,6 @@ import type { Metadata } from 'next';
 import { Geist, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { getBranding } from '@/lib/branding';
-import { ThemeToggle } from './theme-toggle';
 
 // Tipos de letra do Itinera (Geist + JetBrains Mono), servidos do PRÓPRIO
 // domínio: o next/font descarrega-os no build (CI) e emite-os como ficheiros
@@ -50,7 +49,6 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-page font-sans text-fg antialiased">
         {children}
-        <ThemeToggle />
       </body>
     </html>
   );

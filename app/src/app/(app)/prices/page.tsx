@@ -57,7 +57,7 @@ export default async function PricesPage({
   // `me()` (0021) é UM pedido que traz a decisão de vista E o nome de quem
   // gera — até 2026-09-24 eram três: getUser(), profiles e can_read_costs().
   // É o único await que tem de vir antes dos outros: decide QUAL vista se lê.
-  const me = await getMe(supabase);
+  const me = await getMe();
   const canReadCosts = me?.can_read_costs === true;
 
   // item 72: só as colunas que o ecrã mostra. `select('*')` trazia ~20 colunas

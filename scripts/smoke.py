@@ -1824,7 +1824,7 @@ def block_presentation_contract(tokens):
 
     pagina = (
         _pathlib.Path(__file__).resolve().parent.parent
-        / "app" / "src" / "app" / "prices" / "page.tsx"
+        / "app" / "src" / "app" / "(app)" / "prices" / "page.tsx"
     )
     if pagina.is_file():
         texto = pagina.read_text()
@@ -1912,7 +1912,7 @@ def block_alert_rule():
     import pathlib as _pathlib
 
     raiz = _pathlib.Path(__file__).resolve().parent.parent / "app" / "src"
-    rota = raiz / "app" / "prices" / "export" / "route.ts"
+    rota = raiz / "app" / "(app)" / "prices" / "export" / "route.ts"
     regra = raiz / "lib" / "alert.ts"
     if not rota.is_file() or not regra.is_file():
         check("JJ: regra do Alert (item 67)", False, "route.ts ou lib/alert.ts ausente")
@@ -1987,8 +1987,8 @@ def block_price_notice(sales_uuid):
         "isPriceNoticeOn compara com false" if "!== false" in modulo else "comparação não encontrada",
     )
 
-    pagina = (raiz / "app" / "prices" / "page.tsx").read_text()
-    rota = (raiz / "app" / "prices" / "export" / "route.ts").read_text()
+    pagina = (raiz / "app" / "(app)" / "prices" / "page.tsx").read_text()
+    rota = (raiz / "app" / "(app)" / "prices" / "export" / "route.ts").read_text()
     i = pagina.find("{aviso && (")
     bloco_aviso = pagina[i:pagina.find(")}", i)] if i >= 0 else ""
     check(
@@ -2172,7 +2172,7 @@ def block_me_and_settings(tokens, claims):
     # O contrato da página (item 76/75): uma chamada de identidade, sem cruzar
     # com v_products. Leitura estática do fonte, como o KK/II.
     import pathlib as _pl
-    pagina = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "prices" / "page.tsx").read_text()
+    pagina = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "(app)" / "prices" / "page.tsx").read_text()
     check("LL: /prices usa me() e já não pede getUser, profiles, can_read_costs nem v_products",
           "getMe(" in pagina and "auth.getUser" not in pagina and "'profiles'" not in pagina
           and "can_read_costs')" not in pagina and "v_products" not in pagina,
@@ -2181,8 +2181,8 @@ def block_me_and_settings(tokens, claims):
         return ("getMe(" in t and "auth.getUser" not in t and "'profiles'" not in t and "can_read_costs')" not in t
                 and (not tambem_sem_v_products or "v_products" not in t))
     raiz_app = _pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app"
-    px = (raiz_app / "prices" / "export" / "route.ts").read_text()
-    gx = (raiz_app / "products" / "export" / "route.ts").read_text()
+    px = (raiz_app / "(app)" / "prices" / "export" / "route.ts").read_text()
+    gx = (raiz_app / "(app)" / "products" / "export" / "route.ts").read_text()
     check("LL: /prices/export usa me() e já não pede getUser, profiles, can_read_costs nem v_products",
           sem_pedidos_antigos(px, True), "getMe presente, sem os pedidos antigos")
     check("LL: /products/export usa me() e já não pede getUser, profiles nem can_read_costs",
@@ -2190,30 +2190,104 @@ def block_me_and_settings(tokens, claims):
 
 
 def block_home_menu():
-    """MM — item 81: o menu da página inicial não tem <Link> (zero prefetch,
-    nem por viewport nem por hover). Leitura estática, por ELEMENTOS reais
-    (como o II), e com o outro lado da fronteira: que há botões e que o
-    componente navega por router.push — senão "nenhum Link" passava também
-    com o menu apagado."""
+    """MM — item 81, reescrito a 2026-10-04 (menu lateral). O menu deixou de
+    viver na página inicial: está em `(app)/app-shell.tsx`, alimentado por
+    `lib/nav.ts`. O que o item 81 exigia mantém-se — zero prefetch (nenhum
+    <Link>, nem por viewport nem por hover) — e acrescenta-se o outro lado da
+    fronteira (que há entradas e que navegam por router.push, senão «nenhum
+    Link» passava também com o menu apagado) e a prova de que as entradas por
+    papel batem com as guardas de auth-guard.ts, que são a fronteira real."""
     import re as _re
     import pathlib as _pl
-    raiz = _pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app"
-    pagina = (raiz / "page.tsx").read_text()
-    botao = (raiz / "menu-button.tsx").read_text()
-    links = _re.findall(r"<Link\s[^>]*>", pagina)
-    botoes = _re.findall(r"<MenuButton\s", pagina)
-    check("MM: a página inicial não tem nenhum <Link> (item 81)", len(links) == 0, f"{len(links)} <Link>")
-    check("MM: o menu é feito de <MenuButton> (não está vazio)", len(botoes) >= 10, f"{len(botoes)} <MenuButton>")
-    check("MM: o MenuButton navega por router.push e não usa <Link>",
-          "router.push(href)" in botao and not _re.search(r"<Link\s[^>]*>", botao),
-          "router.push presente, sem <Link>")
+    raiz = _pl.Path(__file__).resolve().parent.parent / "app" / "src"
+    app = raiz / "app" / "(app)"
+    pagina = (app / "page.tsx").read_text()
+    casca = (app / "app-shell.tsx").read_text()
+    layout = (app / "layout.tsx").read_text()
+    prices = (app / "prices" / "page.tsx").read_text()
+    nav = (raiz / "lib" / "nav.ts").read_text()
+    guard = (raiz / "lib" / "auth-guard.ts").read_text()
+    me_ts = (raiz / "lib" / "me.ts").read_text()
+
+    check("MM: a página inicial redirecciona para /prices e já não é um menu",
+          "redirect('/prices')" in pagina and "<MenuButton" not in pagina and not _re.search(r"<Link\s", pagina),
+          "redirect('/prices'), sem MenuButton nem Link")
+    check("MM: o menu lateral não tem nenhum <Link> (item 81, zero prefetch)",
+          not _re.search(r"<Link\s", casca) and "next/link" not in casca, "sem <Link> nem import de next/link")
+    check("MM: o menu lateral navega por router.push com <a href> (não está vazio)",
+          "router.push(href)" in casca and len(_re.findall(r"<a\s", casca)) >= 1,
+          "router.push presente e entradas <a>")
+    n_itens = len(_re.findall(r"href: '/", nav))
+    check("MM: nav.ts define as entradas do menu (>= 10)", n_itens >= 10, f"{n_itens} entradas")
+    check("MM: o layout e o /prices pedem me() sem argumento (partilhado por cache(), sem pedido a mais)",
+          "getMe()" in layout and "getMe()" in prices and "cache(" in me_ts,
+          "getMe() no layout e no /prices, cache() em me.ts")
+
+    def corpo(fonte, nome):
+        m = _re.search(r"export async function " + nome + r"\b.*?\n}\n", fonte, _re.S)
+        return m.group(0) if m else ""
+    def papeis_guarda(nome):
+        return set(_re.findall(r"r: '([a-z_]+)'", corpo(guard, nome)))
+    def papeis_nav(const):
+        m = _re.search(r"const " + const + r" = ([^;]+);", nav)
+        linha = m.group(1) if m else ""
+        return set(_re.findall(r"has\('([a-z_]+)'\)", linha)) | ({"admin"} if _re.search(r"\badmin\b", linha) else set())
+    check("MM: as entradas «Audit log» são para os mesmos papéis que canReadAuditLog()",
+          papeis_nav("canAudit") == papeis_guarda("canReadAuditLog") != set(),
+          f"nav {sorted(papeis_nav('canAudit'))} == guarda {sorted(papeis_guarda('canReadAuditLog'))}")
+    check("MM: a entrada «Bulk import» é para os mesmos papéis que canManageProducts()",
+          papeis_nav("canProducts") == papeis_guarda("canManageProducts") != set(),
+          f"nav {sorted(papeis_nav('canProducts'))} == guarda {sorted(papeis_guarda('canManageProducts'))}")
+    check("MM: «Pricing configuration» usa can_read_costs + logistics, como pricingConfigReadAccess()",
+          "r: 'logistics'" in corpo(guard, "pricingConfigReadAccess") and "has('logistics')" in nav
+          and "me.can_read_costs" in nav and "can_read_costs" in corpo(guard, "pricingConfigReadAccess"),
+          "can_read_costs + has_role('logistics')")
+
+
+def block_theme():
+    """TT — tema (2026-10-04). Três coisas que se estragam em silêncio:
+    (1) uma cor fixa (`bg-gray-100`, `text-red-700`, `bg-white`…) escrita à mão
+    numa página NÃO muda com o tema — fica uma ilha clara no modo escuro;
+    (2) uma cor de texto que reprova o contraste; (3) um tipo de letra pedido a
+    um terceiro, que o CSP `font-src 'self'` bloquearia e a /privacy não
+    declara. Leitura estática do fonte + o script de contraste."""
+    import re as _re
+    import pathlib as _pl
+    import subprocess as _sp
+    raiz = _pl.Path(__file__).resolve().parent.parent
+    src = raiz / "app" / "src"
+    fixa = _re.compile(
+        r"(?<![\w-])(?:bg|text|border|ring|divide|placeholder|fill|stroke|outline)-"
+        r"(?:(?:gray|slate|zinc|neutral|red|green|yellow|amber|blue|orange|emerald)-\d+|(?:white|black)(?![\w/-]))")
+    achados = []
+    for f in sorted(src.rglob("*.ts*")):
+        if "email-templates" in f.parts:
+            continue
+        for m in fixa.finditer(f.read_text()):
+            achados.append(f"{f.relative_to(src)}: {m.group(0)}")
+    check("TT: nenhuma cor fixa da paleta do Tailwind no fonte (só tokens do tema)",
+          not achados, "0 ocorrências" if not achados else f"{len(achados)}: {achados[:3]}")
+
+    r = _sp.run([sys.executable, str(raiz / "scripts" / "contraste-tema.py")], capture_output=True, text=True)
+    falhas = [l for l in r.stdout.splitlines() if l.startswith("XX")]
+    check("TT: todos os pares de texto dos temas claro e escuro passam o contraste WCAG AA",
+          r.returncode == 0, "0 falhas" if r.returncode == 0 else f"{len(falhas)}: {falhas[:2]}")
+
+    layout = (src / "app" / "layout.tsx").read_text()
+    check("TT: o <head> aplica o tema antes da primeira pintura (sem piscar)",
+          "setAttribute('data-theme'" in layout and "suppressHydrationWarning" in layout,
+          "script inline + suppressHydrationWarning")
+    externos = [f"{f.relative_to(src)}" for f in src.rglob("*.ts*")
+                if _re.search(r"fonts\.(googleapis|gstatic)\.com", f.read_text())]
+    check("TT: nenhum tipo de letra pedido a um terceiro (CSP font-src 'self')",
+          not externos, "0 referências" if not externos else str(externos))
 
 
 def block_product_alert_column():
     """NN — item 79: a coluna Alert de /products/[id] só existe para quem lê
     custos, e o colSpan da linha de erro acompanha as colunas que há."""
     import pathlib as _pl
-    t = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "products" / "[id]" / "page.tsx").read_text()
+    t = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "(app)" / "products" / "[id]" / "page.tsx").read_text()
     check("NN: o <th> Alert do /products/[id] está condicionado a canReadCosts",
           'canReadCosts === true && <th className="py-2 pr-4">Alert</th>' in t
           and '<th className="py-2 pr-4">Alert</th>' not in t.replace('canReadCosts === true && <th className="py-2 pr-4">Alert</th>', ''),
@@ -2240,7 +2314,7 @@ def block_retention_text():
         check("OO: retenção dos registos de acesso", True, "SKIP — /etc/logrotate.d/nginx ilegível ou sem `rotate`")
         return
     n = m.group(1)
-    pagina = (raiz / "app" / "src" / "app" / "privacy" / "page.tsx").read_text()
+    pagina = (raiz / "app" / "src" / "app" / "(app)" / "privacy" / "page.tsx").read_text()
     nota = (raiz / "docs" / "DATA-PROCESSING-NOTICE.md").read_text()
     check(f"OO: a /privacy diz {n} dias de registos de acesso (o logrotate faz rotate {n})",
           f"access logs ({n} days)" in pagina, "texto igual ao logrotate")
@@ -2258,7 +2332,7 @@ def block_login_link_prefetch():
     pagar um pedido especulativo."""
     import re as _re
     import pathlib as _pl
-    raiz = _pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "login"
+    raiz = _pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "(public)" / "login"
     forma = (raiz / "form.tsx").read_text()
     links = _re.findall(r"<Link\s[^>]*>", forma)
     check("PP: form.tsx tem exactamente um <Link>, o de forgot-password", len(links) == 1, f"{len(links)} <Link>")
@@ -2271,7 +2345,7 @@ def block_settings_save_feedback():
     auditoria, item 86). O ficheiro já usa este padrão noutro formulário
     (a proposta de câmbio) — o scope tem de ser SÓ o SettingRow."""
     import pathlib as _pl
-    t = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "config" / "forms.tsx").read_text()
+    t = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "(app)" / "config" / "forms.tsx").read_text()
     i0 = t.find("export function SettingRow")
     i1 = t.find("\nexport function", i0 + 1)
     trecho = t[i0:i1 if i1 > 0 else None]
@@ -2286,7 +2360,7 @@ def block_product_money_formatting():
     a duas casas e a margem em percentagem, como o /prices (item 72). Antes
     chegava o número bruto do compute_price() (até 14 decimais)."""
     import pathlib as _pl
-    t = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "products" / "[id]" / "page.tsx").read_text()
+    t = (_pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app" / "(app)" / "products" / "[id]" / "page.tsx").read_text()
     check("RR: total_cost_eur passa por eur()", "eur(r.total_cost_eur)" in t, "eur(r.total_cost_eur) presente")
     check("RR: margin passa por pct()", "pct(r.margin)" in t, "pct(r.margin) presente")
     check("RR: min_price e ref_price passam por eur()",
@@ -2474,6 +2548,7 @@ def main():
     block_price_notice(sell_side.get("sales"))
     block_me_and_settings(tokens, claims)
     block_home_menu()
+    block_theme()
     block_product_alert_column()
     block_login_link_prefetch()
     block_settings_save_feedback()

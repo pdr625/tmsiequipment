@@ -30,13 +30,16 @@ function stored(): Choice {
   }
 }
 
-// Seletor de tema: Auto (segue o sistema) → Light → Dark. Botão flutuante no
-// canto inferior direito, escondido na impressão. É provisório de propósito:
-// quando existir a barra lateral (tarefa seguinte) passa para o rodapé dela.
+// Seletor de tema: Auto (segue o sistema) → Light → Dark. Dois sítios:
+//   inline   — rodapé do menu lateral (páginas autenticadas, app-shell.tsx);
+//   floating — canto inferior direito, para as páginas SEM menu lateral
+//              (login, recuperação, troca forçada de password). Escondido na
+//              impressão.
+// (Antes da barra lateral era um botão flutuante provisório em todas.)
 // A escolha inicial é lida DEPOIS de montar (useEffect) para o HTML do
 // servidor e o primeiro render do cliente coincidirem; o aspecto do tema em
 // si já foi aplicado pelo script inline do layout.
-export function ThemeToggle() {
+export function ThemeToggle({ variant = 'floating' }: { variant?: 'floating' | 'inline' }) {
   const [choice, setChoice] = useState<Choice>('system');
 
   useEffect(() => {
@@ -70,7 +73,11 @@ export function ThemeToggle() {
       onClick={next}
       aria-label={`Theme: ${LABEL[choice]}. Click to change.`}
       title={`Theme: ${LABEL[choice]}`}
-      className="fixed bottom-4 right-4 z-50 cursor-pointer rounded-full border border-line-strong bg-surface px-3 py-1.5 text-xs font-medium text-fg-soft shadow-sm print:hidden"
+      className={
+        variant === 'inline'
+          ? 'w-full cursor-pointer rounded-md border border-nav-line px-3 py-1.5 text-left text-xs font-medium text-nav-fg hover:text-nav-fg-hover'
+          : 'fixed bottom-4 right-4 z-50 cursor-pointer rounded-full border border-line-strong bg-surface px-3 py-1.5 text-xs font-medium text-fg-soft shadow-sm print:hidden'
+      }
     >
       {choice === 'dark' ? '☾' : choice === 'light' ? '☀' : '◐'} {LABEL[choice]}
     </button>
