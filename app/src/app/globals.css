@@ -179,15 +179,68 @@
   }
 }
 
-/* Print landscape for the price list's print view (i10). No Tailwind
- * utility reaches this — @page is a page-box at-rule, not a style
- * applicable to an element/class, so it can't be a `print:` variant.
- * The only printable screen today is /prices; scoped globally to @media
- * print rather than to a class for that reason, not because it's meant
- * to apply everywhere print is used in the future. */
+/* Impressão (i10, revista a 2026-10-05).
+ *
+ * ORIENTAÇÃO: o i10 fixava `@page { size: landscape }`, e uma regra de página
+ * ganha sempre à escolha do utilizador no diálogo de impressão — por isso
+ * «Portrait» não fazia nada. Agora `size: auto`: manda o que o utilizador
+ * escolher (e o papel: A4, Letter…). Nenhuma classe Tailwind alcança um
+ * at-rule de página, por isso isto vive aqui e não numa variante `print:`.
+ * Margens pequenas e fixas: o padrão do browser (~1 cm de cada lado e mais em
+ * cima/baixo) desperdiçava a folha.
+ *
+ * ESPAÇO: o ecrã tem limites que o papel não deve herdar — contentor de
+ * página com largura máxima e margens (`max-w-*`, `px-4`, `py-8`), letra de
+ * ecrã e células com `py-2`. Tudo o que vem abaixo é SEM camada, por isso
+ * ganha aos utilitários do Tailwind (que estão numa camada) sem `!important`.
+ *  - o contentor da página (filho directo de <main>) ocupa a largura toda;
+ *  - o tamanho da letra base desce (tudo o que é `rem` — letra, folgas,
+ *    larguras — escala junto) e desce mais em retrato, onde a folha é mais
+ *    estreita; `orientation` mede a folha escolhida, não o ecrã;
+ *  - células mais baixas (mais linhas por folha);
+ *  - uma linha nunca parte entre duas folhas, e o cabeçalho da tabela repete-se
+ *    em cada folha (`thead` como grupo de cabeçalho);
+ *  - colunas numéricas sem quebra, para os valores não ficarem em duas linhas;
+ *    a coluna do nome é a que cede e quebra. */
 @media print {
   @page {
-    size: landscape;
+    size: auto;
+    margin: 10mm 8mm;
+  }
+
+  html {
+    font-size: 12.5px;
+  }
+
+  main > div {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  table td,
+  table th {
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+
+  td.text-right,
+  th.text-right {
+    white-space: nowrap;
+  }
+}
+
+@media print and (orientation: portrait) {
+  html {
+    font-size: 11.5px;
   }
 }
 

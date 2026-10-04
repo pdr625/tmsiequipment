@@ -2290,6 +2290,21 @@ def block_theme():
     check("TT: nenhuma página autenticada tem um <Link> «Back» para / (o menu lateral substitui-o)",
           not home, "0 ocorrências" if not home else str(home))
     css = (src / "app" / "globals.css").read_text()
+    # Impressão (2026-10-05): um `@page { size: landscape|portrait }` ganha à
+    # escolha do utilizador no diálogo — foi o defeito («Portrait» não fazia
+    # nada). A orientação tem de ficar com o utilizador.
+    css_limpo = _re.sub(r"/\*.*?\*/", "", css, flags=_re.S)  # o comentário cita o defeito antigo
+    blocos_pagina = _re.findall(r"@page\s*\{([^}]*)\}", css_limpo)
+    forcada = [b for b in blocos_pagina if _re.search(r"size:\s*[^;]*\b(landscape|portrait)\b", b)]
+    check("TT: a impressão não força a orientação da folha (@page size: auto)",
+          bool(blocos_pagina) and not forcada and any(_re.search(r"size:\s*auto", b) for b in blocos_pagina),
+          "@page size: auto, sem landscape/portrait" if not forcada else f"orientação forçada: {forcada}")
+    impressao = css_limpo
+    check("TT: na impressão o contentor da página ocupa a largura toda e a tabela repete o cabeçalho",
+          _re.search(r"main\s*>\s*div\s*\{[^}]*max-width:\s*none", impressao) is not None
+          and _re.search(r"thead\s*\{[^}]*display:\s*table-header-group", impressao) is not None
+          and _re.search(r"tr\s*\{[^}]*break-inside:\s*avoid", impressao) is not None,
+          "main > div sem max-width, thead repetido, linhas indivisíveis")
     check("TT: o foco por teclado é visível (:focus-visible definido)",
           _re.search(r"(?m)^\s*:focus-visible\s*\{[^}]*outline:\s*2px solid", css) is not None,
           ":focus-visible global (sem seletor à frente) com contorno de 2px")
