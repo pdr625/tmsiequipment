@@ -22,7 +22,7 @@ export default async function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-8 shadow-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold">{branding.displayName}</h1>
+        <h1 className="mb-6 text-center text-2xl font-bold tracking-tight">{branding.displayName}</h1>
         <LoginForm />
       </div>
 

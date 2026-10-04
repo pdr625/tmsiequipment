@@ -37,7 +37,7 @@ export function DecideProposalForm({ proposalId }: { proposalId: number }) {
         name="decision"
         value="approved"
         disabled={pending}
-        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
       >
         {pending ? '…' : 'Approve'}
       </button>
@@ -47,7 +47,7 @@ export function DecideProposalForm({ proposalId }: { proposalId: number }) {
         name="decision"
         value="rejected"
         disabled={pending}
-        className="rounded-md border border-line-strong px-3 py-1 text-sm font-medium disabled:opacity-50"
+        className="rounded-md border border-line-strong px-3 py-1 text-sm font-medium disabled:opacity-50 transition-colors hover:bg-surface-alt"
       >
         {pending ? '…' : 'Reject'}
       </button>
@@ -146,9 +146,9 @@ export function PendingQueue({ items }: { items: PendingItem[] }) {
               {i.canDecide && (
                 <input type="checkbox" checked={selected.has(i.id)} onChange={() => toggle(i.id)} aria-label={`Select proposal ${i.id}`} />
               )}
-              <span className="rounded bg-surface-alt px-2 py-0.5 text-xs font-medium">{i.targetTable}</span>
+              <span className="rounded-full bg-surface-alt px-2.5 py-0.5 text-xs font-medium">{i.targetTable}</span>
               {i.branchId && <span className="text-xs text-fg-muted">branch {i.branchId}</span>}
-              <span className={`rounded px-2 py-0.5 text-xs ${STATUS_PENDING_STYLE}`}>pending approval</span>
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_PENDING_STYLE}`}>pending approval</span>
             </div>
             <p className="mb-1 text-sm">{i.displayText}</p>
             <p className="mb-2 text-xs text-fg-muted">
@@ -238,7 +238,7 @@ export function PendingQueue({ items }: { items: PendingItem[] }) {
             type="button"
             disabled={commitPending || (decision === 'rejected' && reason.trim() === '')}
             onClick={confirmCommit}
-            className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
+            className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
           >
             {commitPending ? '…' : `Confirm — ${decision} ${preview.eligible_count}`}
           </button>

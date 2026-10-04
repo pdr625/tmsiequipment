@@ -59,7 +59,7 @@ export function CreateBranchForm({ currencies }: { currencies: { code: string }[
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
       >
         {pending ? 'Creating…' : 'Create branch'}
       </button>
@@ -111,7 +111,7 @@ export function CreateChannelForm({ branches }: { branches: { id: string }[] }) 
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
       >
         {pending ? 'Creating…' : 'Create channel'}
       </button>

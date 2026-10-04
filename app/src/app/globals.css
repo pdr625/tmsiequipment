@@ -122,6 +122,63 @@
   --font-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', Consolas, monospace;
 }
 
+/* Acabamento (tarefa 3 do pacote «apresentação», 2026-10-04). Regras de BASE
+ * em vez de classes repetidas em ~250 elementos: as páginas são muito
+ * regulares (125 <th>, 77 <input>, 34 <button> iguais). Ficam na camada
+ * `base`, por isso qualquer utilitário Tailwind explícito num elemento ganha.
+ *  - foco VISÍVEL em tudo o que se foca (antes só havia o do browser, quase
+ *    invisível no escuro); no menu lateral usa o coral, porque o cobalto não
+ *    se lê sobre o trilho azul-marinho;
+ *  - campos com fundo de «superfície» (no escuro destacam-se da página),
+ *    placeholder legível e caixas/rádios na cor primária;
+ *  - cursor certo nos botões, incluindo desactivados;
+ *  - cabeçalhos de tabela em maiúsculas pequenas (o «eyebrow» do Itinera),
+ *    números alinhados à direita em largura fixa, e linha realçada ao passar o
+ *    rato. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--primary-fg);
+    outline-offset: 2px;
+  }
+  #app-sidebar :focus-visible {
+    outline-color: var(--nav-active-fg);
+  }
+  input,
+  select,
+  textarea {
+    background-color: var(--surface);
+    color: var(--fg);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--fg-muted);
+    opacity: 0.85;
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--primary);
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  th {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  td.text-right,
+  th.text-right {
+    font-variant-numeric: tabular-nums;
+  }
+  tr:hover > td {
+    background-color: var(--surface-alt);
+  }
+}
+
 /* Print landscape for the price list's print view (i10). No Tailwind
  * utility reaches this — @page is a page-box at-rule, not a style
  * applicable to an element/class, so it can't be a `print:` variant.

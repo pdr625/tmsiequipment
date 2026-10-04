@@ -99,17 +99,14 @@ export default async function OverridesPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Overrides</h1>
-        <Link href="/" className="text-sm text-fg-soft underline">
-          Back
-        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">Overrides</h1>
       </div>
 
       <section className="mb-10">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <h2 className="text-sm font-semibold text-fg-soft">Price overrides</h2>
+          <h2 className="text-base font-semibold tracking-tight text-fg">Price overrides</h2>
           {(pendingOverrideProposals?.length ?? 0) > 0 && (
-            <Link href="/proposals" className="rounded bg-warning-soft px-2 py-0.5 text-xs text-warning">
+            <Link href="/proposals" className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning">
               {pendingOverrideProposals?.length} pending approval
             </Link>
           )}
@@ -151,7 +148,7 @@ export default async function OverridesPage() {
                     {o.valid_from} → {o.valid_to ?? 'open'}
                   </td>
                   <td className="py-2 pr-4">
-                    <span className={`rounded px-2 py-0.5 text-xs ${STATUS_STYLE[s]}`}>{s}</span>
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[s]}`}>{s}</span>
                   </td>
                 </tr>
               );
@@ -173,7 +170,7 @@ export default async function OverridesPage() {
       </section>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-fg-soft">HS code overrides</h2>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">HS code overrides</h2>
         <p className="mb-2 text-xs text-fg-muted">
           Replaces which HS code is used for the customs duty lookup in a specific scope,
           instead of the product&apos;s own default. Only branch scope has any effect on
@@ -200,7 +197,7 @@ export default async function OverridesPage() {
                 <td className="py-2 pr-4">
                   {o.scope_type}: {o.scope_id}
                   {o.scope_type !== 'branch' && (
-                    <span className="ml-2 rounded bg-warning-soft px-2 py-0.5 text-xs text-warning">
+                    <span className="ml-2 rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning">
                       no effect — scope not yet supported by the pricing engine
                     </span>
                   )}

@@ -48,25 +48,22 @@ export default async function ProductsPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Products</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Products</h1>
         <div className="flex items-center gap-4">
           <a
             href="/products/export"
-            className="rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
+            className="rounded-md border border-line-strong px-3 py-2 text-sm font-medium transition-colors hover:bg-surface-alt"
           >
             Export to Excel
           </a>
           {canManage && (
             <Link
               href="/products/new"
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary"
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary transition-colors hover:bg-primary-hover"
             >
               New product
             </Link>
           )}
-          <Link href="/" className="text-sm text-fg-soft underline">
-            Back
-          </Link>
         </div>
       </div>
 

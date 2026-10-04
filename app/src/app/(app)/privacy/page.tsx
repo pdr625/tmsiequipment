@@ -5,7 +5,6 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
-import Link from 'next/link';
 import { getBranding } from '@/lib/branding';
 
 // item 42: informative only, no consent flow — see the header note below and
@@ -18,7 +17,7 @@ export default async function PrivacyPage() {
   return (
     <div className="flex min-h-screen flex-col items-center px-4 py-10">
       <div className="w-full max-w-2xl rounded-lg border border-line bg-surface p-8 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold">Data processing notice</h1>
+        <h1 className="mb-1 text-2xl font-bold tracking-tight">Data processing notice</h1>
         <p className="mb-6 text-sm text-fg-muted">{branding.displayName}</p>
 
         <p className="mb-4 rounded-md border border-warning bg-warning-soft p-3 text-sm text-warning">
@@ -110,10 +109,6 @@ export default async function PrivacyPage() {
             mechanism — today the table keeps every entry without a time limit.
           </li>
         </ul>
-
-        <Link href="/" className="mt-6 inline-block text-sm font-medium text-fg-soft underline">
-          Back
-        </Link>
       </div>
     </div>
   );

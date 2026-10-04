@@ -6,7 +6,6 @@
  */
 
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { isAdmin } from '@/lib/auth-guard';
 import { InviteForm, AddRoleForm, RemoveRoleButton, BanToggleButton, ResetPasswordForm } from './client-forms';
@@ -73,10 +72,7 @@ export default async function AdminUsersPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">User administration</h1>
-        <Link href="/" className="text-sm text-fg-soft underline">
-          Back
-        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">User administration</h1>
       </div>
 
       <InviteForm />
@@ -104,12 +100,12 @@ export default async function AdminUsersPage() {
                   <span className="font-medium">{p.email}</span>
                   {p.full_name && <span className="ml-2 text-sm text-fg-muted">{p.full_name}</span>}
                   {banStatusError ? (
-                    <span className="ml-2 rounded bg-warning-soft px-2 py-0.5 text-xs text-warning">
+                    <span className="ml-2 rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning">
                       ban status unknown
                     </span>
                   ) : (
                     banned && (
-                      <span className="ml-2 rounded bg-danger-soft px-2 py-0.5 text-xs text-danger">disabled</span>
+                      <span className="ml-2 rounded-full bg-danger-soft px-2.5 py-0.5 text-xs font-medium text-danger">disabled</span>
                     )
                   )}
                 </div>

@@ -109,7 +109,7 @@ export function PriceOverrideForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
       >
         {pending ? 'Submitting…' : 'Propose override'}
       </button>
@@ -178,7 +178,7 @@ export function HsOverrideForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
       >
         {pending ? 'Creating…' : 'Create override'}
       </button>

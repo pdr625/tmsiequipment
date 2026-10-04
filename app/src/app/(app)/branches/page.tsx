@@ -5,7 +5,6 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
-import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { isAdmin } from '@/lib/auth-guard';
 import { pickActive } from '@/lib/pick-active';
@@ -95,14 +94,11 @@ export default async function BranchesPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Branches &amp; channels</h1>
-        <Link href="/" className="text-sm text-fg-soft underline">
-          Back
-        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">Branches &amp; channels</h1>
       </div>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Branches</h2>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Branches</h2>
         <table className="mb-3 w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left text-fg-muted">
@@ -131,7 +127,7 @@ export default async function BranchesPage() {
       </section>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Channels</h2>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Channels</h2>
         <table className="mb-3 w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left text-fg-muted">
@@ -161,7 +157,7 @@ export default async function BranchesPage() {
         <>
           <section className="mb-10">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold text-fg-soft">Reference price factor</h2>
+              <h2 className="text-base font-semibold tracking-tight text-fg">Reference price factor</h2>
             </div>
             <p className="mb-2 text-xs text-fg-muted">
               A branch with no proposal yet shows the neutral defaults (ref. factor 1.100, list coef.
@@ -186,7 +182,7 @@ export default async function BranchesPage() {
           </section>
 
           <section className="mb-10">
-            <h2 className="mb-2 text-sm font-semibold text-fg-soft">Transport tiers</h2>
+            <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Transport tiers</h2>
             <table className="mb-3 w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-fg-muted">
@@ -209,7 +205,7 @@ export default async function BranchesPage() {
           </section>
 
           <section className="mb-10">
-            <h2 className="mb-2 text-sm font-semibold text-fg-soft">Margin grids</h2>
+            <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Margin grids</h2>
             <table className="mb-3 w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-fg-muted">

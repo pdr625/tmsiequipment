@@ -88,7 +88,7 @@ export function ExchangeRateForm({ currencies }: { currencies: { code: string }[
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
       >
         {pending ? 'Submitting…' : 'Propose rate'}
       </button>
@@ -171,7 +171,7 @@ export function TransportTierForm({ branches }: { branches: { id: string }[] }) 
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
       >
         {pending ? 'Submitting…' : 'Propose tier'}
       </button>
@@ -263,7 +263,7 @@ export function TransportTierRow({
             form={formId}
             type="submit"
             disabled={pending}
-            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50 transition-colors hover:bg-surface-alt"
           >
             {pending ? '…' : 'Propose'}
           </button>
@@ -330,7 +330,7 @@ export function CustomsRateRow({
             form={formId}
             type="submit"
             disabled={pending}
-            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50 transition-colors hover:bg-surface-alt"
           >
             {pending ? '…' : 'Propose'}
           </button>
@@ -403,7 +403,7 @@ export function MarginGridForm({ branches }: { branches: { id: string }[] }) {
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
       >
         {pending ? 'Submitting…' : 'Propose tier'}
       </button>
@@ -482,7 +482,7 @@ export function MarginGridRow({
             form={formId}
             type="submit"
             disabled={pending}
-            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50 transition-colors hover:bg-surface-alt"
           >
             {pending ? '…' : 'Propose'}
           </button>
@@ -549,7 +549,7 @@ export function BranchPricingParamsRow({
             form={formId}
             type="submit"
             disabled={pending}
-            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50 transition-colors hover:bg-surface-alt"
           >
             {pending ? '…' : 'Propose'}
           </button>
@@ -622,7 +622,7 @@ export function SettingRow({
             form={formId}
             type="submit"
             disabled={pending}
-            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50 transition-colors hover:bg-surface-alt"
           >
             {pending ? '…' : 'Save'}
           </button>
@@ -646,7 +646,7 @@ export function PriceNoticeToggle({ enabled, text }: { enabled: boolean; text: s
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
+        className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50 transition-colors hover:bg-surface-alt"
       >
         {pending ? '…' : enabled ? 'Hide notice' : 'Show notice'}
       </button>

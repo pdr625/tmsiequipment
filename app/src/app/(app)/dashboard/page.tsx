@@ -187,14 +187,11 @@ export default async function DashboardPage() {
     // properties inherit through descendants once defined here (globals.css).
     <div className="dashboard-charts mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Dashboard</h1>
-        <Link href="/" className="text-sm text-fg-soft underline">
-          Back
-        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
       </div>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Products by status</h2>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Products by status</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {STATUSES.map((s) => (
             <Tile key={s} label={s} value={statusCounts.get(s) ?? 0} warn={s === 'review'} />
@@ -203,7 +200,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Average margin by branch</h2>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Average margin by branch</h2>
         <BarChart
           title="Average margin"
           data={marginData}
@@ -213,7 +210,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Exchange rate freshness</h2>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Exchange rate freshness</h2>
         {trackedCurrencies.length === 0 && <p className="text-sm text-fg-muted">No data for this period.</p>}
         {trackedCurrencies.length > 0 && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -249,7 +246,7 @@ export default async function DashboardPage() {
 
       <section className="mb-8">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-fg-soft">Active price overrides</h2>
+          <h2 className="text-base font-semibold tracking-tight text-fg">Active price overrides</h2>
           <Link href="/overrides" className="text-xs text-fg-soft underline">
             Manage overrides
           </Link>
@@ -299,7 +296,7 @@ export default async function DashboardPage() {
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-fg-soft">Recent activity</h2>
+          <h2 className="text-base font-semibold tracking-tight text-fg">Recent activity</h2>
           <Link href="/audit" className="text-xs text-fg-soft underline">
             Full audit log
           </Link>

@@ -5,7 +5,6 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
-import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { isAdmin } from '@/lib/auth-guard';
 import { PendingQueue, type PendingItem } from './forms';
@@ -118,10 +117,7 @@ export default async function ProposalsPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Proposals</h1>
-        <Link href="/" className="text-sm text-fg-soft underline">
-          Back
-        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">Proposals</h1>
       </div>
       <p className="mb-6 text-xs text-fg-muted">
         Changes to published prices go through here before they take effect. Approve or reject
@@ -130,13 +126,13 @@ export default async function ProposalsPage() {
       </p>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Pending ({pending.length})</h2>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Pending ({pending.length})</h2>
         {pending.length === 0 && <p className="text-sm text-fg-muted">Nothing pending.</p>}
         <PendingQueue items={pendingItems} />
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Decided (most recent 200)</h2>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Decided (most recent 200)</h2>
         {decided.length === 0 && <p className="text-sm text-fg-muted">No decisions yet.</p>}
         {decided.length > 0 && (
           <table className="w-full border-collapse text-sm">
@@ -158,7 +154,7 @@ export default async function ProposalsPage() {
                   </td>
                   <td className="py-2 pr-4">{formatPayload(p)}</td>
                   <td className="py-2 pr-4">
-                    <span className={`rounded px-2 py-0.5 text-xs ${STATUS_STYLE[p.status]}`}>{p.status}</span>
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[p.status]}`}>{p.status}</span>
                   </td>
                   <td className="py-2 pr-4">
                     {userLabel(p.decided_by)}

@@ -21,7 +21,7 @@ export default function ResetPasswordPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-8 shadow-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold">Set a new password</h1>
+        <h1 className="mb-6 text-center text-2xl font-bold tracking-tight">Set a new password</h1>
 
         <form action={formAction} className="space-y-4">
           <div>
@@ -48,7 +48,7 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             disabled={pending}
-            className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
+            className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
           >
             {pending ? 'Saving…' : 'Save new password'}
           </button>

@@ -51,7 +51,7 @@ export function InviteForm() {
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
       >
         {pending ? 'Sending…' : 'Send invite'}
       </button>
@@ -109,7 +109,7 @@ export function AddRoleForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md border border-line-strong px-2 py-1 text-xs font-medium disabled:opacity-50"
+        className="rounded-md border border-line-strong px-2 py-1 text-xs font-medium disabled:opacity-50 transition-colors hover:bg-surface-alt"
       >
         {pending ? 'Adding…' : 'Add role'}
       </button>
@@ -199,7 +199,7 @@ export function ResetPasswordForm({ userId }: { userId: string }) {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md border border-line-strong px-2 py-1 text-xs font-medium disabled:opacity-50"
+          className="rounded-md border border-line-strong px-2 py-1 text-xs font-medium disabled:opacity-50 transition-colors hover:bg-surface-alt"
         >
           {pending ? 'Resetting…' : 'Reset password'}
         </button>

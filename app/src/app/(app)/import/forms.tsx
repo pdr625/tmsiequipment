@@ -55,7 +55,7 @@ function ImportPanel({
 
   return (
     <section className="mb-10 rounded-lg border border-line p-4">
-      <h2 className="mb-1 text-sm font-semibold text-fg-soft">{title}</h2>
+      <h2 className="mb-1 text-base font-semibold tracking-tight text-fg">{title}</h2>
       <p className="mb-3 text-xs text-fg-muted">{hint}</p>
 
       <input type="file" accept=".csv,text/csv" onChange={onFile} className="mb-3 block text-sm" />
@@ -69,7 +69,7 @@ function ImportPanel({
           <button
             type="submit"
             disabled={previewPending}
-            className="rounded-md border border-line-strong px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+            className="rounded-md border border-line-strong px-3 py-1.5 text-sm font-medium disabled:opacity-50 transition-colors hover:bg-surface-alt"
           >
             {previewPending ? 'A validar…' : 'Pré-visualizar (não grava nada)'}
           </button>
@@ -109,7 +109,7 @@ function ImportPanel({
           <button
             type="submit"
             disabled={commitPending}
-            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-on-primary disabled:opacity-50"
+            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
           >
             {commitPending ? 'A gravar…' : 'Confirmar gravação'}
           </button>

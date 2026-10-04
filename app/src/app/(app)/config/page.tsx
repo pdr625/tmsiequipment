@@ -75,7 +75,7 @@ type PendingProposal = { id: number; target_table: string };
 function PendingBadge({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <Link href="/proposals" className="rounded bg-warning-soft px-2 py-0.5 text-xs text-warning">
+    <Link href="/proposals" className="rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning">
       {count} pending approval
     </Link>
   );
@@ -194,16 +194,13 @@ export default async function ConfigPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Pricing configuration</h1>
-        <Link href="/" className="text-sm text-fg-soft underline">
-          Back
-        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">Pricing configuration</h1>
       </div>
 
       {readCosts && (
         <section className="mb-10">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-fg-soft">Exchange rates</h2>
+            <h2 className="text-base font-semibold tracking-tight text-fg">Exchange rates</h2>
             <PendingBadge count={pendingCount('exchange_rates')} />
           </div>
           <p className="mb-2 text-xs text-fg-muted">
@@ -236,7 +233,7 @@ export default async function ConfigPage() {
                       {active ? (
                         'in use'
                       ) : (
-                        <span className="rounded bg-surface-alt px-2 py-0.5 text-xs">
+                        <span className="rounded-full bg-surface-alt px-2.5 py-0.5 text-xs font-medium">
                           superseded same day
                         </span>
                       )}
@@ -253,7 +250,7 @@ export default async function ConfigPage() {
       {(readCosts || readLogistics) && (
         <section className="mb-10">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-fg-soft">Transport tiers</h2>
+            <h2 className="text-base font-semibold tracking-tight text-fg">Transport tiers</h2>
             <PendingBadge count={pendingCount('transport_tiers')} />
           </div>
           <table className="w-full border-collapse text-sm">
@@ -280,7 +277,7 @@ export default async function ConfigPage() {
       {(readCosts || readLogistics) && (
         <section className="mb-10">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-fg-soft">Customs duty rates</h2>
+            <h2 className="text-base font-semibold tracking-tight text-fg">Customs duty rates</h2>
             <PendingBadge count={pendingCount('customs_rates')} />
           </div>
           <table className="w-full border-collapse text-sm">
@@ -305,7 +302,7 @@ export default async function ConfigPage() {
       {readCosts && (
         <section className="mb-10">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-fg-soft">Margin grids</h2>
+            <h2 className="text-base font-semibold tracking-tight text-fg">Margin grids</h2>
             <PendingBadge count={pendingCount('margin_grids')} />
           </div>
           <table className="w-full border-collapse text-sm">
@@ -331,7 +328,7 @@ export default async function ConfigPage() {
       {readCosts && (
         <section className="mb-10">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-fg-soft">Reference price factor</h2>
+            <h2 className="text-base font-semibold tracking-tight text-fg">Reference price factor</h2>
             <PendingBadge count={pendingCount('branch_pricing_params')} />
           </div>
           <p className="mb-2 text-xs text-fg-muted">
@@ -359,7 +356,7 @@ export default async function ConfigPage() {
 
       {admin && (
         <section className="mb-10">
-          <h2 className="mb-2 text-sm font-semibold text-fg-soft">Operational price notice</h2>
+          <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Operational price notice</h2>
           <p className="mb-2 text-xs text-fg-muted">
             Shown on the price list, its print view and the Excel export until the customs-duty basis is
             confirmed. Admin only.
@@ -369,7 +366,7 @@ export default async function ConfigPage() {
       )}
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Settings</h2>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Settings</h2>
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left text-fg-muted">

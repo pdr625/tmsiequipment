@@ -47,9 +47,9 @@ export default async function NewProductPage() {
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">New product (draft)</h1>
+        <h1 className="text-2xl font-bold tracking-tight">New product (draft)</h1>
         <Link href="/products" className="text-sm text-fg-soft underline">
-          Back
+          ← Products
         </Link>
       </div>
       <CreateProductForm branches={branches ?? []} currencies={currencies ?? []} />

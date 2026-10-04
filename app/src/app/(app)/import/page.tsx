@@ -6,7 +6,6 @@
  */
 
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { isAdmin, canManageProducts } from '@/lib/auth-guard';
 import { HsDutyImportPanel, ProductsImportPanel, UndoBatchForm } from './forms';
@@ -46,10 +45,7 @@ export default async function ImportPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Importação em massa</h1>
-        <Link href="/" className="text-sm text-fg-soft underline">
-          Back
-        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">Importação em massa</h1>
       </div>
       <p className="mb-6 text-sm text-fg-soft">
         Carregamento inicial — escreve directo, fora do workflow de propor/aprovar (decisão
@@ -62,7 +58,7 @@ export default async function ImportPage() {
 
       {admin && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold text-fg-soft">Lotes recentes</h2>
+          <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Lotes recentes</h2>
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-line text-left text-fg-muted">

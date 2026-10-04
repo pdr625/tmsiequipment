@@ -19,7 +19,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-8 shadow-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold">Reset your password</h1>
+        <h1 className="mb-6 text-center text-2xl font-bold tracking-tight">Reset your password</h1>
 
         {state && 'success' in state ? (
           <p className="text-sm text-fg-soft">
@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={pending}
-              className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
+              className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50 transition-colors hover:bg-primary-hover"
             >
               {pending ? 'Sending…' : 'Send reset link'}
             </button>

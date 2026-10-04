@@ -6,7 +6,6 @@
  */
 
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { isAdmin } from '@/lib/auth-guard';
 import { getBranding } from '@/lib/branding';
 import { BrandingForm } from './form';
@@ -26,10 +25,7 @@ export default async function BrandingPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Branding</h1>
-        <Link href="/" className="text-sm text-fg-soft underline">
-          Back
-        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">Branding</h1>
       </div>
       <p className="mb-6 text-xs text-fg-muted">
         Applied to the app&apos;s title/home page and to the Excel export and print view.

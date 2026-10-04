@@ -96,10 +96,7 @@ export default async function AuditPage({
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Audit log</h1>
-        <Link href="/" className="text-sm text-fg-soft underline">
-          Back
-        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">Audit log</h1>
       </div>
       <p className="mb-4 text-xs text-fg-muted">Read-only. Per-item audit is also on each product&apos;s own page.</p>
 
@@ -131,7 +128,7 @@ export default async function AuditPage({
           <label className="mb-1 block text-xs text-fg-muted">To</label>
           <input name="to" type="date" defaultValue={to ?? ''} className="rounded-md border border-line-strong px-2 py-1 text-sm" />
         </div>
-        <button type="submit" className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary">
+        <button type="submit" className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary transition-colors hover:bg-primary-hover">
           Filter
         </button>
         {(table || actor || from || to) && (

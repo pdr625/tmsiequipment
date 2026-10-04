@@ -31,7 +31,7 @@ export default async function AccountPasswordPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-8 shadow-sm">
-        <h1 className="mb-2 text-center text-xl font-semibold">Change your password</h1>
+        <h1 className="mb-2 text-center text-2xl font-bold tracking-tight">Change your password</h1>
         {forced && (
           <p className="mb-4 rounded-md border border-warning bg-warning-soft p-2 text-center text-xs text-warning">
             Your password was reset by an administrator. Set a new one to continue.

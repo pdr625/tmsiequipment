@@ -236,11 +236,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">
+        <h1 className="text-2xl font-bold tracking-tight">
           {product.name} <span className="text-fg-muted">({product.id})</span>
         </h1>
         <Link href="/products" className="text-sm text-fg-soft underline">
-          Back
+          ← Products
         </Link>
       </div>
 
@@ -269,7 +269,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Price by branch / channel</h2>
+        <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Price by branch / channel</h2>
         {priceRows.length === 0 && priceErrors.length === 0 && (
           <p className="text-sm text-fg-muted">Not priced for any branch or channel visible to you.</p>
         )}
@@ -328,7 +328,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                       {overriddenInputs.length === 0 ? (
                         '—'
                       ) : (
-                        <span className="rounded bg-primary-soft px-2 py-0.5 text-xs text-primary-fg" title={hsOverride ? `HS: ${hsOverride.hs_code}` : undefined}>
+                        <span className="rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary-fg" title={hsOverride ? `HS: ${hsOverride.hs_code}` : undefined}>
                           {overriddenInputs.join(', ')}
                         </span>
                       )}
@@ -351,7 +351,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {versions && versions.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-2 text-sm font-semibold text-fg-soft">Price history</h2>
+          <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Price history</h2>
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-line text-left text-fg-muted">
@@ -380,7 +380,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       {((priceOverrides && priceOverrides.length > 0) || (hsOverrides && hsOverrides.length > 0)) && (
         <section className="mb-8">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-fg-soft">Overrides</h2>
+            <h2 className="text-base font-semibold tracking-tight text-fg">Overrides</h2>
             <Link href="/overrides" className="text-xs text-fg-soft underline">
               Manage overrides
             </Link>
@@ -430,7 +430,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     <td className="py-2 pr-4">
                       {o.scope_type}: {o.scope_id}
                       {o.scope_type !== 'branch' && (
-                        <span className="ml-2 rounded bg-warning-soft px-2 py-0.5 text-xs text-warning">no effect</span>
+                        <span className="ml-2 rounded-full bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning">no effect</span>
                       )}
                     </td>
                     <td className="py-2 pr-4">{o.hs_code}</td>
@@ -445,7 +445,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {auditEntries && auditEntries.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-2 text-sm font-semibold text-fg-soft">Audit log</h2>
+          <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Audit log</h2>
           <ul className="space-y-1 text-sm">
             {auditEntries.map((a) => (
               <li key={a.id} className="text-fg-soft">
@@ -458,7 +458,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {canManage && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold text-fg-soft">Edit</h2>
+          <h2 className="mb-2 text-base font-semibold tracking-tight text-fg">Edit</h2>
           <EditProductForm
             product={product}
             branches={branches ?? []}

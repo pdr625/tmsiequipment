@@ -5,7 +5,6 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
-import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getBranding, footerLines } from '@/lib/branding';
 import { PrintButton } from './print-button';
@@ -178,18 +177,15 @@ export default async function PricesPage({
       </div>
 
       <div className="mb-6 flex items-center justify-between print:hidden">
-        <h1 className="text-xl font-semibold">Price list</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Price list</h1>
         <div className="flex items-center gap-4">
           <a
             href={branch ? `/prices/export?branch=${branch}` : '/prices/export'}
-            className="rounded-md border border-line-strong px-3 py-1 text-sm font-medium"
+            className="rounded-md border border-line-strong px-3 py-1 text-sm font-medium transition-colors hover:bg-surface-alt"
           >
             Export to Excel
           </a>
           <PrintButton />
-          <Link href="/" prefetch={false} className="text-sm text-fg-soft underline">
-            Back
-          </Link>
         </div>
       </div>
 

@@ -2282,6 +2282,18 @@ def block_theme():
     check("TT: nenhum tipo de letra pedido a um terceiro (CSP font-src 'self')",
           not externos, "0 referências" if not externos else str(externos))
 
+    # Acabamento (tarefa 3): com o menu lateral, «Back para a página inicial» é
+    # redundante e a `/` já só redirecciona. Um <Link href="/"> numa página
+    # autenticada seria um botão que dá uma volta inútil.
+    home = [str(f.relative_to(src)) for f in (src / "app" / "(app)").rglob("*.tsx")
+            if f.name != "app-shell.tsx" and _re.search(r'<Link\s[^>]*href="/"', f.read_text())]
+    check("TT: nenhuma página autenticada tem um <Link> «Back» para / (o menu lateral substitui-o)",
+          not home, "0 ocorrências" if not home else str(home))
+    css = (src / "app" / "globals.css").read_text()
+    check("TT: o foco por teclado é visível (:focus-visible definido)",
+          _re.search(r"(?m)^\s*:focus-visible\s*\{[^}]*outline:\s*2px solid", css) is not None,
+          ":focus-visible global (sem seletor à frente) com contorno de 2px")
+
 
 def block_product_alert_column():
     """NN — item 79: a coluna Alert de /products/[id] só existe para quem lê
