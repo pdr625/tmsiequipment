@@ -17,30 +17,30 @@ export default async function PrivacyPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center px-4 py-10">
-      <div className="w-full max-w-2xl rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
+      <div className="w-full max-w-2xl rounded-lg border border-line bg-surface p-8 shadow-sm">
         <h1 className="mb-1 text-xl font-semibold">Data processing notice</h1>
-        <p className="mb-6 text-sm text-gray-500">{branding.displayName}</p>
+        <p className="mb-6 text-sm text-fg-muted">{branding.displayName}</p>
 
-        <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <p className="mb-4 rounded-md border border-warning bg-warning-soft p-3 text-sm text-warning">
           This is internal information, not legal advice. It describes what this system
           actually does, measured directly against its database, containers and host — not a
           generic template.
         </p>
 
-        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-fg-muted">
           Who is responsible
         </h2>
-        <p className="mb-4 text-sm text-gray-700">
+        <p className="mb-4 text-sm text-fg-soft">
           For this pilot phase: Pedro Alexandre, personally — the app runs on a personal
           server under a personal domain while a licence with your organisation is under
           negotiation. Contact: pedroalexandre625@gmail.com. This is the answer for the
           current phase, not necessarily the final one.
         </p>
 
-        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-fg-muted">
           What personal data this system holds
         </h2>
-        <ul className="mb-4 list-disc space-y-2 pl-5 text-sm text-gray-700">
+        <ul className="mb-4 list-disc space-y-2 pl-5 text-sm text-fg-soft">
           <li>
             <strong>Name and email</strong> — to identify who is signed in and what their role
             is authorised to see. Kept indefinitely; no deletion mechanism exists yet.
@@ -73,24 +73,24 @@ export default async function PrivacyPage() {
           </li>
         </ul>
 
-        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-fg-muted">
           What it&apos;s used for
         </h2>
-        <p className="mb-4 text-sm text-gray-700">
+        <p className="mb-4 text-sm text-fg-soft">
           Identifying who is using the app and enforcing what their role may see; proving who
           made a change and when; keeping the service running and recoverable. Nothing here is
           used for profiling, marketing, or shared with anyone outside what this notice
           describes.
         </p>
 
-        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-fg-muted">
           What you can ask for, and what already works
         </h2>
-        <p className="mb-2 text-sm text-gray-700">
+        <p className="mb-2 text-sm text-fg-soft">
           Contact the person named above to see what data is held about you, correct a wrong
           name or email, or stop having an account.
         </p>
-        <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-gray-700">
+        <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-fg-soft">
           <li>Correcting your name or email — an admin can do this today, on request.</li>
           <li>
             Disabling your access — reversible, done by an admin; this does not erase the audit
@@ -99,10 +99,10 @@ export default async function PrivacyPage() {
           </li>
         </ul>
 
-        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-fg-muted">
           What this system doesn&apos;t do yet — stated plainly
         </h2>
-        <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-gray-700">
+        <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-fg-soft">
           <li>There is no way to fully delete or anonymise an account yet.</li>
           <li>There is no self-service &quot;export my data&quot; button yet.</li>
           <li>
@@ -111,7 +111,7 @@ export default async function PrivacyPage() {
           </li>
         </ul>
 
-        <Link href="/" className="mt-6 inline-block text-sm font-medium text-gray-700 underline">
+        <Link href="/" className="mt-6 inline-block text-sm font-medium text-fg-soft underline">
           Back
         </Link>
       </div>

@@ -26,9 +26,9 @@ export function BrandingForm({ branding, hasLogo }: { branding: Branding; hasLog
           name="display_name"
           required
           defaultValue={branding.displayName}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
         />
-        <p className="mt-1 text-xs text-gray-500">Shown in the browser tab, the home page and every document.</p>
+        <p className="mt-1 text-xs text-fg-muted">Shown in the browser tab, the home page and every document.</p>
       </div>
 
       <div>
@@ -40,7 +40,7 @@ export function BrandingForm({ branding, hasLogo }: { branding: Branding; hasLog
           name="tagline"
           defaultValue={branding.tagline}
           placeholder="e.g. Quality equipment, worldwide"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
         />
       </div>
 
@@ -49,16 +49,16 @@ export function BrandingForm({ branding, hasLogo }: { branding: Branding; hasLog
           Logo (PNG or JPEG, up to 2 MB)
         </label>
         {hasLogo && (
-          <img src="/api/branding/logo" alt="Current logo" className="mb-2 h-12 w-auto border border-gray-200 p-1" />
+          <img src="/api/branding/logo" alt="Current logo" className="mb-2 h-12 w-auto border border-line p-1" />
         )}
         <input
           id="logo"
           name="logo"
           type="file"
           accept="image/png,image/jpeg"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
         />
-        <p className="mt-1 text-xs text-gray-500">Leave empty to keep the current logo.</p>
+        <p className="mt-1 text-xs text-fg-muted">Leave empty to keep the current logo.</p>
       </div>
 
       <div className="flex gap-4">
@@ -71,7 +71,7 @@ export function BrandingForm({ branding, hasLogo }: { branding: Branding; hasLog
             name="primary_color"
             type="color"
             defaultValue={branding.primaryColor}
-            className="h-10 w-16 rounded-md border border-gray-300"
+            className="h-10 w-16 rounded-md border border-line-strong"
           />
         </div>
         <div className="flex-1">
@@ -84,9 +84,9 @@ export function BrandingForm({ branding, hasLogo }: { branding: Branding; hasLog
             required
             defaultValue={branding.fontFamily}
             placeholder="Arial"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
           />
-          <p className="mt-1 text-xs text-gray-500">A font name available in Excel and in the browser used to print.</p>
+          <p className="mt-1 text-xs text-fg-muted">A font name available in Excel and in the browser used to print.</p>
         </div>
       </div>
 
@@ -99,9 +99,9 @@ export function BrandingForm({ branding, hasLogo }: { branding: Branding; hasLog
           name="footer_text"
           defaultValue={branding.footerText}
           placeholder="e.g. Acme Corp — internal use only"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
         />
-        <p className="mt-1 text-xs text-gray-500">
+        <p className="mt-1 text-xs text-fg-muted">
           Shown at the bottom of the Excel export and the print view — never the software&apos;s own
           licence notice, which stays in the app only (login page footer).
         </p>
@@ -117,19 +117,19 @@ export function BrandingForm({ branding, hasLogo }: { branding: Branding; hasLog
           rows={3}
           defaultValue={branding.legalText}
           placeholder="e.g. Prices exclude VAT. Valid for 30 days."
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
         />
       </div>
 
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? 'Saving…' : 'Save branding'}
       </button>
       <ErrorText state={state} />
-      {state && 'success' in state && <p className="text-xs text-green-700">Saved.</p>}
+      {state && 'success' in state && <p className="text-xs text-success">Saved.</p>}
     </form>
   );
 }

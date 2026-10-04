@@ -75,7 +75,7 @@ type PendingProposal = { id: number; target_table: string };
 function PendingBadge({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <Link href="/proposals" className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
+    <Link href="/proposals" className="rounded bg-warning-soft px-2 py-0.5 text-xs text-warning">
       {count} pending approval
     </Link>
   );
@@ -195,7 +195,7 @@ export default async function ConfigPage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Pricing configuration</h1>
-        <Link href="/" className="text-sm text-gray-600 underline">
+        <Link href="/" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>
@@ -203,10 +203,10 @@ export default async function ConfigPage() {
       {readCosts && (
         <section className="mb-10">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-gray-700">Exchange rates</h2>
+            <h2 className="text-sm font-semibold text-fg-soft">Exchange rates</h2>
             <PendingBadge count={pendingCount('exchange_rates')} />
           </div>
-          <p className="mb-2 text-xs text-gray-500">
+          <p className="mb-2 text-xs text-fg-muted">
             Append-only: the engine always uses the latest entry with an effective date on or before
             today. To change a rate, propose a new one — never edit history. It takes effect once
             approved. Made a mistake today? Propose a corrected entry with the same date — once
@@ -215,7 +215,7 @@ export default async function ConfigPage() {
           </p>
           <table className="mb-3 w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-fg-muted">
                 <th className="py-2 pr-4">Currency</th>
                 <th className="py-2 pr-4">Rate (per EUR)</th>
                 <th className="py-2 pr-4">Effective date</th>
@@ -227,7 +227,7 @@ export default async function ConfigPage() {
               {exchangeRates?.map((r) => {
                 const active = activeExchangeRateIds.has(r.id);
                 return (
-                  <tr key={r.id} className={`border-b border-gray-100 ${active ? '' : 'text-gray-400'}`}>
+                  <tr key={r.id} className={`border-b border-line ${active ? '' : 'text-fg-muted'}`}>
                     <td className="py-2 pr-4">{r.currency}</td>
                     <td className="py-2 pr-4">{r.rate_per_eur}</td>
                     <td className="py-2 pr-4">{r.effective_date}</td>
@@ -236,7 +236,7 @@ export default async function ConfigPage() {
                       {active ? (
                         'in use'
                       ) : (
-                        <span className="rounded bg-gray-100 px-2 py-0.5 text-xs">
+                        <span className="rounded bg-surface-alt px-2 py-0.5 text-xs">
                           superseded same day
                         </span>
                       )}
@@ -253,12 +253,12 @@ export default async function ConfigPage() {
       {(readCosts || readLogistics) && (
         <section className="mb-10">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-gray-700">Transport tiers</h2>
+            <h2 className="text-sm font-semibold text-fg-soft">Transport tiers</h2>
             <PendingBadge count={pendingCount('transport_tiers')} />
           </div>
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-fg-muted">
                 <th className="py-2 pr-4">Branch</th>
                 <th className="py-2 pr-4">Tier</th>
                 <th className="py-2 pr-4">Max weight (kg)</th>
@@ -280,12 +280,12 @@ export default async function ConfigPage() {
       {(readCosts || readLogistics) && (
         <section className="mb-10">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-gray-700">Customs duty rates</h2>
+            <h2 className="text-sm font-semibold text-fg-soft">Customs duty rates</h2>
             <PendingBadge count={pendingCount('customs_rates')} />
           </div>
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-fg-muted">
                 <th className="py-2 pr-4">HS code</th>
                 <th className="py-2 pr-4">Zone</th>
                 <th className="py-2 pr-4">Rate</th>
@@ -305,12 +305,12 @@ export default async function ConfigPage() {
       {readCosts && (
         <section className="mb-10">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-gray-700">Margin grids</h2>
+            <h2 className="text-sm font-semibold text-fg-soft">Margin grids</h2>
             <PendingBadge count={pendingCount('margin_grids')} />
           </div>
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-fg-muted">
                 <th className="py-2 pr-4">Branch</th>
                 <th className="py-2 pr-4">Tier</th>
                 <th className="py-2 pr-4">Max cost (EUR)</th>
@@ -331,16 +331,16 @@ export default async function ConfigPage() {
       {readCosts && (
         <section className="mb-10">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-gray-700">Reference price factor</h2>
+            <h2 className="text-sm font-semibold text-fg-soft">Reference price factor</h2>
             <PendingBadge count={pendingCount('branch_pricing_params')} />
           </div>
-          <p className="mb-2 text-xs text-gray-500">
+          <p className="mb-2 text-xs text-fg-muted">
             Reference price = minimum price × this factor. List coefficient has no editor here
             yet — shown for context, carried forward unchanged by any proposal made below.
           </p>
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-fg-muted">
                 <th className="py-2 pr-4">Branch</th>
                 <th className="py-2 pr-4">Ref. factor</th>
                 <th className="py-2 pr-4">List coef.</th>
@@ -359,8 +359,8 @@ export default async function ConfigPage() {
 
       {admin && (
         <section className="mb-10">
-          <h2 className="mb-2 text-sm font-semibold text-gray-700">Operational price notice</h2>
-          <p className="mb-2 text-xs text-gray-500">
+          <h2 className="mb-2 text-sm font-semibold text-fg-soft">Operational price notice</h2>
+          <p className="mb-2 text-xs text-fg-muted">
             Shown on the price list, its print view and the Excel export until the customs-duty basis is
             confirmed. Admin only.
           </p>
@@ -369,10 +369,10 @@ export default async function ConfigPage() {
       )}
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Settings</h2>
+        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Settings</h2>
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
+            <tr className="border-b border-line text-left text-fg-muted">
               <th className="py-2 pr-4">Key</th>
               <th className="py-2 pr-4">Value</th>
               <th className="py-2 pr-4">Note</th>

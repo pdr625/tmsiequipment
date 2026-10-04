@@ -47,11 +47,11 @@ export default async function ImportPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Importação em massa</h1>
-        <Link href="/" className="text-sm text-gray-600 underline">
+        <Link href="/" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>
-      <p className="mb-6 text-sm text-gray-600">
+      <p className="mb-6 text-sm text-fg-soft">
         Carregamento inicial — escreve directo, fora do workflow de propor/aprovar (decisão
         registada em <code>docs/STATE.md</code>). Pré-visualiza sempre antes de gravar; nada é
         escrito sem confirmação deliberada.
@@ -62,10 +62,10 @@ export default async function ImportPage() {
 
       {admin && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold text-gray-700">Lotes recentes</h2>
+          <h2 className="mb-2 text-sm font-semibold text-fg-soft">Lotes recentes</h2>
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-fg-muted">
                 <th className="py-2 pr-4">Quando</th>
                 <th className="py-2 pr-4">Tipo</th>
                 <th className="py-2 pr-4">Ficheiro</th>
@@ -76,7 +76,7 @@ export default async function ImportPage() {
             </thead>
             <tbody>
               {batches?.map((b) => (
-                <tr key={b.id} className="border-b border-gray-100">
+                <tr key={b.id} className="border-b border-line">
                   <td className="py-2 pr-4">{new Date(b.created_at).toLocaleString()}</td>
                   <td className="py-2 pr-4">{b.kind}</td>
                   <td className="py-2 pr-4">{b.source_filename ?? '—'}</td>
@@ -87,7 +87,7 @@ export default async function ImportPage() {
               ))}
               {(!batches || batches.length === 0) && (
                 <tr>
-                  <td colSpan={6} className="py-2 text-gray-500">
+                  <td colSpan={6} className="py-2 text-fg-muted">
                     Nenhum lote ainda.
                   </td>
                 </tr>

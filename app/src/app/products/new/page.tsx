@@ -48,7 +48,7 @@ export default async function NewProductPage() {
     <div className="mx-auto max-w-lg px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">New product (draft)</h1>
-        <Link href="/products" className="text-sm text-gray-600 underline">
+        <Link href="/products" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>

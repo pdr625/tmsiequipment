@@ -36,10 +36,10 @@ export function ExchangeRateForm({ currencies }: { currencies: { code: string }[
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 p-3">
+    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-line p-3">
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Currency</label>
-        <select name="currency" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+        <label className="mb-1 block text-xs text-fg-muted">Currency</label>
+        <select name="currency" required className="rounded-md border border-line-strong px-2 py-1 text-sm">
           {currencies.map((c) => (
             <option key={c.code} value={c.code}>
               {c.code}
@@ -48,52 +48,52 @@ export function ExchangeRateForm({ currencies }: { currencies: { code: string }[
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Rate (per EUR)</label>
+        <label className="mb-1 block text-xs text-fg-muted">Rate (per EUR)</label>
         <input
           name="rate_per_eur"
           type="number"
           step="0.000001"
           required
-          className="w-32 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-32 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Effective date</label>
+        <label className="mb-1 block text-xs text-fg-muted">Effective date</label>
         <input
           name="effective_date"
           type="date"
           defaultValue={today}
           required
-          className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Source</label>
+        <label className="mb-1 block text-xs text-fg-muted">Source</label>
         <input
           name="source"
           required
           placeholder="SAP, manual, ..."
-          className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Reason</label>
+        <label className="mb-1 block text-xs text-fg-muted">Reason</label>
         <input
           name="reason"
           required
           placeholder="Why this change?"
-          className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-48 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? 'Submitting…' : 'Propose rate'}
       </button>
       <ErrorText state={state} />
-      {state && 'success' in state && <p className="text-xs text-green-700">Submitted — pending approval.</p>}
+      {state && 'success' in state && <p className="text-xs text-success">Submitted — pending approval.</p>}
     </form>
   );
 }
@@ -113,10 +113,10 @@ export function TransportTierForm({ branches }: { branches: { id: string }[] }) 
   const [state, formAction, pending] = useActionState<ConfigActionState, FormData>(updateTransportTier, undefined);
 
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 p-3">
+    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-line p-3">
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Branch</label>
-        <select name="branch_id" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+        <label className="mb-1 block text-xs text-fg-muted">Branch</label>
+        <select name="branch_id" required className="rounded-md border border-line-strong px-2 py-1 text-sm">
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
               {b.id}
@@ -125,58 +125,58 @@ export function TransportTierForm({ branches }: { branches: { id: string }[] }) 
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Tier (1-3)</label>
+        <label className="mb-1 block text-xs text-fg-muted">Tier (1-3)</label>
         <input
           name="tier"
           type="number"
           min="1"
           max="3"
           required
-          className="w-16 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-16 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Max weight (kg)</label>
+        <label className="mb-1 block text-xs text-fg-muted">Max weight (kg)</label>
         <input
           name="max_weight_kg"
           type="number"
           step="0.01"
           placeholder="open-ended"
-          className="w-28 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-28 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Cost</label>
+        <label className="mb-1 block text-xs text-fg-muted">Cost</label>
         <input
           name="cost"
           type="number"
           step="0.01"
           required
-          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-24 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Currency</label>
-        <input name="currency" required maxLength={3} className="w-16 rounded-md border border-gray-300 px-2 py-1 text-sm" />
+        <label className="mb-1 block text-xs text-fg-muted">Currency</label>
+        <input name="currency" required maxLength={3} className="w-16 rounded-md border border-line-strong px-2 py-1 text-sm" />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Reason</label>
+        <label className="mb-1 block text-xs text-fg-muted">Reason</label>
         <input
           name="reason"
           required
           placeholder="Why this change?"
-          className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-48 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? 'Submitting…' : 'Propose tier'}
       </button>
       <ErrorText state={state} />
-      {state && 'success' in state && <p className="text-xs text-green-700">Submitted — pending approval.</p>}
+      {state && 'success' in state && <p className="text-xs text-success">Submitted — pending approval.</p>}
     </form>
   );
 }
@@ -192,7 +192,7 @@ export function TransportTierRow({
   const formId = `tt-${tier.branch_id}-${tier.tier}`;
 
   return (
-    <tr className="border-b border-gray-100">
+    <tr className="border-b border-line">
       <td className="py-2 pr-4">
         {tier.branch_id}
         {canWrite && (
@@ -212,7 +212,7 @@ export function TransportTierRow({
             step="0.01"
             defaultValue={tier.max_weight_kg ?? ''}
             placeholder="open-ended"
-            className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-24 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         ) : (
           (tier.max_weight_kg ?? '—')
@@ -226,7 +226,7 @@ export function TransportTierRow({
             type="number"
             step="0.01"
             defaultValue={tier.cost}
-            className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-24 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         ) : (
           tier.cost
@@ -239,7 +239,7 @@ export function TransportTierRow({
             name="currency"
             defaultValue={tier.currency}
             maxLength={3}
-            className="w-16 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-16 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         ) : (
           tier.currency
@@ -253,7 +253,7 @@ export function TransportTierRow({
             name="reason"
             required
             placeholder="Why this change?"
-            className="w-36 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-36 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         </td>
       )}
@@ -263,11 +263,11 @@ export function TransportTierRow({
             form={formId}
             type="submit"
             disabled={pending}
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
           >
             {pending ? '…' : 'Propose'}
           </button>
-          {state && 'success' in state && <p className="mt-1 text-xs text-green-700">Submitted.</p>}
+          {state && 'success' in state && <p className="mt-1 text-xs text-success">Submitted.</p>}
         </td>
       )}
     </tr>
@@ -287,7 +287,7 @@ export function CustomsRateRow({
   const formId = `cr-${rate.hs_code}-${rate.zone}`;
 
   return (
-    <tr className="border-b border-gray-100">
+    <tr className="border-b border-line">
       <td className="py-2 pr-4" title={description}>
         {rate.hs_code}
         {canWrite && (
@@ -306,7 +306,7 @@ export function CustomsRateRow({
             type="number"
             step="0.0001"
             defaultValue={rate.rate}
-            className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-20 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         ) : (
           rate.rate
@@ -320,7 +320,7 @@ export function CustomsRateRow({
             name="reason"
             required
             placeholder="Why this change?"
-            className="w-36 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-36 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         </td>
       )}
@@ -330,11 +330,11 @@ export function CustomsRateRow({
             form={formId}
             type="submit"
             disabled={pending}
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
           >
             {pending ? '…' : 'Propose'}
           </button>
-          {state && 'success' in state && <p className="mt-1 text-xs text-green-700">Submitted.</p>}
+          {state && 'success' in state && <p className="mt-1 text-xs text-success">Submitted.</p>}
         </td>
       )}
     </tr>
@@ -347,10 +347,10 @@ export function MarginGridForm({ branches }: { branches: { id: string }[] }) {
   const [state, formAction, pending] = useActionState<ConfigActionState, FormData>(updateMarginGrid, undefined);
 
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 p-3">
+    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-line p-3">
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Branch</label>
-        <select name="branch_id" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+        <label className="mb-1 block text-xs text-fg-muted">Branch</label>
+        <select name="branch_id" required className="rounded-md border border-line-strong px-2 py-1 text-sm">
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
               {b.id}
@@ -359,28 +359,28 @@ export function MarginGridForm({ branches }: { branches: { id: string }[] }) {
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Tier (1-4)</label>
+        <label className="mb-1 block text-xs text-fg-muted">Tier (1-4)</label>
         <input
           name="tier"
           type="number"
           min="1"
           max="4"
           required
-          className="w-16 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-16 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Max cost (EUR)</label>
+        <label className="mb-1 block text-xs text-fg-muted">Max cost (EUR)</label>
         <input
           name="max_cost_eur"
           type="number"
           step="0.01"
           placeholder="open-ended"
-          className="w-28 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-28 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Margin (0-1)</label>
+        <label className="mb-1 block text-xs text-fg-muted">Margin (0-1)</label>
         <input
           name="margin"
           type="number"
@@ -388,27 +388,27 @@ export function MarginGridForm({ branches }: { branches: { id: string }[] }) {
           min="0"
           max="0.9999"
           required
-          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-24 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Reason</label>
+        <label className="mb-1 block text-xs text-fg-muted">Reason</label>
         <input
           name="reason"
           required
           placeholder="Why this change?"
-          className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-48 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? 'Submitting…' : 'Propose tier'}
       </button>
       <ErrorText state={state} />
-      {state && 'success' in state && <p className="text-xs text-green-700">Submitted — pending approval.</p>}
+      {state && 'success' in state && <p className="text-xs text-success">Submitted — pending approval.</p>}
     </form>
   );
 }
@@ -424,7 +424,7 @@ export function MarginGridRow({
   const formId = `mg-${grid.branch_id}-${grid.tier}`;
 
   return (
-    <tr className="border-b border-gray-100">
+    <tr className="border-b border-line">
       <td className="py-2 pr-4">
         {grid.branch_id}
         {canWrite && (
@@ -444,7 +444,7 @@ export function MarginGridRow({
             step="0.01"
             defaultValue={grid.max_cost_eur ?? ''}
             placeholder="open-ended"
-            className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-24 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         ) : (
           (grid.max_cost_eur ?? '—')
@@ -458,7 +458,7 @@ export function MarginGridRow({
             type="number"
             step="0.0001"
             defaultValue={grid.margin}
-            className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-20 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         ) : (
           grid.margin
@@ -472,7 +472,7 @@ export function MarginGridRow({
             name="reason"
             required
             placeholder="Why this change?"
-            className="w-36 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-36 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         </td>
       )}
@@ -482,11 +482,11 @@ export function MarginGridRow({
             form={formId}
             type="submit"
             disabled={pending}
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
           >
             {pending ? '…' : 'Propose'}
           </button>
-          {state && 'success' in state && <p className="mt-1 text-xs text-green-700">Submitted.</p>}
+          {state && 'success' in state && <p className="mt-1 text-xs text-success">Submitted.</p>}
         </td>
       )}
     </tr>
@@ -507,7 +507,7 @@ export function BranchPricingParamsRow({
   const formId = `bpp-${params.branch_id}`;
 
   return (
-    <tr className="border-b border-gray-100">
+    <tr className="border-b border-line">
       <td className="py-2 pr-4">
         {params.branch_id}
         {canWrite && (
@@ -524,7 +524,7 @@ export function BranchPricingParamsRow({
             type="number"
             step="0.001"
             defaultValue={params.ref_factor}
-            className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-20 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         ) : (
           params.ref_factor
@@ -539,7 +539,7 @@ export function BranchPricingParamsRow({
             name="reason"
             required
             placeholder="Why this change?"
-            className="w-36 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-36 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         </td>
       )}
@@ -549,11 +549,11 @@ export function BranchPricingParamsRow({
             form={formId}
             type="submit"
             disabled={pending}
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
           >
             {pending ? '…' : 'Propose'}
           </button>
-          {state && 'success' in state && <p className="mt-1 text-xs text-green-700">Submitted.</p>}
+          {state && 'success' in state && <p className="mt-1 text-xs text-success">Submitted.</p>}
         </td>
       )}
     </tr>
@@ -572,7 +572,7 @@ export function SettingRow({
   const rawValue = JSON.stringify(setting.value);
 
   return (
-    <tr className="border-b border-gray-100">
+    <tr className="border-b border-line">
       <td className="py-2 pr-4">
         {setting.key}
         {canWrite && (
@@ -588,7 +588,7 @@ export function SettingRow({
             name="value"
             defaultValue={rawValue}
             title='Raw JSON value, e.g. 0.15 or "SAP"'
-            className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-24 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         ) : (
           rawValue
@@ -600,7 +600,7 @@ export function SettingRow({
             form={formId}
             name="note"
             defaultValue={setting.note ?? ''}
-            className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-48 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         ) : (
           (setting.note ?? '—')
@@ -610,7 +610,7 @@ export function SettingRow({
             (dois valores inválidos aceites e em vigor, sem aviso nenhum).
             updateSetting() já devolvia { success: true }; faltava mostrá-lo. */}
         {state && 'success' in state && (
-          <p role="status" className="mt-1 text-xs text-green-600">
+          <p role="status" className="mt-1 text-xs text-success">
             Saved
           </p>
         )}
@@ -622,7 +622,7 @@ export function SettingRow({
             form={formId}
             type="submit"
             disabled={pending}
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
           >
             {pending ? '…' : 'Save'}
           </button>
@@ -641,12 +641,12 @@ export function PriceNoticeToggle({ enabled, text }: { enabled: boolean; text: s
     <form action={formAction} className="flex flex-wrap items-center gap-3 text-sm">
       <input type="hidden" name="enabled" value={enabled ? 'false' : 'true'} />
       <span>
-        {enabled ? 'Shown' : 'Hidden'}: <span className="italic text-gray-600">“{text}”</span>
+        {enabled ? 'Shown' : 'Hidden'}: <span className="italic text-fg-soft">“{text}”</span>
       </span>
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+        className="rounded-md border border-line-strong px-2 py-1 text-xs disabled:opacity-50"
       >
         {pending ? '…' : enabled ? 'Hide notice' : 'Show notice'}
       </button>

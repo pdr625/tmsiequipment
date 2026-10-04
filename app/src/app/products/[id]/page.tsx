@@ -237,48 +237,48 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">
-          {product.name} <span className="text-gray-400">({product.id})</span>
+          {product.name} <span className="text-fg-muted">({product.id})</span>
         </h1>
-        <Link href="/products" className="text-sm text-gray-600 underline">
+        <Link href="/products" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>
 
-      <div className="mb-8 rounded-lg border border-gray-200 p-4 text-sm">
+      <div className="mb-8 rounded-lg border border-line p-4 text-sm">
         <p>
-          <span className="text-gray-500">Status:</span> <span className="font-medium">{product.status}</span> ·{' '}
-          <span className="text-gray-500">Type:</span> {product.item_type} ·{' '}
-          <span className="text-gray-500">Primary branch:</span> {product.primary_branch}
+          <span className="text-fg-muted">Status:</span> <span className="font-medium">{product.status}</span> ·{' '}
+          <span className="text-fg-muted">Type:</span> {product.item_type} ·{' '}
+          <span className="text-fg-muted">Primary branch:</span> {product.primary_branch}
         </p>
         <p className="mt-1">
-          <span className="text-gray-500">Sold in:</span> {product.sold_in.join(', ') || '—'}
+          <span className="text-fg-muted">Sold in:</span> {product.sold_in.join(', ') || '—'}
         </p>
         {canReadOperational && (
-          <p className="mt-1 text-gray-500">
+          <p className="mt-1 text-fg-muted">
             HS {product.hs_code ?? '—'} · Weight {product.gross_weight_kg ?? '—'} kg · Unit {product.unit ?? '—'}
           </p>
         )}
         {canReadCosts && (
           <p className="mt-1">
-            <span className="text-gray-500">EXW:</span> {product.exw_price} {product.currency} ·{' '}
-            <span className="text-gray-500">Interco margin:</span> {product.interco_margin ?? '—'} ·{' '}
-            <span className="text-gray-500">SAP (SA/CN/US/UK):</span> {product.sap_code_sa ?? '—'} /{' '}
+            <span className="text-fg-muted">EXW:</span> {product.exw_price} {product.currency} ·{' '}
+            <span className="text-fg-muted">Interco margin:</span> {product.interco_margin ?? '—'} ·{' '}
+            <span className="text-fg-muted">SAP (SA/CN/US/UK):</span> {product.sap_code_sa ?? '—'} /{' '}
             {product.sap_code_cn ?? '—'} / {product.sap_code_us ?? '—'} / {product.sap_code_uk ?? '—'}
           </p>
         )}
       </div>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Price by branch / channel</h2>
+        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Price by branch / channel</h2>
         {priceRows.length === 0 && priceErrors.length === 0 && (
-          <p className="text-sm text-gray-500">Not priced for any branch or channel visible to you.</p>
+          <p className="text-sm text-fg-muted">Not priced for any branch or channel visible to you.</p>
         )}
         {/* Item 79: a coluna Alert é só de quem lê custos — para os outros
             papéis o motor devolve sempre 0 alertas, e era uma coluna vazia. */}
         {(priceRows.length > 0 || priceErrors.length > 0) && (
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-fg-muted">
                 <th className="py-2 pr-4">Branch / channel</th>
                 {seesCosts && (
                   <>
@@ -297,9 +297,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 const hsOverride = r.scope_type === 'branch' ? hsOverrideFor(r.branch_id) : undefined;
                 const overriddenInputs = [...(r.overrides ?? []), ...(hsOverride ? ['hs_code'] : [])];
                 return (
-                  <tr key={`${r.scope_type}-${r.branch_id}`} className="border-b border-gray-100">
+                  <tr key={`${r.scope_type}-${r.branch_id}`} className="border-b border-line">
                     <td className="py-2 pr-4">
-                      {r.branch_id} {r.scope_type === 'channel' && <span className="text-xs text-gray-400">(channel)</span>}
+                      {r.branch_id} {r.scope_type === 'channel' && <span className="text-xs text-fg-muted">(channel)</span>}
                     </td>
                     {seesCosts && (
                       <>
@@ -316,7 +316,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     {canReadCosts === true && (
                       <td className="py-2 pr-4">
                         {r.errors && r.errors.length > 0 ? (
-                          <span role="alert" className="text-red-700">
+                          <span role="alert" className="text-danger">
                             {r.errors.join(', ')}
                           </span>
                         ) : (
@@ -328,7 +328,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                       {overriddenInputs.length === 0 ? (
                         '—'
                       ) : (
-                        <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700" title={hsOverride ? `HS: ${hsOverride.hs_code}` : undefined}>
+                        <span className="rounded bg-primary-soft px-2 py-0.5 text-xs text-primary-fg" title={hsOverride ? `HS: ${hsOverride.hs_code}` : undefined}>
                           {overriddenInputs.join(', ')}
                         </span>
                       )}
@@ -337,9 +337,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 );
               })}
               {priceErrors.map((e) => (
-                <tr key={`error-${e.branchId}`} className="border-b border-gray-100">
+                <tr key={`error-${e.branchId}`} className="border-b border-line">
                   <td className="py-2 pr-4">{e.branchId}</td>
-                  <td colSpan={(seesCosts ? 2 : 0) + 3 + (canReadCosts === true ? 1 : 0)} role="alert" className="py-2 pr-4 text-red-700">
+                  <td colSpan={(seesCosts ? 2 : 0) + 3 + (canReadCosts === true ? 1 : 0)} role="alert" className="py-2 pr-4 text-danger">
                     Calculation error: {e.message}
                   </td>
                 </tr>
@@ -351,10 +351,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {versions && versions.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-2 text-sm font-semibold text-gray-700">Price history</h2>
+          <h2 className="mb-2 text-sm font-semibold text-fg-soft">Price history</h2>
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-fg-muted">
                 <th className="py-2 pr-4">Version</th>
                 <th className="py-2 pr-4">EXW</th>
                 <th className="py-2 pr-4">Changed at</th>
@@ -363,7 +363,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             </thead>
             <tbody>
               {versions.map((v) => (
-                <tr key={v.id} className="border-b border-gray-100">
+                <tr key={v.id} className="border-b border-line">
                   <td className="py-2 pr-4">{v.version}</td>
                   <td className="py-2 pr-4">
                     {v.exw_price} {v.currency}
@@ -380,15 +380,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       {((priceOverrides && priceOverrides.length > 0) || (hsOverrides && hsOverrides.length > 0)) && (
         <section className="mb-8">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Overrides</h2>
-            <Link href="/overrides" className="text-xs text-gray-600 underline">
+            <h2 className="text-sm font-semibold text-fg-soft">Overrides</h2>
+            <Link href="/overrides" className="text-xs text-fg-soft underline">
               Manage overrides
             </Link>
           </div>
           {priceOverrides && priceOverrides.length > 0 && (
             <table className="mb-3 w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
+                <tr className="border-b border-line text-left text-fg-muted">
                   <th className="py-2 pr-4">Scope</th>
                   <th className="py-2 pr-4">Kind</th>
                   <th className="py-2 pr-4">Value</th>
@@ -399,9 +399,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               </thead>
               <tbody>
                 {priceOverrides.map((o) => (
-                  <tr key={o.id} className="border-b border-gray-100">
+                  <tr key={o.id} className="border-b border-line">
                     <td className="py-2 pr-4">
-                      {o.scope_id} {o.scope_type === 'channel' && <span className="text-xs text-gray-400">(channel)</span>}
+                      {o.scope_id} {o.scope_type === 'channel' && <span className="text-xs text-fg-muted">(channel)</span>}
                     </td>
                     <td className="py-2 pr-4">{o.kind}</td>
                     <td className="py-2 pr-4">{o.value}</td>
@@ -418,7 +418,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           {hsOverrides && hsOverrides.length > 0 && (
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
+                <tr className="border-b border-line text-left text-fg-muted">
                   <th className="py-2 pr-4">Scope</th>
                   <th className="py-2 pr-4">HS code</th>
                   <th className="py-2 pr-4">Reason</th>
@@ -426,11 +426,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               </thead>
               <tbody>
                 {hsOverrides.map((o) => (
-                  <tr key={`${o.scope_type}-${o.scope_id}`} className="border-b border-gray-100">
+                  <tr key={`${o.scope_type}-${o.scope_id}`} className="border-b border-line">
                     <td className="py-2 pr-4">
                       {o.scope_type}: {o.scope_id}
                       {o.scope_type !== 'branch' && (
-                        <span className="ml-2 rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">no effect</span>
+                        <span className="ml-2 rounded bg-warning-soft px-2 py-0.5 text-xs text-warning">no effect</span>
                       )}
                     </td>
                     <td className="py-2 pr-4">{o.hs_code}</td>
@@ -445,10 +445,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {auditEntries && auditEntries.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-2 text-sm font-semibold text-gray-700">Audit log</h2>
+          <h2 className="mb-2 text-sm font-semibold text-fg-soft">Audit log</h2>
           <ul className="space-y-1 text-sm">
             {auditEntries.map((a) => (
-              <li key={a.id} className="text-gray-600">
+              <li key={a.id} className="text-fg-soft">
                 {new Date(a.at).toLocaleString()} — {a.action}
               </li>
             ))}
@@ -458,7 +458,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {canManage && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold text-gray-700">Edit</h2>
+          <h2 className="mb-2 text-sm font-semibold text-fg-soft">Edit</h2>
           <EditProductForm
             product={product}
             branches={branches ?? []}

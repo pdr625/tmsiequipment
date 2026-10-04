@@ -29,7 +29,7 @@ export function LoginForm() {
             type="email"
             autoComplete="email"
             required
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             placeholder="you@company.com"
           />
         </div>
@@ -44,13 +44,13 @@ export function LoginForm() {
             type="password"
             autoComplete="current-password"
             required
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             placeholder="••••••••"
           />
         </div>
 
         {state?.error && (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="text-sm text-danger">
             {state.error}
           </p>
         )}
@@ -58,7 +58,7 @@ export function LoginForm() {
         <button
           type="submit"
           disabled={pending}
-          className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
         >
           {pending ? 'Signing in…' : 'Sign in'}
         </button>
@@ -68,7 +68,7 @@ export function LoginForm() {
         {/* Item 96: sem sessão nenhuma para pré-carregar — a página de login
             não paga a tempestade dos itens 73/81 (um só link), mas não há
             razão para pagar nenhum pedido especulativo aqui. */}
-        <Link href="/forgot-password" prefetch={false} className="text-gray-600 underline">
+        <Link href="/forgot-password" prefetch={false} className="text-fg-soft underline">
           Forgot password?
         </Link>
       </p>

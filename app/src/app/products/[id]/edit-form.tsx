@@ -75,11 +75,11 @@ export function EditProductForm({
   const [state, formAction, pending] = useActionState<UpdateProductState, FormData>(updateProduct, undefined);
 
   return (
-    <form action={formAction} className="space-y-6 rounded-lg border border-gray-200 p-4">
+    <form action={formAction} className="space-y-6 rounded-lg border border-line p-4">
       <input type="hidden" name="id" value={product.id} />
 
       <fieldset className="space-y-3">
-        <legend className="mb-1 text-xs font-medium uppercase text-gray-500">Identity</legend>
+        <legend className="mb-1 text-xs font-medium uppercase text-fg-muted">Identity</legend>
         <div>
           <label htmlFor="name" className="mb-1 block text-sm font-medium">
             Name
@@ -89,7 +89,7 @@ export function EditProductForm({
             name="name"
             defaultValue={product.name}
             required
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
           />
         </div>
         <div>
@@ -100,7 +100,7 @@ export function EditProductForm({
             id="description"
             name="description"
             defaultValue={product.description ?? ''}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
           />
         </div>
         <div className="flex gap-2">
@@ -112,7 +112,7 @@ export function EditProductForm({
               id="item_type"
               name="item_type"
               defaultValue={product.item_type}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             >
               {ITEM_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -129,7 +129,7 @@ export function EditProductForm({
               id="category_id"
               name="category_id"
               defaultValue={product.category_id ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             >
               <option value="">—</option>
               {categories.map((c) => (
@@ -149,7 +149,7 @@ export function EditProductForm({
             name="parent_id"
             defaultValue={product.parent_id ?? ''}
             placeholder="T-0000"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
           />
         </div>
         <div className="flex gap-2">
@@ -161,7 +161,7 @@ export function EditProductForm({
               id="supplier_id"
               name="supplier_id"
               defaultValue={product.supplier_id ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             >
               <option value="">—</option>
               {suppliers.map((s) => (
@@ -180,14 +180,14 @@ export function EditProductForm({
               name="origin_country"
               defaultValue={product.origin_country ?? ''}
               maxLength={2}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             />
           </div>
         </div>
       </fieldset>
 
       <fieldset className="space-y-3">
-        <legend className="mb-1 text-xs font-medium uppercase text-gray-500">Commercial</legend>
+        <legend className="mb-1 text-xs font-medium uppercase text-fg-muted">Commercial</legend>
         <div className="flex gap-2">
           <div className="flex-1">
             <label htmlFor="exw_price" className="mb-1 block text-sm font-medium">
@@ -200,7 +200,7 @@ export function EditProductForm({
               step="0.01"
               defaultValue={product.exw_price ?? ''}
               required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -213,7 +213,7 @@ export function EditProductForm({
               defaultValue={product.currency ?? ''}
               maxLength={3}
               required
-              className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-24 rounded-md border border-line-strong px-3 py-2 text-sm"
             />
           </div>
         </div>
@@ -225,7 +225,7 @@ export function EditProductForm({
             id="primary_branch"
             name="primary_branch"
             defaultValue={product.primary_branch}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
           >
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
@@ -246,9 +246,9 @@ export function EditProductForm({
             min="0"
             max="0.9999"
             defaultValue={product.interco_margin ?? 0}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-fg-muted">
             What the primary branch earns reselling this article to the other branches. Never charged
             when the primary branch sells to itself.
           </p>
@@ -267,7 +267,7 @@ export function EditProductForm({
       </fieldset>
 
       <fieldset className="space-y-3">
-        <legend className="mb-1 text-xs font-medium uppercase text-gray-500">
+        <legend className="mb-1 text-xs font-medium uppercase text-fg-muted">
           Customs &amp; logistics (required for active/review — except HS/weight for options and services)
         </legend>
         <div className="flex gap-2">
@@ -279,7 +279,7 @@ export function EditProductForm({
               id="hs_code"
               name="hs_code"
               defaultValue={product.hs_code ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             >
               <option value="">—</option>
               {hsCodes.map((h) => (
@@ -297,7 +297,7 @@ export function EditProductForm({
               id="unit"
               name="unit"
               defaultValue={product.unit ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             >
               <option value="">—</option>
               {units.map((u) => (
@@ -319,7 +319,7 @@ export function EditProductForm({
               type="number"
               step="0.01"
               defaultValue={product.gross_weight_kg ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             />
           </div>
           <div className="flex-1">
@@ -332,7 +332,7 @@ export function EditProductForm({
               type="number"
               step="0.01"
               defaultValue={product.net_weight_kg ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             />
           </div>
           <div className="flex-1">
@@ -344,7 +344,7 @@ export function EditProductForm({
               name="lead_time_days"
               type="number"
               defaultValue={product.lead_time_days ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             />
           </div>
         </div>
@@ -361,7 +361,7 @@ export function EditProductForm({
       </fieldset>
 
       <fieldset className="space-y-3">
-        <legend className="mb-1 text-xs font-medium uppercase text-gray-500">
+        <legend className="mb-1 text-xs font-medium uppercase text-fg-muted">
           SAP code — only the one matching the primary branch above is required for activation
         </legend>
         <div className="grid grid-cols-2 gap-2">
@@ -373,7 +373,7 @@ export function EditProductForm({
               id="sap_code_sa"
               name="sap_code_sa"
               defaultValue={product.sap_code_sa ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -384,7 +384,7 @@ export function EditProductForm({
               id="sap_code_cn"
               name="sap_code_cn"
               defaultValue={product.sap_code_cn ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -395,7 +395,7 @@ export function EditProductForm({
               id="sap_code_us"
               name="sap_code_us"
               defaultValue={product.sap_code_us ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -406,19 +406,19 @@ export function EditProductForm({
               id="sap_code_uk"
               name="sap_code_uk"
               defaultValue={product.sap_code_uk ?? ''}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
             />
           </div>
         </div>
       </fieldset>
 
       <fieldset>
-        <legend className="mb-1 text-xs font-medium uppercase text-gray-500">Lifecycle</legend>
+        <legend className="mb-1 text-xs font-medium uppercase text-fg-muted">Lifecycle</legend>
         <select
           id="status"
           name="status"
           defaultValue={product.status}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
         >
           {STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -429,16 +429,16 @@ export function EditProductForm({
       </fieldset>
 
       {state && 'error' in state && (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="rounded-md border border-danger bg-danger-soft p-3 text-sm text-danger">
           {state.error}
         </p>
       )}
-      {state && 'success' in state && <p className="text-sm text-green-700">Saved.</p>}
+      {state && 'success' in state && <p className="text-sm text-success">Saved.</p>}
 
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? 'Saving…' : 'Save'}
       </button>

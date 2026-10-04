@@ -97,16 +97,16 @@ export default async function AuditPage({
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Audit log</h1>
-        <Link href="/" className="text-sm text-gray-600 underline">
+        <Link href="/" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>
-      <p className="mb-4 text-xs text-gray-500">Read-only. Per-item audit is also on each product&apos;s own page.</p>
+      <p className="mb-4 text-xs text-fg-muted">Read-only. Per-item audit is also on each product&apos;s own page.</p>
 
-      <form className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 p-3 text-sm">
+      <form className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-line p-3 text-sm">
         <div>
-          <label className="mb-1 block text-xs text-gray-500">Table</label>
-          <select name="table" defaultValue={table ?? ''} className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+          <label className="mb-1 block text-xs text-fg-muted">Table</label>
+          <select name="table" defaultValue={table ?? ''} className="rounded-md border border-line-strong px-2 py-1 text-sm">
             <option value="">All</option>
             {TABLES.map((t) => (
               <option key={t} value={t}>
@@ -116,43 +116,43 @@ export default async function AuditPage({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-gray-500">Actor (UUID)</label>
+          <label className="mb-1 block text-xs text-fg-muted">Actor (UUID)</label>
           <input
             name="actor"
             defaultValue={actor ?? ''}
-            className="w-56 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="w-56 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-gray-500">From</label>
-          <input name="from" type="date" defaultValue={from ?? ''} className="rounded-md border border-gray-300 px-2 py-1 text-sm" />
+          <label className="mb-1 block text-xs text-fg-muted">From</label>
+          <input name="from" type="date" defaultValue={from ?? ''} className="rounded-md border border-line-strong px-2 py-1 text-sm" />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-gray-500">To</label>
-          <input name="to" type="date" defaultValue={to ?? ''} className="rounded-md border border-gray-300 px-2 py-1 text-sm" />
+          <label className="mb-1 block text-xs text-fg-muted">To</label>
+          <input name="to" type="date" defaultValue={to ?? ''} className="rounded-md border border-line-strong px-2 py-1 text-sm" />
         </div>
-        <button type="submit" className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white">
+        <button type="submit" className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary">
           Filter
         </button>
         {(table || actor || from || to) && (
-          <Link href="/audit" className="text-xs text-gray-600 underline">
+          <Link href="/audit" className="text-xs text-fg-soft underline">
             Clear
           </Link>
         )}
       </form>
 
       {error && (
-        <p role="alert" className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="mb-4 rounded-md border border-danger bg-danger-soft p-3 text-sm text-danger">
           {error.message}
         </p>
       )}
 
-      {!error && entries?.length === 0 && <p className="text-sm text-gray-500">No entries match.</p>}
+      {!error && entries?.length === 0 && <p className="text-sm text-fg-muted">No entries match.</p>}
 
       {!error && entries && entries.length > 0 && (
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
+            <tr className="border-b border-line text-left text-fg-muted">
               <th className="py-2 pr-4">At</th>
               <th className="py-2 pr-4">Actor</th>
               <th className="py-2 pr-4">Table</th>
@@ -162,7 +162,7 @@ export default async function AuditPage({
           </thead>
           <tbody>
             {entries.map((e) => (
-              <tr key={e.id} className="border-b border-gray-100">
+              <tr key={e.id} className="border-b border-line">
                 <td className="py-2 pr-4">{new Date(e.at).toLocaleString()}</td>
                 <td className="py-2 pr-4">{actorEmail(e.actor)}</td>
                 <td className="py-2 pr-4">{e.table_name}</td>
@@ -180,7 +180,7 @@ export default async function AuditPage({
             ← Previous
           </Link>
         )}
-        <span className="text-gray-500">Page {page}</span>
+        <span className="text-fg-muted">Page {page}</span>
         {entries && entries.length === PAGE_SIZE && (
           <Link href={qs({ page: String(page + 1) })} className="underline">
             Next →

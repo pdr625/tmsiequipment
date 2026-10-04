@@ -7,6 +7,101 @@
 
 @import 'tailwindcss';
 
+/* Design tokens (tarefa «tema», 2026-10-04) — a mesma identidade visual do
+ * Itinera (cobalto + coral, fundo quente, Geist), para as duas apps se lerem
+ * como da mesma origem. Valores claros = tokens.css do Itinera, com UMA
+ * diferença deliberada: --fg-muted. O do Itinera (#94a3b8) dá 2,56:1 sobre
+ * branco e reprova no WCAG AA para texto; aqui o texto secundário é
+ * informação (133 usos), por isso #5f6b7e (4,86:1 sobre o fundo alternativo).
+ *
+ * O escuro foi derivado do azul-marinho da barra lateral do Itinera e
+ * medido par a par (>= 4,5:1 em todo o texto, scripts nos apontamentos do
+ * STATE). --primary é o PREENCHIMENTO (botões, texto branco por cima);
+ * --primary-fg é a cor de TEXTO/ligações — no escuro são valores diferentes
+ * porque o cobalto escuro não lê como texto sobre fundo escuro.
+ *
+ * O tema vem de [data-theme] no <html>, posto antes da primeira pintura por
+ * um script inline no layout (sem piscar). Sem preferência guardada segue o
+ * sistema. Impressão é sempre clara (bloco @media print abaixo).
+ */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  color-scheme: light;
+  --page: #fafaf7;
+  --surface: #ffffff;
+  --surface-alt: #f4f3ee;
+  --fg: #0f172a;
+  --fg-soft: #475569;
+  --fg-muted: #5f6b7e;
+  --line: #e7e5dc;
+  --line-strong: #d6d3c7;
+  --primary: #1e40af;
+  --primary-hover: #1e3a8a;
+  --primary-fg: #1e40af;
+  --primary-soft: #dbeafe;
+  --on-primary: #ffffff;
+  --accent: #ff5a36;
+  --accent-soft: #ffe4dd;
+  --success: #047857;
+  --success-soft: #d1fae5;
+  --danger: #be123c;
+  --danger-soft: #ffe4e6;
+  --warning: #92400e;
+  --warning-soft: #fef3c7;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page: #0b1020;
+  --surface: #131c31;
+  --surface-alt: #1a2540;
+  --fg: #e8ecf4;
+  --fg-soft: #b4bfd1;
+  --fg-muted: #8d9ab0;
+  --line: #243049;
+  --line-strong: #3a4868;
+  --primary: #3b5bdb;
+  --primary-hover: #4c6ef0;
+  --primary-fg: #93abff;
+  --primary-soft: #1b2a5c;
+  --on-primary: #ffffff;
+  --accent: #ff5a36;
+  --accent-soft: #3a1c15;
+  --success: #34d399;
+  --success-soft: #0f2a22;
+  --danger: #fb7185;
+  --danger-soft: #2e1219;
+  --warning: #fbbf24;
+  --warning-soft: #2e2208;
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-fg: var(--fg);
+  --color-fg-soft: var(--fg-soft);
+  --color-fg-muted: var(--fg-muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --font-sans: var(--font-geist), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
 /* Print landscape for the price list's print view (i10). No Tailwind
  * utility reaches this — @page is a page-box at-rule, not a style
  * applicable to an element/class, so it can't be a `print:` variant.
@@ -16,6 +111,34 @@
 @media print {
   @page {
     size: landscape;
+  }
+}
+
+/* Impressão sempre em tema claro, mesmo com o ecrã em escuro: papel branco com
+ * texto claro seria ilegível e gastaria toda a tinta. Vem DEPOIS do bloco
+ * escuro com a mesma especificidade, por isso ganha. */
+@media print {
+  :root[data-theme='dark'] {
+    color-scheme: light;
+    --page: #ffffff;
+    --surface: #ffffff;
+    --surface-alt: #f4f3ee;
+    --fg: #0f172a;
+    --fg-soft: #475569;
+    --fg-muted: #5f6b7e;
+    --line: #e7e5dc;
+    --line-strong: #d6d3c7;
+    --primary: #1e40af;
+    --primary-hover: #1e3a8a;
+    --primary-fg: #1e40af;
+    --primary-soft: #dbeafe;
+    --on-primary: #ffffff;
+    --success: #047857;
+    --success-soft: #d1fae5;
+    --danger: #be123c;
+    --danger-soft: #ffe4e6;
+    --warning: #92400e;
+    --warning-soft: #fef3c7;
   }
 }
 
@@ -30,23 +153,11 @@
  * four categorical hexes above, always paired with icon + text, never
  * color alone.
  *
- * Light-only, deliberately (Pedro, 2026-09-05): this chart card was the
- * only theme-aware element in an otherwise light-only app — on a machine
- * with a dark OS preference it flipped on its own while every other page
- * stayed light, which read as broken rather than themed. The dark
- * `prefers-color-scheme`/`[data-theme]` blocks that used to live here
- * are removed, not just disabled; global dark mode is a separate future
- * improvement (docs/ROADMAP.md), not something this card should opt into
- * alone. The dark values below are the ones that were live in
- * production and confirmed correct (E3-i8 F3, CSS verified in the
- * served bundle) — keep them as the starting point when the app gets a
- * real theme, rather than re-deriving the palette from scratch:
- *   --chart-surface: #1a1a19; --chart-text: #fcfcfb;
- *   --chart-text-muted: #a9a79f; --chart-border: #333230;
- *   --series-1: #3987e5; --series-2: #d95926;
- *   --series-3: #199e70; --series-4: #c98500;
- *   --state-warn-bg: #3a1512; --state-warn-text: #f2a89e;
- *   --state-warn-border: #e2564a; */
+ * Tema (2026-10-04): o modo escuro global passou a existir, por isso este
+ * cartão deixou de ser «só claro». Os valores escuros são os que estiveram em
+ * produção na E3-i8 F3 e foram confirmados correctos (guardados aqui desde
+ * 2026-09-05 precisamente para este momento) — não foram re-derivados.
+ * Impressão volta a claro, como o resto. */
 .dashboard-charts {
   --chart-surface: #fcfcfb;
   --chart-text: #1a1a19;
@@ -59,4 +170,34 @@
   --state-warn-bg: #fdeceb;
   --state-warn-text: #8a1710;
   --state-warn-border: #c4281e;
+}
+
+:root[data-theme='dark'] .dashboard-charts {
+  --chart-surface: #1a1a19;
+  --chart-text: #fcfcfb;
+  --chart-text-muted: #a9a79f;
+  --chart-border: #333230;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --state-warn-bg: #3a1512;
+  --state-warn-text: #f2a89e;
+  --state-warn-border: #e2564a;
+}
+
+@media print {
+  :root[data-theme='dark'] .dashboard-charts {
+    --chart-surface: #fcfcfb;
+    --chart-text: #1a1a19;
+    --chart-text-muted: #6b6a63;
+    --chart-border: #e4e2dd;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --state-warn-bg: #fdeceb;
+    --state-warn-text: #8a1710;
+    --state-warn-border: #c4281e;
+  }
 }

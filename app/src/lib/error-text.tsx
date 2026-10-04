@@ -10,7 +10,7 @@ import type { ActionState } from './action-state';
 export function ErrorText<TSuccess = unknown>({ state }: { state: ActionState<TSuccess> }) {
   if (!state || !('error' in state)) return null;
   return (
-    <p role="alert" className="mt-1 text-xs text-red-600">
+    <p role="alert" className="mt-1 text-xs text-danger">
       {state.error}
     </p>
   );

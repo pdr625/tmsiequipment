@@ -27,7 +27,7 @@ export function ChangePasswordForm() {
           type="password"
           autoComplete="current-password"
           required
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
         />
       </div>
 
@@ -41,7 +41,7 @@ export function ChangePasswordForm() {
           type="password"
           autoComplete="new-password"
           required
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
         />
       </div>
 
@@ -55,12 +55,12 @@ export function ChangePasswordForm() {
           type="password"
           autoComplete="new-password"
           required
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
         />
       </div>
 
       {state?.error && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger">
           {state.error}
         </p>
       )}
@@ -68,7 +68,7 @@ export function ChangePasswordForm() {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? 'Saving…' : 'Change password'}
       </button>

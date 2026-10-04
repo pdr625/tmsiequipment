@@ -28,8 +28,8 @@ export function DecideProposalForm({ proposalId }: { proposalId: number }) {
         <input type="hidden" name="proposal_id" value={proposalId} />
       </form>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Reason (required to reject)</label>
-        <input form={formId} name="reason" className="w-56 rounded-md border border-gray-300 px-2 py-1 text-sm" />
+        <label className="mb-1 block text-xs text-fg-muted">Reason (required to reject)</label>
+        <input form={formId} name="reason" className="w-56 rounded-md border border-line-strong px-2 py-1 text-sm" />
       </div>
       <button
         form={formId}
@@ -37,7 +37,7 @@ export function DecideProposalForm({ proposalId }: { proposalId: number }) {
         name="decision"
         value="approved"
         disabled={pending}
-        className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? '…' : 'Approve'}
       </button>
@@ -47,12 +47,12 @@ export function DecideProposalForm({ proposalId }: { proposalId: number }) {
         name="decision"
         value="rejected"
         disabled={pending}
-        className="rounded-md border border-gray-300 px-3 py-1 text-sm font-medium disabled:opacity-50"
+        className="rounded-md border border-line-strong px-3 py-1 text-sm font-medium disabled:opacity-50"
       >
         {pending ? '…' : 'Reject'}
       </button>
       <ErrorText state={state} />
-      {state && 'success' in state && <p className="text-xs text-green-700">Decision recorded.</p>}
+      {state && 'success' in state && <p className="text-xs text-success">Decision recorded.</p>}
     </div>
   );
 }
@@ -72,7 +72,7 @@ export type PendingItem = {
   canDecide: boolean;
 };
 
-const STATUS_PENDING_STYLE = 'bg-yellow-100 text-yellow-800';
+const STATUS_PENDING_STYLE = 'bg-warning-soft text-warning';
 
 type BatchChange = { id: number; target_table: string; key: string | null; before: number | null; after: number | null; reason: string };
 type BatchExcluded = { id: number; reason: string; target_table?: string; branch_id?: string | null };
@@ -141,23 +141,23 @@ export function PendingQueue({ items }: { items: PendingItem[] }) {
     <>
       <ul className="mb-3 space-y-3">
         {items.map((i) => (
-          <li key={i.id} className="rounded-lg border border-gray-200 p-3">
+          <li key={i.id} className="rounded-lg border border-line p-3">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               {i.canDecide && (
                 <input type="checkbox" checked={selected.has(i.id)} onChange={() => toggle(i.id)} aria-label={`Select proposal ${i.id}`} />
               )}
-              <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium">{i.targetTable}</span>
-              {i.branchId && <span className="text-xs text-gray-500">branch {i.branchId}</span>}
+              <span className="rounded bg-surface-alt px-2 py-0.5 text-xs font-medium">{i.targetTable}</span>
+              {i.branchId && <span className="text-xs text-fg-muted">branch {i.branchId}</span>}
               <span className={`rounded px-2 py-0.5 text-xs ${STATUS_PENDING_STYLE}`}>pending approval</span>
             </div>
             <p className="mb-1 text-sm">{i.displayText}</p>
-            <p className="mb-2 text-xs text-gray-500">
+            <p className="mb-2 text-xs text-fg-muted">
               Reason: {i.reason} — proposed by {i.proposedByLabel} on {i.proposedAt.slice(0, 10)}
             </p>
             {i.canDecide ? (
               <DecideProposalForm proposalId={i.id} />
             ) : (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-fg-muted">
                 Waiting for {i.branchId ? `the ${i.branchId} branch manager or an admin` : 'an admin'} to decide.
               </p>
             )}
@@ -166,21 +166,21 @@ export function PendingQueue({ items }: { items: PendingItem[] }) {
       </ul>
 
       {decidable.length === 0 ? null : (
-      <div className="mb-4 rounded-lg border border-gray-300 bg-gray-50 p-3">
-      <p className="mb-2 text-xs font-semibold text-gray-700">Batch decision — check the rows above, then preview before deciding</p>
+      <div className="mb-4 rounded-lg border border-line-strong bg-surface-alt p-3">
+      <p className="mb-2 text-xs font-semibold text-fg-soft">Batch decision — check the rows above, then preview before deciding</p>
       <div className="flex flex-wrap items-end gap-2">
-        <span className="text-xs text-gray-600">{selected.size} selected</span>
+        <span className="text-xs text-fg-soft">{selected.size} selected</span>
         <input
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="Reason (required to reject)"
-          className="w-56 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-56 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
         <button
           type="button"
           disabled={selected.size === 0 || previewPending}
           onClick={() => startPreview('approved')}
-          className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
         >
           {previewPending && decision === 'approved' ? '…' : 'Preview approve'}
         </button>
@@ -188,7 +188,7 @@ export function PendingQueue({ items }: { items: PendingItem[] }) {
           type="button"
           disabled={selected.size === 0 || previewPending}
           onClick={() => startPreview('rejected')}
-          className="rounded-md border border-gray-300 px-3 py-1 text-sm font-medium disabled:opacity-50"
+          className="rounded-md border border-line-strong px-3 py-1 text-sm font-medium disabled:opacity-50"
         >
           {previewPending && decision === 'rejected' ? '…' : 'Preview reject'}
         </button>
@@ -196,14 +196,14 @@ export function PendingQueue({ items }: { items: PendingItem[] }) {
       <ErrorText state={previewState} />
 
       {preview && !committed && (
-        <div className="mt-3 rounded-md border border-gray-300 bg-white p-3">
+        <div className="mt-3 rounded-md border border-line-strong bg-surface p-3">
           <p className="mb-2 text-xs font-semibold">
             Preview — {decision}: {preview.eligible_count} will be decided, {preview.excluded_count} excluded
           </p>
           {(preview.changes?.length ?? 0) > 0 && (
             <table className="mb-2 w-full border-collapse text-xs">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
+                <tr className="border-b border-line text-left text-fg-muted">
                   <th className="py-1 pr-3">Target</th>
                   <th className="py-1 pr-3">Key</th>
                   <th className="py-1 pr-3">Before</th>
@@ -212,7 +212,7 @@ export function PendingQueue({ items }: { items: PendingItem[] }) {
               </thead>
               <tbody>
                 {preview.changes!.map((c) => (
-                  <tr key={c.id} className="border-b border-gray-100">
+                  <tr key={c.id} className="border-b border-line">
                     <td className="py-1 pr-3">{c.target_table}</td>
                     <td className="py-1 pr-3">{c.key}</td>
                     <td className="py-1 pr-3">{fmtValue(c.before)}</td>
@@ -224,8 +224,8 @@ export function PendingQueue({ items }: { items: PendingItem[] }) {
           )}
           {preview.excluded.length > 0 && (
             <div className="mb-2">
-              <p className="mb-1 text-xs font-semibold text-amber-700">Excluded — not part of this batch</p>
-              <ul className="space-y-0.5 text-xs text-amber-700">
+              <p className="mb-1 text-xs font-semibold text-warning">Excluded — not part of this batch</p>
+              <ul className="space-y-0.5 text-xs text-warning">
                 {preview.excluded.map((e) => (
                   <li key={e.id}>
                     #{e.id} {e.target_table && `(${e.target_table}${e.branch_id ? `, ${e.branch_id}` : ''})`}: {e.reason}
@@ -238,7 +238,7 @@ export function PendingQueue({ items }: { items: PendingItem[] }) {
             type="button"
             disabled={commitPending || (decision === 'rejected' && reason.trim() === '')}
             onClick={confirmCommit}
-            className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
           >
             {commitPending ? '…' : `Confirm — ${decision} ${preview.eligible_count}`}
           </button>
@@ -246,7 +246,7 @@ export function PendingQueue({ items }: { items: PendingItem[] }) {
       )}
       <ErrorText state={commitState} />
       {committed && (
-        <p className="mt-2 text-xs text-green-700">
+        <p className="mt-2 text-xs text-success">
           Batch decided — {committed.decided_count} proposals ({committed.batch_id}), {committed.excluded_count} excluded.
         </p>
       )}

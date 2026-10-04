@@ -96,16 +96,16 @@ export default async function BranchesPage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Branches &amp; channels</h1>
-        <Link href="/" className="text-sm text-gray-600 underline">
+        <Link href="/" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Branches</h2>
+        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Branches</h2>
         <table className="mb-3 w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
+            <tr className="border-b border-line text-left text-fg-muted">
               <th className="py-2 pr-4">Code</th>
               <th className="py-2 pr-4">Name</th>
               <th className="py-2 pr-4">Country</th>
@@ -116,7 +116,7 @@ export default async function BranchesPage() {
           </thead>
           <tbody>
             {branches?.map((b) => (
-              <tr key={b.id} className="border-b border-gray-100">
+              <tr key={b.id} className="border-b border-line">
                 <td className="py-2 pr-4 font-medium">{b.id}</td>
                 <td className="py-2 pr-4">{b.name}</td>
                 <td className="py-2 pr-4">{b.country}</td>
@@ -131,10 +131,10 @@ export default async function BranchesPage() {
       </section>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Channels</h2>
+        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Channels</h2>
         <table className="mb-3 w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
+            <tr className="border-b border-line text-left text-fg-muted">
               <th className="py-2 pr-4">Code</th>
               <th className="py-2 pr-4">Name</th>
               <th className="py-2 pr-4">Branch</th>
@@ -144,7 +144,7 @@ export default async function BranchesPage() {
           </thead>
           <tbody>
             {channels?.map((c) => (
-              <tr key={c.id} className="border-b border-gray-100">
+              <tr key={c.id} className="border-b border-line">
                 <td className="py-2 pr-4 font-medium">{c.id}</td>
                 <td className="py-2 pr-4">{c.name}</td>
                 <td className="py-2 pr-4">{c.branch_id}</td>
@@ -161,15 +161,15 @@ export default async function BranchesPage() {
         <>
           <section className="mb-10">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold text-gray-700">Reference price factor</h2>
+              <h2 className="text-sm font-semibold text-fg-soft">Reference price factor</h2>
             </div>
-            <p className="mb-2 text-xs text-gray-500">
+            <p className="mb-2 text-xs text-fg-muted">
               A branch with no proposal yet shows the neutral defaults (ref. factor 1.100, list coef.
               1.000) — proposing one seeds its first row, exactly like editing an existing one.
             </p>
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
+                <tr className="border-b border-line text-left text-fg-muted">
                   <th className="py-2 pr-4">Branch</th>
                   <th className="py-2 pr-4">Ref. factor</th>
                   <th className="py-2 pr-4">List coef.</th>
@@ -186,10 +186,10 @@ export default async function BranchesPage() {
           </section>
 
           <section className="mb-10">
-            <h2 className="mb-2 text-sm font-semibold text-gray-700">Transport tiers</h2>
+            <h2 className="mb-2 text-sm font-semibold text-fg-soft">Transport tiers</h2>
             <table className="mb-3 w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
+                <tr className="border-b border-line text-left text-fg-muted">
                   <th className="py-2 pr-4">Branch</th>
                   <th className="py-2 pr-4">Tier</th>
                   <th className="py-2 pr-4">Max weight (kg)</th>
@@ -209,10 +209,10 @@ export default async function BranchesPage() {
           </section>
 
           <section className="mb-10">
-            <h2 className="mb-2 text-sm font-semibold text-gray-700">Margin grids</h2>
+            <h2 className="mb-2 text-sm font-semibold text-fg-soft">Margin grids</h2>
             <table className="mb-3 w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-gray-500">
+                <tr className="border-b border-line text-left text-fg-muted">
                   <th className="py-2 pr-4">Branch</th>
                   <th className="py-2 pr-4">Tier</th>
                   <th className="py-2 pr-4">Max cost (EUR)</th>

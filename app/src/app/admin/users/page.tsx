@@ -74,7 +74,7 @@ export default async function AdminUsersPage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">User administration</h1>
-        <Link href="/" className="text-sm text-gray-600 underline">
+        <Link href="/" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>
@@ -82,13 +82,13 @@ export default async function AdminUsersPage() {
       <InviteForm />
 
       {profilesError && (
-        <p role="alert" className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="mb-4 rounded-md border border-danger bg-danger-soft p-3 text-sm text-danger">
           {profilesError.message}
         </p>
       )}
 
       {banStatusError && (
-        <p role="alert" className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="mb-4 rounded-md border border-danger bg-danger-soft p-3 text-sm text-danger">
           {banStatusError}
         </p>
       )}
@@ -98,18 +98,18 @@ export default async function AdminUsersPage() {
           const userRoles = rolesByUser.get(p.user_id) ?? [];
           const banned = bannedIds.has(p.user_id);
           return (
-            <div key={p.user_id} className="rounded-lg border border-gray-200 p-4">
+            <div key={p.user_id} className="rounded-lg border border-line p-4">
               <div className="mb-2 flex items-center justify-between">
                 <div>
                   <span className="font-medium">{p.email}</span>
-                  {p.full_name && <span className="ml-2 text-sm text-gray-500">{p.full_name}</span>}
+                  {p.full_name && <span className="ml-2 text-sm text-fg-muted">{p.full_name}</span>}
                   {banStatusError ? (
-                    <span className="ml-2 rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
+                    <span className="ml-2 rounded bg-warning-soft px-2 py-0.5 text-xs text-warning">
                       ban status unknown
                     </span>
                   ) : (
                     banned && (
-                      <span className="ml-2 rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">disabled</span>
+                      <span className="ml-2 rounded bg-danger-soft px-2 py-0.5 text-xs text-danger">disabled</span>
                     )
                   )}
                 </div>
@@ -117,7 +117,7 @@ export default async function AdminUsersPage() {
               </div>
 
               <ul className="mb-2 space-y-1">
-                {userRoles.length === 0 && <li className="text-xs text-gray-400">No roles assigned.</li>}
+                {userRoles.length === 0 && <li className="text-xs text-fg-muted">No roles assigned.</li>}
                 {userRoles.map((r) => (
                   <li key={r.id} className="flex items-center gap-2 text-sm">
                     <span>

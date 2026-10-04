@@ -18,11 +18,11 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
+      <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-8 shadow-sm">
         <h1 className="mb-6 text-center text-xl font-semibold">Reset your password</h1>
 
         {state && 'success' in state ? (
-          <p className="text-sm text-gray-700">
+          <p className="text-sm text-fg-soft">
             If an account exists for that email, a reset link has been sent.
           </p>
         ) : (
@@ -37,13 +37,13 @@ export default function ForgotPasswordPage() {
                 type="email"
                 autoComplete="email"
                 required
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
                 placeholder="you@company.com"
               />
             </div>
 
             {state?.error && (
-              <p role="alert" className="text-sm text-red-600">
+              <p role="alert" className="text-sm text-danger">
                 {state.error}
               </p>
             )}
@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={pending}
-              className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
             >
               {pending ? 'Sending…' : 'Send reset link'}
             </button>
@@ -59,7 +59,7 @@ export default function ForgotPasswordPage() {
         )}
 
         <p className="mt-4 text-center text-sm">
-          <Link href="/login" className="text-gray-600 underline">
+          <Link href="/login" className="text-fg-soft underline">
             Back to sign in
           </Link>
         </p>

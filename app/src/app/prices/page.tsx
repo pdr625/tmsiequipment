@@ -169,7 +169,7 @@ export default async function PricesPage({
         <h1 className="text-lg font-bold" style={{ color: branding.primaryColor }}>
           {branding.displayName} — Price list
         </h1>
-        {branding.tagline !== '' && <p className="text-sm text-gray-600">{branding.tagline}</p>}
+        {branding.tagline !== '' && <p className="text-sm text-fg-soft">{branding.tagline}</p>}
         <p className="text-sm">Scope: {rotuloAmbito}</p>
         <p className="text-sm">Currency: {currencies.join(', ') || '—'}</p>
         <p className="text-sm">
@@ -182,12 +182,12 @@ export default async function PricesPage({
         <div className="flex items-center gap-4">
           <a
             href={branch ? `/prices/export?branch=${branch}` : '/prices/export'}
-            className="rounded-md border border-gray-300 px-3 py-1 text-sm font-medium"
+            className="rounded-md border border-line-strong px-3 py-1 text-sm font-medium"
           >
             Export to Excel
           </a>
           <PrintButton />
-          <Link href="/" prefetch={false} className="text-sm text-gray-600 underline">
+          <Link href="/" prefetch={false} className="text-sm text-fg-soft underline">
             Back
           </Link>
         </div>
@@ -196,7 +196,7 @@ export default async function PricesPage({
       {/* Item 32: preços operacionais até o despachante confirmar a base do
           direito aduaneiro. Sem print:hidden — sai também na impressão. */}
       {aviso && (
-        <p role="note" className="mb-4 text-xs text-amber-800">
+        <p role="note" className="mb-4 text-xs text-warning">
           ⓘ {aviso}
         </p>
       )}
@@ -211,7 +211,7 @@ export default async function PricesPage({
         <FilterButton
           href="/prices"
           active={!branch}
-          className={`rounded-md border px-3 py-1 text-sm ${!branch ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
+          className={`rounded-md border px-3 py-1 text-sm ${!branch ? 'border-primary bg-primary text-on-primary' : 'border-line-strong'}`}
         >
           All branches
         </FilterButton>
@@ -220,7 +220,7 @@ export default async function PricesPage({
             key={b.id}
             href={`/prices?branch=${b.id}`}
             active={branch === b.id}
-            className={`rounded-md border px-3 py-1 text-sm ${branch === b.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
+            className={`rounded-md border px-3 py-1 text-sm ${branch === b.id ? 'border-primary bg-primary text-on-primary' : 'border-line-strong'}`}
           >
             {b.name}
           </FilterButton>
@@ -230,7 +230,7 @@ export default async function PricesPage({
             key={c.id}
             href={`/prices?branch=${c.id}`}
             active={branch === c.id}
-            className={`rounded-md border px-3 py-1 text-sm ${branch === c.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
+            className={`rounded-md border px-3 py-1 text-sm ${branch === c.id ? 'border-primary bg-primary text-on-primary' : 'border-line-strong'}`}
           >
             {c.name} (channel)
           </FilterButton>
@@ -239,37 +239,37 @@ export default async function PricesPage({
 
       {canReadCosts && (
         <div className="mb-4 flex items-center gap-2 text-sm print:hidden">
-          <span className="text-gray-500">Status:</span>
+          <span className="text-fg-muted">Status:</span>
           {(['active', 'draft', 'review', 'all'] as const).map((e) => (
             <FilterButton
               key={e}
               href={`/prices?${new URLSearchParams({ ...(branch ? { branch } : {}), status: e }).toString()}`}
               active={estadoPedido === e}
-              className={`rounded-md border px-2 py-0.5 ${estadoPedido === e ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
+              className={`rounded-md border px-2 py-0.5 ${estadoPedido === e ? 'border-primary bg-primary text-on-primary' : 'border-line-strong'}`}
             >
               {e}
             </FilterButton>
           ))}
-          <span className="text-gray-400">
+          <span className="text-fg-muted">
             ({visiveis.length} of {rows?.length ?? 0})
           </span>
         </div>
       )}
 
       {error && (
-        <p role="alert" className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="rounded-md border border-danger bg-danger-soft p-3 text-sm text-danger">
           {error.message}
         </p>
       )}
 
       {!error && visiveis.length === 0 && (
-        <p className="text-sm text-gray-600">No prices visible for your role in this scope.</p>
+        <p className="text-sm text-fg-soft">No prices visible for your role in this scope.</p>
       )}
 
       {!error && visiveis.length > 0 && canReadCosts && (
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
+            <tr className="border-b border-line text-left text-fg-muted">
               <th className="py-2 pr-4">Product</th>
               <th className="py-2 pr-4">Scope</th>
               <th className="py-2 pr-4">Status</th>
@@ -285,18 +285,18 @@ export default async function PricesPage({
             {(visiveis as LinhaPreco[]).map((r) => (
               <tr
                 key={`${r.product_id}-${r.branch_id}-${r.scope_type ?? 'b'}`}
-                className="border-b border-gray-100"
+                className="border-b border-line"
               >
                 <td className="py-2 pr-4">
                   <span className="font-medium">{r.product_id}</span>
-                  <span className="text-gray-600"> — {nomeDe(r)}</span>
+                  <span className="text-fg-soft"> — {nomeDe(r)}</span>
                 </td>
                 <td className="py-2 pr-4">{r.branch_id}</td>
                 <td className="py-2 pr-4">
                   {estadoDe(r) === 'active' ? (
-                    <span className="text-gray-500">active</span>
+                    <span className="text-fg-muted">active</span>
                   ) : (
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                    <span className="rounded bg-warning-soft px-1.5 py-0.5 text-xs font-medium text-warning">
                       {estadoDe(r)}
                     </span>
                   )}
@@ -316,7 +316,7 @@ export default async function PricesPage({
       {!error && visiveis.length > 0 && !canReadCosts && (
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
+            <tr className="border-b border-line text-left text-fg-muted">
               <th className="py-2 pr-4">Product</th>
               <th className="py-2 pr-4">Scope</th>
               <th className="py-2 pr-4">Currency</th>
@@ -327,10 +327,10 @@ export default async function PricesPage({
           </thead>
           <tbody>
             {(visiveis as LinhaPreco[]).map((r) => (
-              <tr key={`${r.product_id}-${r.branch_id}`} className="border-b border-gray-100">
+              <tr key={`${r.product_id}-${r.branch_id}`} className="border-b border-line">
                 <td className="py-2 pr-4">
                   <span className="font-medium">{r.product_id}</span>
-                  <span className="text-gray-600"> — {r.name}</span>
+                  <span className="text-fg-soft"> — {r.name}</span>
                 </td>
                 <td className="py-2 pr-4">{r.branch_id}</td>
                 <td className="py-2 pr-4">{r.currency}</td>
@@ -344,7 +344,7 @@ export default async function PricesPage({
       )}
 
       {footer.length > 0 && (
-        <div className="mt-6 hidden text-xs text-gray-500 print:block" style={{ fontFamily: branding.fontFamily }}>
+        <div className="mt-6 hidden text-xs text-fg-muted print:block" style={{ fontFamily: branding.fontFamily }}>
           {footer.map((line) => (
             <p key={line}>{line}</p>
           ))}

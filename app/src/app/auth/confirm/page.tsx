@@ -33,11 +33,11 @@ export default async function ConfirmPage({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+      <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-8 text-center shadow-sm">
         <h1 className="mb-2 text-xl font-semibold">
           {type === 'invite' ? "You've been invited" : 'Reset your password'}
         </h1>
-        <p className="mb-6 text-sm text-gray-600">
+        <p className="mb-6 text-sm text-fg-soft">
           Confirm to continue — this keeps the link from being used automatically before you open it.
         </p>
         <ConfirmForm tokenHash={tokenHash} type={type} code={code} />

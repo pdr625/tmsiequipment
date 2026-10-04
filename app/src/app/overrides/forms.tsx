@@ -35,10 +35,10 @@ export function PriceOverrideForm({
   const availableKinds = scopeType === 'channel' ? channelKinds : kinds;
 
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 p-3">
+    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-line p-3">
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Product</label>
-        <select name="product_id" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+        <label className="mb-1 block text-xs text-fg-muted">Product</label>
+        <select name="product_id" required className="rounded-md border border-line-strong px-2 py-1 text-sm">
           {products.map((p) => (
             <option key={p.id} value={p.id}>
               {p.id} — {p.name}
@@ -47,20 +47,20 @@ export function PriceOverrideForm({
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Scope</label>
+        <label className="mb-1 block text-xs text-fg-muted">Scope</label>
         <select
           name="scope_type"
           value={scopeType}
           onChange={(e: ChangeEvent<HTMLSelectElement>) => setScopeType(e.target.value as 'branch' | 'channel')}
-          className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="rounded-md border border-line-strong px-2 py-1 text-sm"
         >
           <option value="branch">Branch</option>
           <option value="channel">Channel</option>
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">{scopeType === 'channel' ? 'Channel' : 'Branch'}</label>
-        <select name="scope_id" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+        <label className="mb-1 block text-xs text-fg-muted">{scopeType === 'channel' ? 'Channel' : 'Branch'}</label>
+        <select name="scope_id" required className="rounded-md border border-line-strong px-2 py-1 text-sm">
           {(scopeType === 'channel' ? channels : branches).map((b) => (
             <option key={b.id} value={b.id}>
               {b.id}
@@ -69,8 +69,8 @@ export function PriceOverrideForm({
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Kind</label>
-        <select name="kind" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+        <label className="mb-1 block text-xs text-fg-muted">Kind</label>
+        <select name="kind" required className="rounded-md border border-line-strong px-2 py-1 text-sm">
           {availableKinds.map((k) => (
             <option key={k} value={k}>
               {k}
@@ -79,42 +79,42 @@ export function PriceOverrideForm({
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Value</label>
+        <label className="mb-1 block text-xs text-fg-muted">Value</label>
         <input
           name="value"
           type="number"
           step="0.0001"
           required
-          className="w-24 rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="w-24 rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Reason</label>
-        <input name="reason" required className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm" />
+        <label className="mb-1 block text-xs text-fg-muted">Reason</label>
+        <input name="reason" required className="w-48 rounded-md border border-line-strong px-2 py-1 text-sm" />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Valid from</label>
+        <label className="mb-1 block text-xs text-fg-muted">Valid from</label>
         <input
           name="valid_from"
           type="date"
           defaultValue={today}
           required
-          className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="rounded-md border border-line-strong px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Valid to (optional)</label>
-        <input name="valid_to" type="date" className="rounded-md border border-gray-300 px-2 py-1 text-sm" />
+        <label className="mb-1 block text-xs text-fg-muted">Valid to (optional)</label>
+        <input name="valid_to" type="date" className="rounded-md border border-line-strong px-2 py-1 text-sm" />
       </div>
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? 'Submitting…' : 'Propose override'}
       </button>
       <ErrorText state={state} />
-      {state && 'success' in state && <p className="text-xs text-green-700">Submitted — pending approval.</p>}
+      {state && 'success' in state && <p className="text-xs text-success">Submitted — pending approval.</p>}
     </form>
   );
 }
@@ -131,10 +131,10 @@ export function HsOverrideForm({
   const [state, formAction, pending] = useActionState<OverrideActionState, FormData>(createHsOverride, undefined);
 
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 p-3">
+    <form action={formAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-line p-3">
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Product</label>
-        <select name="product_id" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+        <label className="mb-1 block text-xs text-fg-muted">Product</label>
+        <select name="product_id" required className="rounded-md border border-line-strong px-2 py-1 text-sm">
           {products.map((p) => (
             <option key={p.id} value={p.id}>
               {p.id} — {p.name}
@@ -143,17 +143,17 @@ export function HsOverrideForm({
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Scope</label>
+        <label className="mb-1 block text-xs text-fg-muted">Scope</label>
         <input
           value="branch"
           disabled
           title="Only branch scope has any effect on calculations today — see the note above."
-          className="w-24 rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-sm text-gray-500"
+          className="w-24 rounded-md border border-line-strong bg-surface-alt px-2 py-1 text-sm text-fg-muted"
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Branch</label>
-        <select name="scope_id" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+        <label className="mb-1 block text-xs text-fg-muted">Branch</label>
+        <select name="scope_id" required className="rounded-md border border-line-strong px-2 py-1 text-sm">
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
               {b.id}
@@ -162,8 +162,8 @@ export function HsOverrideForm({
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">HS code</label>
-        <select name="hs_code" required className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+        <label className="mb-1 block text-xs text-fg-muted">HS code</label>
+        <select name="hs_code" required className="rounded-md border border-line-strong px-2 py-1 text-sm">
           {hsCodes.map((h) => (
             <option key={h.code} value={h.code}>
               {h.code} — {h.description}
@@ -172,18 +172,18 @@ export function HsOverrideForm({
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Reason</label>
-        <input name="reason" required className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm" />
+        <label className="mb-1 block text-xs text-fg-muted">Reason</label>
+        <input name="reason" required className="w-48 rounded-md border border-line-strong px-2 py-1 text-sm" />
       </div>
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-gray-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? 'Creating…' : 'Create override'}
       </button>
       <ErrorText state={state} />
-      {state && 'success' in state && <p className="text-xs text-green-700">Created.</p>}
+      {state && 'success' in state && <p className="text-xs text-success">Created.</p>}
     </form>
   );
 }

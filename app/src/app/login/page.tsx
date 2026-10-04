@@ -21,12 +21,12 @@ export default async function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
+      <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-8 shadow-sm">
         <h1 className="mb-6 text-center text-xl font-semibold">{branding.displayName}</h1>
         <LoginForm />
       </div>
 
-      <footer className="mt-8 max-w-sm text-center text-xs text-gray-500">
+      <footer className="mt-8 max-w-sm text-center text-xs text-fg-muted">
         {PROPRIETARY_NOTICE.map((line) => (
           <p key={line}>{line}</p>
         ))}

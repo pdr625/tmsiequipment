@@ -20,7 +20,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
+      <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-8 shadow-sm">
         <h1 className="mb-6 text-center text-xl font-semibold">Set a new password</h1>
 
         <form action={formAction} className="space-y-4">
@@ -34,13 +34,13 @@ export default function ResetPasswordPage() {
               type="password"
               autoComplete="new-password"
               required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-line-strong px-3 py-2 text-sm"
               placeholder="••••••••"
             />
           </div>
 
           {state?.error && (
-            <p role="alert" className="text-sm text-red-600">
+            <p role="alert" className="text-sm text-danger">
               {state.error}
             </p>
           )}
@@ -48,7 +48,7 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             disabled={pending}
-            className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
           >
             {pending ? 'Saving…' : 'Save new password'}
           </button>

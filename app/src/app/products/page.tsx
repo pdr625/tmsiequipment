@@ -52,38 +52,38 @@ export default async function ProductsPage() {
         <div className="flex items-center gap-4">
           <a
             href="/products/export"
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+            className="rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
           >
             Export to Excel
           </a>
           {canManage && (
             <Link
               href="/products/new"
-              className="rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary"
             >
               New product
             </Link>
           )}
-          <Link href="/" className="text-sm text-gray-600 underline">
+          <Link href="/" className="text-sm text-fg-soft underline">
             Back
           </Link>
         </div>
       </div>
 
       {error && (
-        <p role="alert" className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="mb-4 rounded-md border border-danger bg-danger-soft p-3 text-sm text-danger">
           {error.message}
         </p>
       )}
 
       {!error && products?.length === 0 && (
-        <p className="text-sm text-gray-600">No products visible for your role.</p>
+        <p className="text-sm text-fg-soft">No products visible for your role.</p>
       )}
 
       {!error && products && products.length > 0 && (
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
+            <tr className="border-b border-line text-left text-fg-muted">
               <th className="py-2 pr-4">Product</th>
               <th className="py-2 pr-4">Type</th>
               <th className="py-2 pr-4">Status</th>
@@ -93,12 +93,12 @@ export default async function ProductsPage() {
           </thead>
           <tbody>
             {products.map((p) => (
-              <tr key={p.id} className="border-b border-gray-100">
+              <tr key={p.id} className="border-b border-line">
                 <td className="py-2 pr-4">
                   <Link href={`/products/${p.id}`} className="underline">
                     {p.name}
                   </Link>{' '}
-                  <span className="text-gray-400">({p.id})</span>
+                  <span className="text-fg-muted">({p.id})</span>
                 </td>
                 <td className="py-2 pr-4">{p.item_type}</td>
                 <td className="py-2 pr-4">{p.status}</td>

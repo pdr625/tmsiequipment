@@ -26,9 +26,9 @@ type Proposal = {
 type Profile = { user_id: string; email: string | null };
 
 const STATUS_STYLE: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
+  pending: 'bg-warning-soft text-warning',
+  approved: 'bg-success-soft text-success',
+  rejected: 'bg-danger-soft text-danger',
 };
 
 // payload is a free-form jsonb blob (one shape per target_table, see 0007
@@ -119,29 +119,29 @@ export default async function ProposalsPage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Proposals</h1>
-        <Link href="/" className="text-sm text-gray-600 underline">
+        <Link href="/" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>
-      <p className="mb-6 text-xs text-gray-500">
+      <p className="mb-6 text-xs text-fg-muted">
         Changes to published prices go through here before they take effect. Approve or reject
         with a reason — approving materialises the change as a new, append-only entry, it never
         edits history; rejecting leaves the current value untouched.
       </p>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Pending ({pending.length})</h2>
-        {pending.length === 0 && <p className="text-sm text-gray-500">Nothing pending.</p>}
+        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Pending ({pending.length})</h2>
+        {pending.length === 0 && <p className="text-sm text-fg-muted">Nothing pending.</p>}
         <PendingQueue items={pendingItems} />
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Decided (most recent 200)</h2>
-        {decided.length === 0 && <p className="text-sm text-gray-500">No decisions yet.</p>}
+        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Decided (most recent 200)</h2>
+        {decided.length === 0 && <p className="text-sm text-fg-muted">No decisions yet.</p>}
         {decided.length > 0 && (
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-fg-muted">
                 <th className="py-2 pr-4">Target</th>
                 <th className="py-2 pr-4">Change</th>
                 <th className="py-2 pr-4">Status</th>
@@ -151,10 +151,10 @@ export default async function ProposalsPage() {
             </thead>
             <tbody>
               {decided.map((p) => (
-                <tr key={p.id} className="border-b border-gray-100 align-top">
+                <tr key={p.id} className="border-b border-line align-top">
                   <td className="py-2 pr-4">
                     {p.target_table}
-                    {p.branch_id && <div className="text-xs text-gray-500">{p.branch_id}</div>}
+                    {p.branch_id && <div className="text-xs text-fg-muted">{p.branch_id}</div>}
                   </td>
                   <td className="py-2 pr-4">{formatPayload(p)}</td>
                   <td className="py-2 pr-4">
@@ -163,7 +163,7 @@ export default async function ProposalsPage() {
                   <td className="py-2 pr-4">
                     {userLabel(p.decided_by)}
                     {p.status === 'approved' && p.decided_by === p.proposed_by && (
-                      <div className="text-xs text-gray-400">self-approved</div>
+                      <div className="text-xs text-fg-muted">self-approved</div>
                     )}
                   </td>
                   <td className="py-2 pr-4">{p.decision_reason ?? '—'}</td>

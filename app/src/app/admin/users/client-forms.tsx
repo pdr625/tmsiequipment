@@ -44,19 +44,19 @@ export function InviteForm() {
           name="email"
           type="email"
           required
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="rounded-md border border-line-strong px-3 py-2 text-sm"
           placeholder="name@example.test"
         />
       </div>
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? 'Sending…' : 'Send invite'}
       </button>
       <ErrorText state={state} />
-      {state && 'success' in state && <p className="text-xs text-green-700">Invite sent.</p>}
+      {state && 'success' in state && <p className="text-xs text-success">Invite sent.</p>}
     </form>
   );
 }
@@ -75,8 +75,8 @@ export function AddRoleForm({
     <form action={formAction} className="mt-2 flex flex-wrap items-end gap-2">
       <input type="hidden" name="user_id" value={userId} />
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Role</label>
-        <select name="role" required className="rounded-md border border-gray-300 px-2 py-1 text-xs">
+        <label className="mb-1 block text-xs text-fg-muted">Role</label>
+        <select name="role" required className="rounded-md border border-line-strong px-2 py-1 text-xs">
           {ROLES.map((r) => (
             <option key={r} value={r}>
               {r}
@@ -85,8 +85,8 @@ export function AddRoleForm({
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Branch (sales / branch_manager)</label>
-        <select name="branch_id" className="rounded-md border border-gray-300 px-2 py-1 text-xs">
+        <label className="mb-1 block text-xs text-fg-muted">Branch (sales / branch_manager)</label>
+        <select name="branch_id" className="rounded-md border border-line-strong px-2 py-1 text-xs">
           <option value="">—</option>
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
@@ -96,8 +96,8 @@ export function AddRoleForm({
         </select>
       </div>
       <div>
-        <label className="mb-1 block text-xs text-gray-500">Channel (agent)</label>
-        <select name="channel_id" className="rounded-md border border-gray-300 px-2 py-1 text-xs">
+        <label className="mb-1 block text-xs text-fg-muted">Channel (agent)</label>
+        <select name="channel_id" className="rounded-md border border-line-strong px-2 py-1 text-xs">
           <option value="">—</option>
           {channels.map((c) => (
             <option key={c.id} value={c.id}>
@@ -109,7 +109,7 @@ export function AddRoleForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium disabled:opacity-50"
+        className="rounded-md border border-line-strong px-2 py-1 text-xs font-medium disabled:opacity-50"
       >
         {pending ? 'Adding…' : 'Add role'}
       </button>
@@ -123,7 +123,7 @@ export function RemoveRoleButton({ roleId }: { roleId: number }) {
   return (
     <form action={formAction} className="inline">
       <input type="hidden" name="role_id" value={roleId} />
-      <button type="submit" disabled={pending} className="text-xs text-red-600 underline disabled:opacity-50">
+      <button type="submit" disabled={pending} className="text-xs text-danger underline disabled:opacity-50">
         remove
       </button>
       <ErrorText state={state} />
@@ -143,7 +143,7 @@ export function BanToggleButton({ userId, banned }: { userId: string; banned: bo
         type="submit"
         disabled={pending}
         className={`rounded-md border px-2 py-1 text-xs font-medium disabled:opacity-50 ${
-          banned ? 'border-green-300 text-green-700' : 'border-red-300 text-red-700'
+          banned ? 'border-success text-success' : 'border-danger text-danger'
         }`}
       >
         {pending ? '…' : banned ? 'Reactivate' : 'Disable'}
@@ -162,7 +162,7 @@ export function ResetPasswordForm({ userId }: { userId: string }) {
   const [mode, setMode] = useState<'generate' | 'manual'>('generate');
 
   return (
-    <form action={formAction} className="mt-2 border-t border-gray-100 pt-2">
+    <form action={formAction} className="mt-2 border-t border-line pt-2">
       <input type="hidden" name="user_id" value={userId} />
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex items-center gap-3 text-xs">
@@ -193,25 +193,25 @@ export function ResetPasswordForm({ userId }: { userId: string }) {
             type="password"
             autoComplete="new-password"
             placeholder="New password"
-            className="rounded-md border border-gray-300 px-2 py-1 text-xs"
+            className="rounded-md border border-line-strong px-2 py-1 text-xs"
           />
         )}
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium disabled:opacity-50"
+          className="rounded-md border border-line-strong px-2 py-1 text-xs font-medium disabled:opacity-50"
         >
           {pending ? 'Resetting…' : 'Reset password'}
         </button>
       </div>
       <ErrorText state={state} />
       {state && 'success' in state && !state.generatedPassword && (
-        <p className="mt-1 text-xs text-green-700">Password reset. The user must change it at next login.</p>
+        <p className="mt-1 text-xs text-success">Password reset. The user must change it at next login.</p>
       )}
       {state && 'success' in state && state.generatedPassword && (
-        <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs">
-          <p className="mb-1 font-medium text-amber-800">Shown once — copy it now, it will not be shown again:</p>
-          <code className="block break-all rounded bg-white px-2 py-1 font-mono">{state.generatedPassword}</code>
+        <div className="mt-2 rounded-md border border-warning bg-warning-soft p-2 text-xs">
+          <p className="mb-1 font-medium text-warning">Shown once — copy it now, it will not be shown again:</p>
+          <code className="block break-all rounded bg-surface px-2 py-1 font-mono">{state.generatedPassword}</code>
         </div>
       )}
     </form>

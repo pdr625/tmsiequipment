@@ -30,7 +30,7 @@ export function ConfirmForm({
       {code && <input type="hidden" name="code" value={code} />}
 
       {state?.error && (
-        <p role="alert" className="mb-4 text-sm text-red-600">
+        <p role="alert" className="mb-4 text-sm text-danger">
           {state.error}
         </p>
       )}
@@ -38,7 +38,7 @@ export function ConfirmForm({
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
       >
         {pending ? 'Confirming…' : type === 'invite' ? 'Accept invite' : 'Confirm'}
       </button>

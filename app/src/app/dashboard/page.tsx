@@ -71,9 +71,9 @@ function WarnBadge({ children }: { children: React.ReactNode }) {
 
 function Tile({ label, value, warn }: { label: string; value: number | string; warn?: boolean }) {
   return (
-    <div className={`rounded-lg border p-4 ${warn ? '' : 'border-gray-200'}`} style={warn ? { borderColor: 'var(--state-warn-border)' } : undefined}>
+    <div className={`rounded-lg border p-4 ${warn ? '' : 'border-line'}`} style={warn ? { borderColor: 'var(--state-warn-border)' } : undefined}>
       <div className="text-2xl font-semibold">{value}</div>
-      <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+      <div className="mt-1 flex items-center gap-2 text-xs text-fg-muted">
         <span>{label}</span>
         {warn && <WarnBadge>needs review</WarnBadge>}
       </div>
@@ -188,13 +188,13 @@ export default async function DashboardPage() {
     <div className="dashboard-charts mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Dashboard</h1>
-        <Link href="/" className="text-sm text-gray-600 underline">
+        <Link href="/" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Products by status</h2>
+        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Products by status</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {STATUSES.map((s) => (
             <Tile key={s} label={s} value={statusCounts.get(s) ?? 0} warn={s === 'review'} />
@@ -203,7 +203,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Average margin by branch</h2>
+        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Average margin by branch</h2>
         <BarChart
           title="Average margin"
           data={marginData}
@@ -213,26 +213,26 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">Exchange rate freshness</h2>
-        {trackedCurrencies.length === 0 && <p className="text-sm text-gray-500">No data for this period.</p>}
+        <h2 className="mb-2 text-sm font-semibold text-fg-soft">Exchange rate freshness</h2>
+        {trackedCurrencies.length === 0 && <p className="text-sm text-fg-muted">No data for this period.</p>}
         {trackedCurrencies.length > 0 && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {trackedCurrencies.map((code) => {
               const rate = freshestByCurrency.get(code);
               if (!rate) {
                 return (
-                  <div key={code} className="rounded-lg border border-gray-200 p-4">
+                  <div key={code} className="rounded-lg border border-line p-4">
                     <div className="text-sm font-medium">{code}</div>
-                    <div className="mt-1 text-xs text-gray-500">no rate on file</div>
+                    <div className="mt-1 text-xs text-fg-muted">no rate on file</div>
                   </div>
                 );
               }
               const age = ageDays(rate.effective_date);
               const stale = age > STALE_RATE_DAYS;
               return (
-                <div key={code} className={`rounded-lg border p-4 ${stale ? '' : 'border-gray-200'}`} style={stale ? { borderColor: 'var(--state-warn-border)' } : undefined}>
+                <div key={code} className={`rounded-lg border p-4 ${stale ? '' : 'border-line'}`} style={stale ? { borderColor: 'var(--state-warn-border)' } : undefined}>
                   <div className="text-sm font-medium">{code}</div>
-                  <div className="mt-1 text-xs text-gray-500">
+                  <div className="mt-1 text-xs text-fg-muted">
                     {age} day{age === 1 ? '' : 's'} old (effective {rate.effective_date})
                   </div>
                   {stale && (
@@ -249,19 +249,19 @@ export default async function DashboardPage() {
 
       <section className="mb-8">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Active price overrides</h2>
-          <Link href="/overrides" className="text-xs text-gray-600 underline">
+          <h2 className="text-sm font-semibold text-fg-soft">Active price overrides</h2>
+          <Link href="/overrides" className="text-xs text-fg-soft underline">
             Manage overrides
           </Link>
         </div>
         <div className="mb-3">
           <Tile label="active overrides" value={activeOverrides.length} />
         </div>
-        {activeOverrides.length === 0 && <p className="text-sm text-gray-500">No active overrides.</p>}
+        {activeOverrides.length === 0 && <p className="text-sm text-fg-muted">No active overrides.</p>}
         {activeOverrides.length > 0 && (
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-fg-muted">
                 <th className="py-2 pr-4">Product</th>
                 <th className="py-2 pr-4">Kind</th>
                 <th className="py-2 pr-4">Author</th>
@@ -270,7 +270,7 @@ export default async function DashboardPage() {
             </thead>
             <tbody>
               {activeOverrides.slice(0, OVERRIDES_LIST_LIMIT).map((o) => (
-                <tr key={o.id} className="border-b border-gray-100">
+                <tr key={o.id} className="border-b border-line">
                   <td className="py-2 pr-4">
                     <Link href={`/products/${o.product_id}`} className="underline">
                       {productById.get(o.product_id)?.name ?? o.product_id}
@@ -287,7 +287,7 @@ export default async function DashboardPage() {
           </table>
         )}
         {activeOverrides.length > OVERRIDES_LIST_LIMIT && (
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-fg-muted">
             +{activeOverrides.length - OVERRIDES_LIST_LIMIT} more — see{' '}
             <Link href="/overrides" className="underline">
               /overrides
@@ -299,18 +299,18 @@ export default async function DashboardPage() {
 
       <section>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Recent activity</h2>
-          <Link href="/audit" className="text-xs text-gray-600 underline">
+          <h2 className="text-sm font-semibold text-fg-soft">Recent activity</h2>
+          <Link href="/audit" className="text-xs text-fg-soft underline">
             Full audit log
           </Link>
         </div>
         {(!auditEntries || auditEntries.length === 0) && (
-          <p className="text-sm text-gray-500">No recent activity visible for your role.</p>
+          <p className="text-sm text-fg-muted">No recent activity visible for your role.</p>
         )}
         {auditEntries && auditEntries.length > 0 && (
           <ul className="space-y-1 text-sm">
             {auditEntries.map((a) => (
-              <li key={a.id} className="text-gray-600">
+              <li key={a.id} className="text-fg-soft">
                 {new Date(a.at).toLocaleString()} — {emailFor(a.actor)} — {a.action} {a.table_name} ({a.row_pk})
               </li>
             ))}

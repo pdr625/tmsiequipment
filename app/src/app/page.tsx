@@ -29,25 +29,25 @@ export default async function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+      <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-8 text-center shadow-sm">
         <h1 className="mb-2 text-xl font-semibold">{branding.displayName}</h1>
-        <p className="mb-6 text-sm text-gray-600">Signed in as {user?.email}</p>
+        <p className="mb-6 text-sm text-fg-soft">Signed in as {user?.email}</p>
         <MenuButton
           href="/prices"
-          className="mb-4 block w-full rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white"
+          className="mb-4 block w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-on-primary"
         >
           Price list
         </MenuButton>
         <MenuButton
           href="/products"
-          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+          className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
         >
           Products
         </MenuButton>
         {(readCosts || readLogistics) && (
           <MenuButton
             href="/config"
-            className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+            className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
           >
             Pricing configuration
           </MenuButton>
@@ -55,27 +55,27 @@ export default async function HomePage() {
         {readCosts && (
           <MenuButton
             href="/dashboard"
-            className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+            className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
           >
             Dashboard
           </MenuButton>
         )}
         <MenuButton
           href="/overrides"
-          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+          className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
         >
           Overrides
         </MenuButton>
         <MenuButton
           href="/proposals"
-          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+          className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
         >
           Proposals
         </MenuButton>
         {canReadAudit && (
           <MenuButton
             href="/audit"
-            className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+            className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
           >
             Audit log
           </MenuButton>
@@ -83,7 +83,7 @@ export default async function HomePage() {
         {(admin || canProducts) && (
           <MenuButton
             href="/import"
-            className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+            className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
           >
             Bulk import
           </MenuButton>
@@ -91,7 +91,7 @@ export default async function HomePage() {
         {admin && (
           <MenuButton
             href="/branches"
-            className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+            className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
           >
             Branches &amp; channels
           </MenuButton>
@@ -99,7 +99,7 @@ export default async function HomePage() {
         {admin && (
           <MenuButton
             href="/admin/users"
-            className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+            className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
           >
             User administration
           </MenuButton>
@@ -107,27 +107,27 @@ export default async function HomePage() {
         {admin && (
           <MenuButton
             href="/config/branding"
-            className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+            className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
           >
             Branding
           </MenuButton>
         )}
         <MenuButton
           href="/account/password"
-          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+          className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
         >
           Change password
         </MenuButton>
         <MenuButton
           href="/privacy"
-          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+          className="mb-4 block w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
         >
           Data processing notice
         </MenuButton>
         <form action="/logout" method="post">
           <button
             type="submit"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-medium"
+            className="w-full rounded-md border border-line-strong px-3 py-2 text-sm font-medium"
           >
             Sign out
           </button>

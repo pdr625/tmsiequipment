@@ -27,11 +27,11 @@ export default async function BrandingPage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Branding</h1>
-        <Link href="/" className="text-sm text-gray-600 underline">
+        <Link href="/" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>
-      <p className="mb-6 text-xs text-gray-500">
+      <p className="mb-6 text-xs text-fg-muted">
         Applied to the app&apos;s title/home page and to the Excel export and print view.
         Append-only, like the rest of this app&apos;s configuration: saving never edits a
         previous version, it takes effect immediately as a new one. This never needs approval

@@ -54,13 +54,13 @@ function ImportPanel({
     : undefined;
 
   return (
-    <section className="mb-10 rounded-lg border border-gray-200 p-4">
-      <h2 className="mb-1 text-sm font-semibold text-gray-700">{title}</h2>
-      <p className="mb-3 text-xs text-gray-500">{hint}</p>
+    <section className="mb-10 rounded-lg border border-line p-4">
+      <h2 className="mb-1 text-sm font-semibold text-fg-soft">{title}</h2>
+      <p className="mb-3 text-xs text-fg-muted">{hint}</p>
 
       <input type="file" accept=".csv,text/csv" onChange={onFile} className="mb-3 block text-sm" />
-      {parseError && <p role="alert" className="mb-3 text-sm text-red-600">{parseError}</p>}
-      {rows && <p className="mb-3 text-xs text-gray-500">{rows.length} linhas lidas de {filename}.</p>}
+      {parseError && <p role="alert" className="mb-3 text-sm text-danger">{parseError}</p>}
+      {rows && <p className="mb-3 text-xs text-fg-muted">{rows.length} linhas lidas de {filename}.</p>}
 
       {rows && (
         <form action={previewFormAction} className="mb-3">
@@ -69,7 +69,7 @@ function ImportPanel({
           <button
             type="submit"
             disabled={previewPending}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+            className="rounded-md border border-line-strong px-3 py-1.5 text-sm font-medium disabled:opacity-50"
           >
             {previewPending ? 'A validar…' : 'Pré-visualizar (não grava nada)'}
           </button>
@@ -77,11 +77,11 @@ function ImportPanel({
       )}
 
       {previewState && 'error' in previewState && (
-        <p role="alert" className="mb-3 rounded-md border border-red-300 bg-red-50 p-2 text-sm text-red-700">{previewState.error}</p>
+        <p role="alert" className="mb-3 rounded-md border border-danger bg-danger-soft p-2 text-sm text-danger">{previewState.error}</p>
       )}
 
       {previewErrors && previewErrors.length > 0 && (
-        <div className="mb-3 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+        <div className="mb-3 rounded-md border border-danger bg-danger-soft p-3 text-sm text-danger">
           <p className="mb-1 font-medium">Ficheiro rejeitado — nada foi gravado ({previewErrors.length} erro(s)):</p>
           <ul className="list-disc pl-5">
             {previewErrors.map((e, i) => (
@@ -92,7 +92,7 @@ function ImportPanel({
       )}
 
       {previewOk && (
-        <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm">
+        <div className="mb-3 rounded-md border border-line bg-surface-alt p-3 text-sm">
           <p className="font-medium">Pré-visualização:</p>
           <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-xs">{JSON.stringify(previewState && 'success' in previewState ? previewState.result : null, null, 2)}</pre>
         </div>
@@ -103,13 +103,13 @@ function ImportPanel({
           <input type="hidden" name="rows" value={JSON.stringify(rows)} />
           <input type="hidden" name="filename" value={filename} />
           <div className="flex-1">
-            <label className="mb-1 block text-xs text-gray-500">Motivo (obrigatório para gravar)</label>
-            <input name="reason" required placeholder="Ex.: carregamento inicial dos direitos aduaneiros" className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+            <label className="mb-1 block text-xs text-fg-muted">Motivo (obrigatório para gravar)</label>
+            <input name="reason" required placeholder="Ex.: carregamento inicial dos direitos aduaneiros" className="w-full rounded-md border border-line-strong px-2 py-1 text-sm" />
           </div>
           <button
             type="submit"
             disabled={commitPending}
-            className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-on-primary disabled:opacity-50"
           >
             {commitPending ? 'A gravar…' : 'Confirmar gravação'}
           </button>
@@ -117,10 +117,10 @@ function ImportPanel({
       )}
 
       {commitState && 'error' in commitState && (
-        <p role="alert" className="mt-3 rounded-md border border-red-300 bg-red-50 p-2 text-sm text-red-700">{commitState.error}</p>
+        <p role="alert" className="mt-3 rounded-md border border-danger bg-danger-soft p-2 text-sm text-danger">{commitState.error}</p>
       )}
       {commitState && 'success' in commitState && (
-        <div className="mt-3 rounded-md border border-green-300 bg-green-50 p-3 text-sm text-green-800">
+        <div className="mt-3 rounded-md border border-success bg-success-soft p-3 text-sm text-success">
           <p className="font-medium">Gravado.</p>
           <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-xs">{JSON.stringify(commitState.result, null, 2)}</pre>
         </div>
@@ -156,16 +156,16 @@ export function UndoBatchForm({ batchId }: { batchId: string }) {
   return (
     <form action={formAction} className="flex items-center gap-2">
       <input type="hidden" name="batch_id" value={batchId} />
-      <input name="reason" required placeholder="Motivo" className="w-40 rounded-md border border-gray-300 px-2 py-1 text-xs" />
+      <input name="reason" required placeholder="Motivo" className="w-40 rounded-md border border-line-strong px-2 py-1 text-xs" />
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-700 disabled:opacity-50"
+        className="rounded-md border border-danger px-2 py-1 text-xs text-danger disabled:opacity-50"
       >
         {pending ? '…' : 'Desfazer'}
       </button>
-      {state && 'error' in state && <span className="text-xs text-red-600">{state.error}</span>}
-      {state && 'success' in state && <span className="text-xs text-green-700">Desfeito.</span>}
+      {state && 'error' in state && <span className="text-xs text-danger">{state.error}</span>}
+      {state && 'success' in state && <span className="text-xs text-success">Desfeito.</span>}
     </form>
   );
 }

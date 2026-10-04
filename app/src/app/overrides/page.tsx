@@ -40,9 +40,9 @@ const KINDS = ['fx', 'fee', 'transport', 'duty', 'margin', 'coef'];
 const CHANNEL_KINDS = ['margin', 'transport'];
 
 const STATUS_STYLE: Record<string, string> = {
-  active: 'bg-green-100 text-green-700',
-  expired: 'bg-gray-100 text-gray-500',
-  future: 'bg-blue-100 text-blue-700',
+  active: 'bg-success-soft text-success',
+  expired: 'bg-surface-alt text-fg-muted',
+  future: 'bg-primary-soft text-primary-fg',
 };
 
 // Row visibility for price_overrides is entirely tmsi.overrides_read
@@ -100,28 +100,28 @@ export default async function OverridesPage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Overrides</h1>
-        <Link href="/" className="text-sm text-gray-600 underline">
+        <Link href="/" className="text-sm text-fg-soft underline">
           Back
         </Link>
       </div>
 
       <section className="mb-10">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <h2 className="text-sm font-semibold text-gray-700">Price overrides</h2>
+          <h2 className="text-sm font-semibold text-fg-soft">Price overrides</h2>
           {(pendingOverrideProposals?.length ?? 0) > 0 && (
-            <Link href="/proposals" className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
+            <Link href="/proposals" className="rounded bg-warning-soft px-2 py-0.5 text-xs text-warning">
               {pendingOverrideProposals?.length} pending approval
             </Link>
           )}
         </div>
-        <p className="mb-2 text-xs text-gray-500">
+        <p className="mb-2 text-xs text-fg-muted">
           Each replaces one engine input (fx / fee / transport / duty / margin / coef), never
           the result. To correct one, propose a new entry — never edit an existing override. It
           takes effect once approved.
         </p>
         <table className="mb-3 w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
+            <tr className="border-b border-line text-left text-fg-muted">
               <th className="py-2 pr-4">Product</th>
               <th className="py-2 pr-4">Scope</th>
               <th className="py-2 pr-4">Kind</th>
@@ -135,14 +135,14 @@ export default async function OverridesPage() {
             {priceOverrides?.map((o) => {
               const s = overrideStatus(o.valid_from, o.valid_to);
               return (
-                <tr key={o.id} className="border-b border-gray-100">
+                <tr key={o.id} className="border-b border-line">
                   <td className="py-2 pr-4">
                     <Link href={`/products/${o.product_id}`} className="underline">
                       {productName(o.product_id)}
                     </Link>
                   </td>
                   <td className="py-2 pr-4">
-                    {o.scope_id} {o.scope_type === 'channel' && <span className="text-xs text-gray-400">(channel)</span>}
+                    {o.scope_id} {o.scope_type === 'channel' && <span className="text-xs text-fg-muted">(channel)</span>}
                   </td>
                   <td className="py-2 pr-4">{o.kind}</td>
                   <td className="py-2 pr-4">{o.value}</td>
@@ -159,7 +159,7 @@ export default async function OverridesPage() {
           </tbody>
         </table>
         {(!priceOverrides || priceOverrides.length === 0) && (
-          <p className="mb-3 text-sm text-gray-500">No price overrides visible for your role.</p>
+          <p className="mb-3 text-sm text-fg-muted">No price overrides visible for your role.</p>
         )}
         {canWritePrice && (
           <PriceOverrideForm
@@ -173,8 +173,8 @@ export default async function OverridesPage() {
       </section>
 
       <section className="mb-10">
-        <h2 className="mb-2 text-sm font-semibold text-gray-700">HS code overrides</h2>
-        <p className="mb-2 text-xs text-gray-500">
+        <h2 className="mb-2 text-sm font-semibold text-fg-soft">HS code overrides</h2>
+        <p className="mb-2 text-xs text-fg-muted">
           Replaces which HS code is used for the customs duty lookup in a specific scope,
           instead of the product&apos;s own default. Only branch scope has any effect on
           calculations today — channel/agent scope exists in the schema but the pricing engine
@@ -182,7 +182,7 @@ export default async function OverridesPage() {
         </p>
         <table className="mb-3 w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
+            <tr className="border-b border-line text-left text-fg-muted">
               <th className="py-2 pr-4">Product</th>
               <th className="py-2 pr-4">Scope</th>
               <th className="py-2 pr-4">HS code</th>
@@ -191,7 +191,7 @@ export default async function OverridesPage() {
           </thead>
           <tbody>
             {hsOverrides?.map((o) => (
-              <tr key={`${o.product_id}-${o.scope_type}-${o.scope_id}`} className="border-b border-gray-100">
+              <tr key={`${o.product_id}-${o.scope_type}-${o.scope_id}`} className="border-b border-line">
                 <td className="py-2 pr-4">
                   <Link href={`/products/${o.product_id}`} className="underline">
                     {productName(o.product_id)}
@@ -200,7 +200,7 @@ export default async function OverridesPage() {
                 <td className="py-2 pr-4">
                   {o.scope_type}: {o.scope_id}
                   {o.scope_type !== 'branch' && (
-                    <span className="ml-2 rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
+                    <span className="ml-2 rounded bg-warning-soft px-2 py-0.5 text-xs text-warning">
                       no effect — scope not yet supported by the pricing engine
                     </span>
                   )}
@@ -211,7 +211,7 @@ export default async function OverridesPage() {
             ))}
           </tbody>
         </table>
-        {(!hsOverrides || hsOverrides.length === 0) && <p className="mb-3 text-sm text-gray-500">No HS overrides yet.</p>}
+        {(!hsOverrides || hsOverrides.length === 0) && <p className="mb-3 text-sm text-fg-muted">No HS overrides yet.</p>}
         {canWriteHs && <HsOverrideForm products={products ?? []} branches={branches ?? []} hsCodes={hsCodes ?? []} />}
       </section>
     </div>
