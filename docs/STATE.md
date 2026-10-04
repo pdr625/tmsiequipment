@@ -3,7 +3,12 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: menu lateral (tarefa 2 de 3 da apresentação) — 2026-10-04.** Revisão `a8885bd` em
+**Etapa actual: acabamento por página (tarefa 3 de 3 da apresentação) — 2026-10-05.** Revisão
+`27640ff` em produção (digest `sha256:bbb8b71ef187…`), migrações **ainda 0001–0021**, smoke
+**181/181** nos três modos (179 + 2). Só frontend, sem migração. Fecha o pacote «apresentação»
+(tema → menu lateral → acabamento). Detalhe: primeira secção abaixo.
+
+**Etapa anterior: menu lateral (tarefa 2 de 3 da apresentação) — 2026-10-04.** Revisão `a8885bd` em
 produção (digest `sha256:dc3ee589ca8a…`), migrações **ainda 0001–0021**, smoke **179/179** nos
 três modos (170 − 3 + 12: o bloco MM foi reescrito e nasceu o TT). Só frontend, sem migração. A
 tarefa 3 (acabamento por página) fica por fazer. Detalhe: primeira secção abaixo.
@@ -50,6 +55,53 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 05/10 — acabamento por página (2026-10-05)
+
+**Implantado:** revisão `27640ff`, digest
+`sha256:bbb8b71ef1871c6c5a12480011362170c1b4e03062b438339e2bc0373470e470` (o label
+`org.opencontainers.image.revision` = o commit), `healthy`, `/api/health` 200. CI #67 verde à
+primeira. **Sem migração.** Rollback:
+`sha256:dc3ee589ca8ad68b238effefe2acb7878b32205005e3789b1d0e9f3db4fdb138` (a do menu lateral);
+backup do compose em `deploy/supabase/docker-compose.yml.<timestamp>.bak`.
+
+**Método:** as páginas são muito regulares (125 `<th>`, 77 `<input>`, 34 `<button>`, 94 `<label>`
+iguais), por isso o acabamento foi sobretudo **CSS de base** em `globals.css` em vez de classes
+repetidas em ~250 elementos, mais um pequeno número de trocas de classe **com contagem esperada**.
+
+- **CSS de base** (camada `base`, qualquer utilitário explícito ganha): foco visível por teclado
+  (contorno de 2 px na cor primária; coral dentro do menu lateral, porque o cobalto não se lê sobre o
+  trilho); campos com fundo de «superfície» (no escuro destacam-se da página) e placeholder legível;
+  caixas e rádios na cor primária (`accent-color`); cursor certo nos botões, incluindo desactivados;
+  cabeçalhos de tabela em maiúsculas pequenas (o «eyebrow» do Itinera — todos os `th` são nomes curtos
+  de coluna, nenhum é cabeçalho de linha); números à direita em largura fixa; linha realçada ao passar
+  o rato.
+- **Trocas de classe, contagens verificadas:** títulos `h1` → `text-2xl font-bold tracking-tight` (19);
+  títulos de secção `h2` → `text-base font-semibold tracking-tight text-fg` (28, mais legíveis que o
+  cinzento pequeno de antes); botões primários com `hover:bg-primary-hover` (21); botões de contorno com
+  `hover:bg-surface-alt` (12); etiquetas de estado em pílula, `rounded-full … font-medium` (12). Um
+  duplicado (`font-medium font-medium`) apanhado e corrigido na revisão do diff.
+- **Saem 12 links «Back» para a página inicial** (o menu lateral substitui-os; a `/` só redirecciona).
+  Ficam os 2 que levam à lista de produtos, agora «← Products». Seis imports de `Link` ficaram sem uso e
+  foram retirados (um sétimo, em `prices/page.tsx`, apanhado por uma verificação de consistência
+  import↔uso). **Item 102 fechado.**
+- **Smoke 179 → 181** (bloco `TT`): nenhuma página autenticada tem um `<Link>` para `/`; o foco por
+  teclado está definido. **Ambas provadas a falhar.** A segunda **falhou à primeira na prova** — a
+  asserção era fraca (passava só com o `:focus-visible` do menu lateral); reforçada para exigir a regra
+  global e provada de novo com duas mutações.
+
+**Prova ao vivo (sem sessão):** o CSS publicado traz o `:focus-visible`, `text-transform:uppercase`,
+`tr:hover>td`, `accent-color:var(--primary)` e `hover:bg-primary-hover`; o `/login` mostra o título novo
+(`text-2xl font-bold tracking-tight`) e continua sem menu lateral. **Por HTTP/código, não por browser:**
+como as tabelas, os formulários e os botões **realmente se vêem** em cada página, nos dois temas,
+**fica para o Pedro, no browser.**
+
+**Não feito de propósito (o Pedro decide, ver BACKLOG 98 e 104):** bordas dos campos (1,5:1, item 98),
+largura dos contentores de página, cartões do dashboard, cabeçalho da marca no `/login`.
+
+**A confirmar pelo Pedro:** `/prices`, `/products`, `/config`, `/overrides`, `/proposals`, `/admin/users`
+e um formulário, em claro e em escuro: cabeçalhos de tabela, linha realçada, foco por teclado (Tab),
+botões com hover, etiquetas de estado, campos no escuro.
 
 ## Sessão 04/10 (tarde) — menu lateral no estilo do Itinera (2026-10-04)
 

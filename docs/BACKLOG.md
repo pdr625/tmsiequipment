@@ -1004,9 +1004,15 @@ continuam a fazer as suas chamadas a `getUser()`/`has_role()`/`can_read_costs()`
 `getMe()` **sem argumento** (partilhado com o layout) tira-lhes pedidos em vez de os somar. Medir
 antes e depois com `scripts/contar-pedidos.sh`.
 
-**102. Os links «Back» das páginas apontam para `/`, que agora redirecciona para `/prices`** —
-**REGISTADO 2026-10-04**, é a tarefa 3 (acabamento por página): com o menu lateral são redundantes e
-devem sair. Funcionam, só são estranhos.
+~~**102. Os links «Back» das páginas apontam para `/`, que agora redirecciona para `/prices`**~~ ✅
+**FECHADO 2026-10-05 — `27640ff`.** 12 removidos; ficam os 2 para a lista de produtos («← Products»).
+Bloco `TT` do smoke impede que voltem.
+
+**104. Acabamento visual: candidatos que ficaram de fora de propósito** — **REGISTADO 2026-10-05**,
+depois de o Pedro ver o resultado no browser decide-se o que vale a pena: (a) bordas dos campos a ~1,5:1
+(item 98); (b) largura dos contentores (`max-w-3xl`…`5xl`) agora que há menu lateral; (c) os cartões do
+dashboard, que têm cor de borda própria; (d) o `/login` e as páginas de recuperação, sem a «pílula»
+coral da marca; (e) estados vazios com um desenho em vez de uma linha cinzenta. Nenhum é defeito.
 
 **103. Admin e `viewer` sem conta de teste: as entradas do menu deles só estão provadas por código** —
 **REGISTADO 2026-10-04**. A equivalência `me().roles` ≡ `has_role()` foi provada ao vivo para os 6
