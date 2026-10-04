@@ -3,10 +3,13 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: acabamento por página (tarefa 3 de 3 da apresentação) — 2026-10-05.** Revisão
-`27640ff` em produção (digest `sha256:bbb8b71ef187…`), migrações **ainda 0001–0021**, smoke
-**181/181** nos três modos (179 + 2). Só frontend, sem migração. Fecha o pacote «apresentação»
-(tema → menu lateral → acabamento). Detalhe: primeira secção abaixo.
+**Etapa actual: impressão corrigida — orientação do utilizador e folha aproveitada — 2026-10-05.**
+Revisão `ef47f96` em produção (digest `sha256:f05015cb7f76…`), migrações **ainda 0001–0021**, smoke
+**183/183** nos três modos (181 + 2). Só CSS, sem migração. Detalhe: primeira secção abaixo.
+
+**Etapa anterior: acabamento por página (tarefa 3 de 3 da apresentação) — 2026-10-05.** Revisão
+`27640ff` (digest `sha256:bbb8b71ef187…`), smoke 181/181. Fechou o pacote «apresentação» (tema →
+menu lateral → acabamento).
 
 **Etapa anterior: menu lateral (tarefa 2 de 3 da apresentação) — 2026-10-04.** Revisão `a8885bd` em
 produção (digest `sha256:dc3ee589ca8a…`), migrações **ainda 0001–0021**, smoke **179/179** nos
@@ -55,6 +58,59 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 05/10 (noite) — impressão: orientação e aproveitamento da folha (2026-10-05)
+
+**Pedido do Pedro:** a impressão só saía em paisagem — escolher «Portrait» no diálogo não fazia
+diferença — e o espaço da folha não estava bem aproveitado.
+
+**Implantado:** revisão `ef47f96`, digest
+`sha256:f05015cb7f7656fcedc89a807f89052ba226f1a0c944f4e9ed42cb0aa845cd97` (label = commit), `healthy`,
+`/api/health` 200. CI #68 verde. **Sem migração, só CSS.** Rollback:
+`sha256:bbb8b71ef1871c6c5a12480011362170c1b4e03062b438339e2bc0373470e470` (a do acabamento).
+
+**Causa do «Portrait não faz nada»:** o i10 (2026-09-05) pôs `@page { size: landscape }` em
+`globals.css`. Uma regra de página **ganha sempre** à escolha do utilizador no diálogo de impressão —
+não era o botão nem o React, era esta linha. O comentário original justificava-a com «nenhuma classe
+Tailwind alcança um at-rule de página», o que continua verdade e é por isso que vive no CSS global.
+
+**O que mudou** (tudo no bloco `@media print` de `globals.css`, sem camada, por isso ganha aos
+utilitários do Tailwind sem `!important`):
+- `@page { size: auto; margin: 10mm 8mm }` — **manda a orientação (e o papel) que o utilizador
+  escolher**; margens pequenas e fixas em vez das ~1 cm + extras do padrão do browser.
+- O contentor da página (filho directo de `<main>`, `max-w-3xl`…`5xl` + `px-4 py-8` no ecrã) passa a
+  **ocupar a largura toda, sem margens** — antes o papel herdava um limite de largura que só faz sentido
+  num monitor.
+- **Letra base 12,5 px, e 11,5 px em retrato** (`@media print and (orientation: portrait)`): tudo o que é
+  `rem` — letra, folgas, larguras — escala junto, por isso é uma só alavanca em vez de mexer em cada
+  classe.
+- Células mais baixas (`0,2 rem` em cima/baixo em vez de `py-2`): mais linhas por folha — a lista
+  «All branches» tem ~283 linhas.
+- Uma linha **nunca parte entre duas folhas**; o **cabeçalho da tabela repete-se em cada folha**
+  (`thead` já existia nas duas tabelas do `/prices`); colunas numéricas **sem quebra**, para os valores
+  não ficarem a meio — a coluna do nome é a que cede.
+
+**O que NÃO foi possível fazer:** **ver a impressão.** Não há browser neste host e instalar um (ou
+puxar uma imagem de Chrome headless) com ~80 MB de RAM livre contraria as regras do VPS. A correcção
+está provada **por código e pelo CSS publicado**; o resultado em papel/PDF — em retrato **e** em
+paisagem — **fica para o Pedro, no browser.** Os tamanhos (12,5 / 11,5 px, margens, `0,2 rem`) são a
+primeira estimativa e podem precisar de afinação depois de ele ver o PDF.
+
+**Smoke 181 → 183** (bloco `TT`): a impressão não força a orientação (`@page size: auto`); o contentor
+ocupa a largura toda e a tabela repete o cabeçalho com linhas indivisíveis. **Seis mutações provadas**
+(voltar a `landscape`, forçar `portrait`, apagar o `@page`, contentor com largura máxima, cabeçalho não
+repetido, linhas partíveis). **A primeira versão da asserção falhou no CSS bom:** o regex lia também o
+texto do comentário que cita o defeito antigo (`@page { size: landscape }`) — passou a ignorar os
+comentários CSS antes de analisar, e as seis mutações foram repetidas.
+
+**Prova ao vivo (sem sessão):** o CSS publicado traz `@page{size:auto;margin:10mm 8mm}`, a regra de
+retrato, `main>div{max-width:none;margin:0;padding:0}`, `thead{display:table-header-group}` e
+`tr{break-inside:avoid}`; **não** traz `landscape`.
+
+**A confirmar pelo Pedro:** em `/prices`, Ctrl+P (ou o botão Print) → **Portrait** deve agora
+respeitar-se e **Landscape** também; ver quantas linhas cabem por folha, se o nome do artigo quebra
+bem, se o cabeçalho se repete na 2.ª folha e se o menu lateral/filtros não aparecem. Testar também
+«Save as PDF» e o ecrã em escuro (a impressão tem de sair clara).
 
 ## Sessão 05/10 — acabamento por página (2026-10-05)
 

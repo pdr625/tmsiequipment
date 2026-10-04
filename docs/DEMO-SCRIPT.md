@@ -23,7 +23,7 @@ deixa a app lenta — é a regra dos recursos do `~/atelier-vps/CLAUDE.md`):
 
 | # | Verificação | Comando / onde | O que deve dar |
 |---|---|---|---|
-| 1 | Smoke verde | `python3 scripts/smoke.py` (≥ 10 min antes — gera carga) | `181/181 passed` |
+| 1 | Smoke verde | `python3 scripts/smoke.py` (≥ 10 min antes — gera carga) | `183/183 passed` |
 | 2 | Host calmo | `ps -C claude` | **vazio** — sai do CLI depois do passo 1 |
 | 3 | Memória | `free -m` | `available` confortável (≥ 250 MB), swap sem subir |
 | 4 | App viva | `https://tmsiequipment.duckdns.org/api/health` | `200` |

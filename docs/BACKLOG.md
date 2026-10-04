@@ -1008,6 +1008,13 @@ antes e depois com `scripts/contar-pedidos.sh`.
 **FECHADO 2026-10-05 — `27640ff`.** 12 removidos; ficam os 2 para a lista de produtos («← Products»).
 Bloco `TT` do smoke impede que voltem.
 
+**105. Afinar a impressão depois de o Pedro ver o PDF** — **REGISTADO 2026-10-05**. A correcção da
+impressão (orientação do utilizador, folha aproveitada) está provada por código e pelo CSS publicado,
+**não por browser** — o VPS não tem um e não cabe lá. Os números (letra 12,5/11,5 px, margens 10×8 mm,
+células `0,2 rem`) são a primeira estimativa. Se o PDF mostrar linhas apertadas demais ou espaço por
+usar, é uma alteração de três valores em `globals.css`. Fora de âmbito (e do `/prices`): impressão de
+outras páginas só herda estas regras gerais, sem desenho próprio.
+
 **104. Acabamento visual: candidatos que ficaram de fora de propósito** — **REGISTADO 2026-10-05**,
 depois de o Pedro ver o resultado no browser decide-se o que vale a pena: (a) bordas dos campos a ~1,5:1
 (item 98); (b) largura dos contentores (`max-w-3xl`…`5xl`) agora que há menu lateral; (c) os cartões do
