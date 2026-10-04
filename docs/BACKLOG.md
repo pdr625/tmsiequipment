@@ -985,6 +985,19 @@ ecrã não disse nada). `updateSetting()` já devolvia `{success:true}`; faltava
 `SettingRow` (o ficheiro já usa este padrão noutro formulário). **Confirmado no browser pelo
 Pedro, 2026-10-03.**
 
+**98. Bordas de campos de formulário a ~1,5:1 (WCAG 1.4.11 pede 3:1)** — **REGISTADO 2026-10-04**,
+achado ao medir o contraste do tema. Não é regressão: `border-gray-300` (agora `border-line-strong`)
+já dava ~1,5:1 sobre branco, e o Itinera é igual. Tocar nisto muda o aspecto de todos os
+`<input>`/`<select>` (139 usos), por isso é decisão visual do Pedro, não ficou na tarefa do tema.
+
+**99. Itinera: `--color-text-muted` (`#94a3b8`) dá 2,56:1 sobre branco** — **REGISTADO 2026-10-04**,
+achado ao copiar a paleta para o TMSI. O TMSI usa `#5f6b7e` (4,86:1). Corrigir no Itinera
+(`public/css/tokens.css`) para as duas apps ficarem com o mesmo valor. Fora do repo do TMSI.
+
+**100. Seletor de tema provisório (botão flutuante)** — **REGISTADO 2026-10-04**, é intencional:
+passa para o rodapé do menu lateral na tarefa 2 do pacote de apresentação (menu lateral, depois
+acabamento por página). Se a tarefa 2 não avançar, o botão fica a flutuar sobre o conteúdo.
+
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
 remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e reset de
@@ -1453,7 +1466,8 @@ Detalhe completo:
 
 ## ⚪ Baixas — registadas, sem urgência
 
-**16.** Dark mode global (paleta dark já validada).
+~~**16.** Dark mode global (paleta dark já validada).~~ ✅ **FECHADO 2026-10-04 — `7979a96`.** Tema
+Auto/Light/Dark com a paleta do Itinera; ver `STATE.md`, «Sessão 04/10».
 **17.** `rrsync` na chave homelab→VPS (endurecimento).
 **19.** Varredura ~/.ssh dos dois hosts (item 13 do dossier — parque, não só TMSI).
 **20.** Swap do VPS — vigilância contínua (T8/tiles já o fazem; só agir se a tendência

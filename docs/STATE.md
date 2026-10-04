@@ -3,7 +3,13 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: sessão 03/10 — medições do Pedro registadas, logrotate e backups corrigidos,
+**Etapa actual: tema — paleta do Itinera, modo escuro e Geist (tarefa 1 de 3 da apresentação) —
+2026-10-04.** Revisão `7979a96` em produção (digest `sha256:4901a43c3807…`), migrações **ainda
+0001–0021**, smoke **170/170** nos três modos. Só frontend: nenhuma migração, nenhum pedido novo
+ao backend. Tarefas 2 (menu lateral) e 3 (acabamento por página) ficam por fazer. Detalhe: secção
+seguinte.
+
+**Etapa anterior: sessão 03/10 — medições do Pedro registadas, logrotate e backups corrigidos,
 lote de app pequeno — 2026-10-03.** Revisão `a5961a7` em produção (digest
 `sha256:477e01f146cb…`), migrações **ainda 0001–0021** (sem migração nesta sessão), smoke
 **170/170** nos três modos. Os itens 81/84/85/87/89/96/97 fecharam; 86/88/90-95 ficam para o
@@ -39,6 +45,57 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 04/10 — tema: paleta do Itinera, modo escuro, Geist (2026-10-04)
+
+**Pedido do Pedro:** o aspecto do TMSI era pouco apelativo (cinzentos por omissão do Tailwind, botões
+pretos), sem modo escuro e sem identidade comum com o Itinera. Dividido em três tarefas; **esta é a
+primeira** (tokens e tema). Reverte a decisão de 2026-09-05 «Dark mode: removido, light-only» — o
+`ROADMAP.md` e o item 16 do `BACKLOG.md` já guardavam a paleta escura «validada» para este momento.
+
+**Implantado:** revisão `7979a96`, digest
+`sha256:4901a43c380735a05286b245225460cdbce9c823e40dc00796a6c66a83498d49` (o label
+`org.opencontainers.image.revision` da imagem = o commit), `healthy`, `/api/health` 200. **Sem
+migração.** CI #65 verde (build + typecheck). Digest anterior, para rollback:
+`sha256:477e01f146cb0935de55b0c68dc927b65917ab4bafb29ba396bbc4bb97b9f2bb`; backup do compose em
+`deploy/supabase/docker-compose.yml.<timestamp>.bak`.
+
+- **Tokens semânticos** em `globals.css` (`@theme inline` do Tailwind 4): `page`, `surface`,
+  `surface-alt`, `fg`/`fg-soft`/`fg-muted`, `line`/`line-strong`, `primary` (preenchimento) e
+  `primary-fg` (texto/ligações — diferentes no escuro), `accent`, `success`/`danger`/`warning` + `-soft`.
+  Claro = `tokens.css` do Itinera (cobalto `#1e40af`, coral `#ff5a36`, fundo `#fafaf7`).
+- **Uma divergência deliberada face ao Itinera: `--fg-muted` = `#5f6b7e`**, não `#94a3b8`. O do
+  Itinera dá **2,56:1** sobre branco (reprova o AA); no TMSI é texto de informação (133 usos). O mesmo
+  defeito existe no Itinera — item 99.
+- **Escuro:** derivado do azul-marinho da barra lateral do Itinera, medido par a par. Os valores dos
+  gráficos do dashboard são os que a E3-i8 deixou guardados em comentário, **não re-derivados**.
+  `scripts/contraste-tema.py` lê os valores do próprio `globals.css` e falha (exit 1) abaixo de 4,5:1;
+  **provado a falhar** com o `#94a3b8` do Itinera (3 pares, exit 1) e a passar com o valor real (0 falhas).
+- **36 classes de cor** (`gray-*`, `red-*`, `green-*`, `amber-*`…) trocadas por tokens em 34 ficheiros
+  por script com contagem esperada por classe (todas bateram; os dois desvios explicam-se pelo
+  `layout.tsx`, reescrito à mão). Não sobra nenhuma da paleta antiga.
+- **Seletor Auto → Light → Dark** (`theme-toggle.tsx`), guardado em `localStorage`; sem preferência
+  segue o sistema, também a meio da sessão. Script inline no `<head>` aplica `data-theme` antes da
+  primeira pintura (sem piscar) — o CSP do vhost já permite `'unsafe-inline'` em scripts. **Botão
+  flutuante provisório** (canto inferior direito, `print:hidden`): passa para o rodapé do menu lateral
+  na tarefa 2.
+- **Geist + JetBrains Mono via `next/font/google`**: descarregadas no build (CI) e servidas de
+  `/_next/static/media` — o CSP `font-src 'self'` fica **intacto** e não há pedidos a terceiros em
+  runtime (a `/privacy` continua verdadeira).
+- **Impressão sempre clara** (bloco `@media print` repõe os tokens claros, também nos gráficos).
+  `branding.primaryColor` e as fontes do branding **não mudam** — são marca do cliente nos documentos.
+- **Smoke 170/170 nos três modos** (default, `login`, `jwt` com credenciais «indisponíveis»). As
+  asserções estáticas do smoke tocam estrutura/lógica, não classes de cor — nenhuma partiu.
+
+**Prova ao vivo (sem sessão, na página pública `/login`):** o HTML tem o script do tema; zero classes
+`gray-` antigas; classes novas presentes (`bg-page`, `text-fg`, `bg-surface`, `border-line`); **zero
+referências a googleapis/gstatic**; as fontes referenciadas respondem 200 `font/woff2` do próprio
+domínio; o CSS publicado traz o bloco `data-theme=dark`, o `--fg-muted:#5f6b7e` e o `@media print`.
+**Por código/HTTP, não por browser:** o aspecto real (claro, escuro, alternar, sem piscar, impressão)
+**fica para o Pedro, no browser** — não se fabrica sessão (regra do projecto).
+
+**A confirmar pelo Pedro:** páginas autenticadas nos dois temas (sobretudo `/prices`, `/dashboard`,
+formulários), o seletor, e a pré-visualização de impressão de `/prices` com o ecrã em escuro.
 
 ## Sessão 03/10 — medições registadas, logrotate e backups corrigidos, lote pequeno (2026-10-03)
 

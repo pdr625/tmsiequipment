@@ -165,7 +165,7 @@ fazem sentido com o destino decidido.
 |---|---|---|
 | Piloto com utilizadores reais | Adiado; só contas `.test` até ao deployment final | 2026-09-05 |
 | Terceira perna do backup | Suspensa; as duas primeiras existem | 2026-09-06 |
-| Dark mode | Removido; app light-only | 2026-09-05 |
+| Dark mode | ~~Removido; app light-only~~ → **reposto** (Auto/Light/Dark, paleta do Itinera) | 2026-09-05 → 2026-10-04 |
 | `channels.margin_delta` | Largada na 0009 | 2026-09-09 |
 | `interco_fees` | Histórico; o motor deixou de a ler na 0012 | 2026-09-10 |
 | `branch_manager` aprovar config global | Em aberto, sem prazo (item 50) | 2026-09-16 |
