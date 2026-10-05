@@ -2303,8 +2303,9 @@ def block_theme():
     check("TT: na impressão o contentor da página ocupa a largura toda e a tabela repete o cabeçalho",
           _re.search(r"main\s*>\s*div\s*\{[^}]*max-width:\s*none", impressao) is not None
           and _re.search(r"thead\s*\{[^}]*display:\s*table-header-group", impressao) is not None
-          and _re.search(r"tr\s*\{[^}]*break-inside:\s*avoid", impressao) is not None,
-          "main > div sem max-width, thead repetido, linhas indivisíveis")
+          and _re.search(r"tbody\s+tr\s*\{[^}]*break-inside:\s*avoid", impressao) is not None
+          and _re.search(r"(?<!tbody )(?<![\w-])tr\s*\{[^}]*break-inside", impressao) is None,
+          "main > div sem max-width, thead repetido, só as linhas do tbody indivisíveis")
     check("TT: o foco por teclado é visível (:focus-visible definido)",
           _re.search(r"(?m)^\s*:focus-visible\s*\{[^}]*outline:\s*2px solid", css) is not None,
           ":focus-visible global (sem seletor à frente) com contorno de 2px")

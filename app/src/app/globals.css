@@ -198,8 +198,11 @@
  *    larguras — escala junto) e desce mais em retrato, onde a folha é mais
  *    estreita; `orientation` mede a folha escolhida, não o ecrã;
  *  - células mais baixas (mais linhas por folha);
- *  - uma linha nunca parte entre duas folhas, e o cabeçalho da tabela repete-se
- *    em cada folha (`thead` como grupo de cabeçalho);
+ *  - uma linha de DADOS nunca parte entre duas folhas, e o cabeçalho da tabela
+ *    repete-se em cada folha (`thead` como grupo de cabeçalho). O
+ *    `break-inside: avoid` é só nas linhas do `tbody`: a primeira versão
+ *    (2026-10-05) aplicava-o a todas as `tr`, incluindo a do cabeçalho, e o
+ *    cabeçalho deixou de se repetir a partir da 2.ª folha (visto pelo Pedro);
  *  - colunas numéricas sem quebra, para os valores não ficarem em duas linhas;
  *    a coluna do nome é a que cede e quebra. */
 @media print {
@@ -228,7 +231,7 @@
     display: table-header-group;
   }
 
-  tr {
+  tbody tr {
     break-inside: avoid;
   }
 
