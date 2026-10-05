@@ -141,7 +141,8 @@ sessões (regra do projecto).
 `/config` deve ver só as secções operacionais e a ser recusada em `/dashboard` e `/audit`; `finance` deve
 ver `/config` completo; `branch_manager` deve decidir só propostas da sua filial; a tua conta de admin deve
 ver tudo, incluindo os formulários de `/branches`. E, se quiseres o número, `scripts/contar-pedidos.sh` num
-carregamento de `/config` (era 9 + 1 do layout, esperado agora 5 + 1…).
+carregamento de `/config` — o esperado é **8 pedidos a menos** do que antes desta revisão (as 8 chamadas das
+guardas); o valor absoluto não está calculado, mede-se antes/depois.
 
 ## Sessão 05/10 (noite, 6.ª) — «Print options»: linhas por categoria de produto (2026-10-05)
 
