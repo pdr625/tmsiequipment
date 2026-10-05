@@ -28,6 +28,31 @@ Rendeu um número medido para o item 39 (163 entradas de configuração para 13 
 12,5/artigo) e um item novo, **44** (aprovação em lote para configuração global, achado de
 desenho, não resolvido).
 
+## Triagem do backlog — 2026-10-05
+
+Das **40** entradas sem marca de fecho, **9 estavam fechadas ou decididas** (marcadas abaixo, com a evidência de cada uma, verificada
+ao vivo na BD ou no código — não por memória) e **31 continuam abertas**. Das 31, **18 precisam de uma decisão tua**, **10 são trabalho
+de código** e **3 só se fecham com a tua medição ou o teu browser**. A extracção automática do backlog **não é fiável** (marcava como
+abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um item sem verificar o estado real.
+
+**Fechados / decididos / superados (9):** 8, 13, 56, 59, 60, 61, 62, 64, 74 — ver a nota no início de cada um.
+
+**Abertos — decisão tua, sem código (18):**
+- Política e negócio: **50** (`branch_manager` aprova configuração global?), **82** (`finance` escreve limiares de margem sem proposta), **27** (regra
+  dos 90 dias e notificações), **10** (overrides de canal/agente, parcial), **71** (`price_cache`, condicionado), **104** (acabamento visual), **98** (bordas dos campos).
+- Dependem de terceiros ou de dados teus: **32** (base do direito aduaneiro — aguarda o despachante), **7** (entregabilidade de e-mail), **11** (CPI L113-9),
+  **12** (handover §7), **52** e **53** (códigos SAP), **57** (3 contas reais sem papel — atribuir ou apagar), **95** (câmbios de teste de Setembro),
+  **107** (categorias duplicadas), **108** (3 produtos sem categoria).
+- Fronteira de segurança: **109** (Server Actions a delegar em `perms.ts`).
+
+**Abertos — trabalho de código (10):** **86** (validação de `settings`; `0` restrições hoje — migração 0022, depois da reunião de 13/10), **91** e **93** (cosméticos,
+bloco C), **94** (`audit_log` com autor nulo: **3313 de 6632**, subiu de 2669 de 5249 — quase tudo `DELETE` de manutenção/smoke), **83** (o smoke deixa o artigo fictício
+se rebentar a meio), **55** (a perna off-site não aparece na monitorização; só se mede a idade do dump local), **45**, **46**, **49** (apagar/anonimizar, exportar os
+próprios dados e reter 5 anos — a `/privacy` ainda diz que não existem), **63** (sete rotas cujo único gate é a RLS — endurecimento).
+
+**Abertos — só se fecham contigo (3):** **73** (medir os pedidos por página em runtime com `scripts/contar-pedidos.sh`; `/prices` está em 9), **103** (`viewer` sem utilizador),
+**105** (afinar a impressão depois de veres o PDF).
+
 ## Decisões do Pedro incorporadas
 - Admin pode forçar reset de password: manual OU temporária gerada única (nunca uma
   "default" fixa igual para todos), mostrada uma vez, com troca obrigatória no próximo login.
@@ -195,7 +220,7 @@ diferença entre elas é *quem consegue mentir*.
 limiar de alarme sai da cadência: em modo janela (diário), qualquer idade acima de ~30 h é
 anomalia; em modo semanal, acima de ~8 dias.
 
-**56. Cobertura de prova em falta: 0014 sem smoke, e 4 dos 8 papéis sem sessão automatizada** —
+~~**56. Cobertura de prova em falta: 0014 sem smoke, e 4 dos 8 papéis sem sessão automatizada**~~ ✅ **SUPERADO — triagem 2026-10-05.** O smoke tem o bloco `BB` (migração 0014, com a prova de que o `REVOKE` não é um no-op) e sessão automatizada para 6 dos 8 papéis (`sales`/`agent` desde 2026-09-23). Os 2 que faltam são decisões de desenho: o admin fica fora do smoke (a conta pessoal nunca entra) e o `viewer` não tem utilizador (item 103). _(texto original abaixo)_ —
 **REGISTADO 2026-09-19**, achado da auditoria (§5.2 do `docs/STATUS-REPORT-2026-09.md`). A 0014
 não tem **nenhuma** asserção no `scripts/smoke.py` — e a sua primeira versão foi um `REVOKE` ao
 nível da coluna que aplicou sem erro e **não fez nada**, exactamente o tipo de regressão que só
@@ -247,7 +272,7 @@ valor original restaurado). Efeitos secundários medidos e **ausentes**: os 37 c
 derivado. O desfazer repõe o valor exacto anterior de cada um dos 37, `Ytghuu` incluído.
 **Valores derivados, sujeitos a revisão humana na fase de produção**, por decisão do Pedro.
 
-**59. 🔴 FUGA DE MARGEM por função `SECURITY DEFINER` sem verificação de papel** — **ACHADO
+~~**59. 🔴 FUGA DE MARGEM por função `SECURITY DEFINER` sem verificação de papel**~~ ✅ **CORRIGIDO — 0016 — triagem 2026-10-05.** `branch_margin`, `override_value` e `fx_rate` só têm `EXECUTE` para `postgres` e `service_role`; `authenticated` e `anon` já não as chamam. Verificado ao vivo em 2026-10-05. _(texto original abaixo)_ — **ACHADO
 2026-09-19**, bloco A da sessão de fronteiras laterais. **Três funções não verificam o papel do
 chamador no corpo** e, sendo `SECURITY DEFINER`, lêem tabelas cuja RLS é `can_read_costs()` e
 devolvem o número à mesma:
@@ -269,7 +294,7 @@ nenhum terceiro tocou na API REST do TMSI em todo o período coberto pelos logs.
 dentro das três, ou revogar `EXECUTE` a quem não deve — **mexe em funções e privilégios, logo
 arrasta migração e execução formal do protocolo**. Decisão do Pedro, não tomada aqui.
 
-**60. `decide_price_proposal_batch` sem verificação de papel ao topo** — **ACHADO 2026-09-19.**
+~~**60. `decide_price_proposal_batch` sem verificação de papel ao topo**~~ ✅ **CORRIGIDO — 0016 — triagem 2026-10-05.** O corpo de `decide_price_proposal_batch` abre com «0016 (item 60): verificação de papel à entrada». Verificado ao vivo em 2026-10-05. _(texto original abaixo)_ — **ACHADO 2026-09-19.**
 Ao contrário de `decide_price_proposal`, que levanta `Forbidden`, a versão em lote não verifica
 o papel do chamador: protege-se só pela classificação de elegibilidade por proposta. **Essa
 classificação é eficaz** — medido com `logistics`, incluindo o caso adversarial de lhe entregar
@@ -278,7 +303,7 @@ valor em nenhuma entrada, `decided_count = 0` no caminho de escrita. **Mas cria 
 em `tmsi.decision_batches`**, atribuída a quem chamou, sem ter decidido nada. Não é fuga; é
 integridade e defesa em profundidade. Corrigir mexe na função → migração → decisão do Pedro.
 
-**61. `tmsi.settings` é legível por toda a gente, e contém política de margem** — **ACHADO
+~~**61. `tmsi.settings` é legível por toda a gente, e contém política de margem**~~ ✅ **CORRIGIDO — 0016 — triagem 2026-10-05.** A política `config_read` de `settings` é agora `(key !~~ 'margin\_%') OR can_read_costs()`: as chaves `margin_*` só as lê quem lê custos. Verificado ao vivo em 2026-10-05. _(texto original abaixo)_ — **ACHADO
 2026-09-19.** A política `config_read` de `settings` é `USING (true)`: qualquer autenticado lê
 as 6 chaves, entre elas `margin_min`, `margin_target` e `margin_good`. Medido: `sales` e `agent`,
 que não lêem mais nenhuma tabela de configuração, lêem esta. Não é margem de um artigo — é a
@@ -286,7 +311,7 @@ que não lêem mais nenhuma tabela de configuração, lêem esta. Não é margem
 o mesmo que saber o custo de um artigo. Por isso não o classifico como fuga: classifico-o como
 decisão do Pedro. Se for para fechar, é migração.
 
-**62. As quatro primitivas da fronteira não têm `search_path` pinado** — **ACHADO 2026-09-19.**
+~~**62. As quatro primitivas da fronteira não têm `search_path` pinado**~~ ✅ **CORRIGIDO — 0016 — triagem 2026-10-05.** `has_role`, `can_read_costs`, `my_branches` e `my_channels` têm `search_path=tmsi, pg_temp`. Verificado ao vivo em 2026-10-05. _(texto original abaixo)_ — **ACHADO 2026-09-19.**
 `has_role`, `can_read_costs`, `my_branches` e `my_channels` são `SECURITY DEFINER` **sem**
 `SET search_path`, contra a convenção que a própria 0002 instituiu depois de apanhar esse defeito
 em `audit()`. **Não é explorável hoje** — os corpos qualificam tudo, e `authenticated`/`anon` não
@@ -303,7 +328,7 @@ disparam **incondicionalmente** (`app/src/app/config/page.tsx:104-157`), incluin
 pelo mesmo motivo. As que se resolvem em código de app entram na sessão de correcções; as que
 pedirem migração ficam aqui.
 
-**64. 🔴 `compute_price` devolve o breakdown de custo a quem não tem sessão** —
+~~**64. 🔴 `compute_price` devolve o breakdown de custo a quem não tem sessão**~~ ✅ **CORRIGIDO — 0017 — triagem 2026-10-05.** `compute_price` chamado como `anon` (caminho real `authenticator`→`anon`, artigo `T-1001`) devolve `permission denied for function compute_price`; como `sales` devolve `total_cost_eur` nulo. Verificado ao vivo em 2026-10-05. _(texto original abaixo)_ —
 **ACHADO 2026-09-20**, teste adversarial da condição 3. Pior do que o item 59, e por mecanismo
 diferente: `POST /rest/v1/rpc/compute_price` **sem `Authorization` nenhum** devolve **200 com as
 20 colunas**, breakdown de custo inteiro incluído (`exw_local`, `fee`, `interco`, `transport`,
@@ -672,7 +697,7 @@ sessão; a página chama outra vez. As duas saídas têm custo próprio e a esco
 por viewport, e o de **hover** continuava (log de 24/09, 10:10). Os filtros passaram a
 `<FilterButton>` (`router.push` ao clique, sem `<Link>`); smoke `II` actualizado.
 
-**74. O `/auth/v1/user` duplicado por pedido — decisão pendente** — **2026-09-23**. O middleware
+~~**74. O `/auth/v1/user` duplicado por pedido — decisão pendente**~~ ✅ **SUPERADO para as páginas — triagem 2026-10-05.** As páginas deixaram de chamar `auth.getUser()` (usam o `me()` partilhado, `f52510d`): ficou só o do middleware. Resíduo de baixo impacto: 2 Server Actions (`propose-change.ts`, `config/branding/actions.ts`) e a rota `/api/branding/logo` ainda o chamam uma vez. _(texto original abaixo)_ — **2026-09-23**. O middleware
 corre `auth.getUser()` em **todos** os pedidos (matcher `/((?!_next/static|…))`) e a página corre
 outra vez. São dois *round-trips* ao GoTrue por carregamento, e o GoTrue é o serviço que mais
 sofre com concorrência (medido: 0,141 s isolado, 1,232 s sob a tempestade de *prefetch*).
@@ -1295,7 +1320,7 @@ em logs voltou limpo. Detalhe: `docs/STATE.md`.)
 dessa sessão — o espelho 1.14 já estava feito pela E5-HOMELAB, sinalização removida).
 **7. EOP / entregabilidade de email** *(decisão tua, sem pressa desde a i9)* — continua
 útil para recovery self-service; via TI a ponderar junto com o CPI.
-**8. Piloto com 2–3 colegas** *(ADIADO pelo Pedro, 2026-09-05 — decisão dele, não bloqueio
+~~**8. Piloto com 2–3 colegas**~~ ✅ **DECIDIDO — adiado — triagem 2026-10-05.** Piloto com utilizadores reais adiado pelo Pedro (`ROADMAP.md` §6, 2026-09-05): só contas `.test` até ao deployment final. Não é trabalho, é uma decisão tomada. _(texto original abaixo)_ *(ADIADO pelo Pedro, 2026-09-05 — decisão dele, não bloqueio
 técnico)* — onboarding por password temporária; recolha de feedback que informa a L2 e a
 i11+. Lado técnico pronto e testado ao vivo 2026-09-05 (achado real corrigido antes do guião
 — reset de admin não confirmava email de convite fresco, `docs/STATE.md`); guião
@@ -1350,7 +1375,7 @@ não há precedência nenhuma para decidir enquanto essa regra se mantiver. Se u
 direitos voltarem a aplicar-se a canais, a pergunta (a) reabre.
 **11. CPI L113-9 por escrito** — pré-condição E6; condiciona a via TI (7).
 **12. Questões do handover §7**: moeda escalões TBM (T2) · taxas SAP (C2, manual no piloto).
-**13. Terceira perna do backup** — **SUSPENSO, decisão do Pedro 2026-09-06** (hoje 2
+~~**13. Terceira perna do backup**~~ ✅ **DECIDIDO — suspenso — triagem 2026-10-05.** Terceira perna do backup suspensa pelo Pedro (`ROADMAP.md` §6, 2026-09-06): as duas primeiras existem. _(texto original abaixo)_ — **SUSPENSO, decisão do Pedro 2026-09-06** (hoje 2
 cópias/2 máquinas; liga a D-C/D-D do parque — sem prazo, sem próxima acção definida).
 ~~**14. Paginação/pesquisa nas listagens**~~ ✅ **fechado 2026-09-06.** A medição de 06/09
 do item 26 (3,50–7,25 s a 70 artigos) era mesmo INVÁLIDA (confundida pela própria sessão de

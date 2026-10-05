@@ -79,6 +79,31 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
 
+## Sessão 05/10 (noite, 8.ª) — triagem do backlog antigo (2026-10-05)
+
+**Pedido do Pedro:** triar o backlog antigo do TMSI. **Só documentação e provas — nenhum código, nenhum deploy, sem migração.**
+
+**Método:** a extracção automática do backlog **não é fiável** (marcava como abertas as fugas de margem 59/60/64, corrigidas na 0016/0017), por
+isso cada item foi **verificado contra a realidade** — a BD ao vivo (transacções revertidas, claims injectadas), o código, os scripts e a tabela de
+decisões do `ROADMAP.md` — e só depois classificado. Duas sondas minhas estavam mal feitas à primeira (uma subconsulta como `anon` falhou antes de
+chegar a chamar a função; uma assinatura de função errada) e foram refeitas antes de tirar conclusões.
+
+**Resultado: das 40 entradas sem marca de fecho, 9 estavam fechadas/decididas e 31 continuam abertas.**
+- **Fechadas com prova ao vivo (5):** 59, 60, 61, 62, 64 (migrações 0016 e 0017). Ex.: `compute_price` como `anon` → `permission denied for function`;
+  como `sales` → custo nulo; `config_read` já esconde `margin_*` de quem não lê custos; as 4 primitivas têm `search_path` pinado; as 3 funções do item 59
+  só executam por `postgres`/`service_role`; `0` funções de `tmsi` com `EXECUTE` a `PUBLIC`/`anon`.
+- **Superadas ou decididas (4):** 74 (as páginas já não chamam `auth.getUser()`), 56 (smoke `BB` cobre a 0014; 6 de 8 papéis com sessão), 8 e 13 (decisões
+  do Pedro no `ROADMAP.md` §6).
+- **Abertas — 18 precisam de decisão tua, 10 são trabalho de código, 3 só se fecham com a tua medição/browser.** A lista completa, por categoria, está
+  no topo do `BACKLOG.md` («Triagem do backlog — 2026-10-05»).
+
+**Três factos novos que a triagem encontrou (todos medidos hoje):** (1) o `audit_log` tem **3313 de 6632** linhas com autor nulo, mais do que as 2669 de 5249
+registadas no item 94 — são sobretudo `DELETE` de manutenção (`price_proposals` 1460, `products` 604, `price_overrides` 396) e `INSERT` de produtos de smoke;
+(2) as **3 contas reais sem papel** do item 57 continuam lá (não são contas de teste); (3) os **câmbios de teste de Setembro** do item 95 continuam em
+`exchange_rates`, e `settings` continua com **0 restrições** de validação (item 86).
+
+**O que a triagem NÃO resolve:** os 31 abertos continuam abertos. Os que são decisões tuas (política, dados, terceiros) não têm trabalho de código à espera.
+
 ## Sessão 05/10 (noite, 7.ª) — páginas com `getMe()` partilhado (item 101) (2026-10-05)
 
 **Pedido do Pedro:** migrar as páginas para o `getMe()`.
