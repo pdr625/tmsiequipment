@@ -920,13 +920,16 @@ código de saída só reflecte o último comando) — mas o sentido do erro aí 
 hipótese não purga (acumula), nunca apaga a mais. Registado no item 84, não corrigido (não
 precisa).
 
-**88. A página inicial é pesada: 16× `has_role`, 8× `v_current_branding` por «Back»** —
+~~**88. A página inicial é pesada: 16× `has_role`, 8× `v_current_branding` por «Back»**~~ ✅ **FECHADO 2026-10-05.** —
 **REGISTADO 2026-10-03, achado do Pedro.** O menu decide a visibilidade item a item
 (`isAdmin`/`canManageProducts`/`pricingConfigReadAccess`/`canReadAuditLog`, cada uma com o seu
 `has_role` próprio) em vez de uma só chamada a `tmsi.me()`, e `getBranding()` não está
 deduplicado nesse caminho (ao contrário do `/prices`, onde o item 73 já o envolveu em `cache()`).
 **Bloco C (depois da reunião):** página inicial com `me()` e `getBranding()` em `cache()`.
 Prova: `scripts/contar-pedidos.sh` num «Back» → ≤ 3 pedidos.
+SUPERADO pelo menu lateral (tarefa 2, `a8885bd`): a página inicial deixou de ser um menu, `/` redirecciona para `/prices`,
+as ~16 chamadas `has_role` e as 8 leituras de branding desse ecrã desapareceram, e os links «Back» saíram (tarefa 3, `27640ff`).
+As páginas também deixaram de pagar guardas próprias (`f52510d`, item 101).
 
 ~~**89. `/products/[id]`: `Total cost (EUR)` com até 14 decimais**~~ ✅ **FECHADO
 2026-10-03 — `a5961a7`.** Mesmos `eur()`/`pct()` do `/prices` (item 72), aplicados a
@@ -990,9 +993,13 @@ achado ao medir o contraste do tema. Não é regressão: `border-gray-300` (agor
 já dava ~1,5:1 sobre branco, e o Itinera é igual. Tocar nisto muda o aspecto de todos os
 `<input>`/`<select>` (139 usos), por isso é decisão visual do Pedro, não ficou na tarefa do tema.
 
-**99. Itinera: `--color-text-muted` (`#94a3b8`) dá 2,56:1 sobre branco** — **REGISTADO 2026-10-04**,
+~~**99. Itinera: `--color-text-muted` (`#94a3b8`) dá 2,56:1 sobre branco**~~ ✅ **FECHADO 2026-10-05.** — **REGISTADO 2026-10-04**,
 achado ao copiar a paleta para o TMSI. O TMSI usa `#5f6b7e` (4,86:1). Corrigir no Itinera
 (`public/css/tokens.css`) para as duas apps ficarem com o mesmo valor. Fora do repo do TMSI.
+FECHADO no **Itinera**, não no TMSI: `--color-text-muted` passou de `#94a3b8` para `#5b677a` (4,70:1 sobre todos os
+fundos claros dos tokens; o `#5f6b7e` do TMSI falha por um décimo sobre os fundos tingidos do Itinera). Commits `5a49dbd`
+(texto secundário), `61741cf` (etiquetas e mensagens) e `96dcf6d` (texto sobre o coral), em produção. Os dois valores diferem
+de forma imperceptível; alinhá-los é opcional (mudar o TMSI para `#5b677a` e actualizar o `scripts/contraste-tema.py`).
 
 ~~**100. Seletor de tema provisório (botão flutuante)**~~ ✅ **FECHADO 2026-10-04 — `a8885bd`.**
 Passou para o rodapé do menu lateral; flutuante só nas páginas sem menu.
