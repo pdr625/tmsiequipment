@@ -30,12 +30,12 @@ desenho, não resolvido).
 
 ## Triagem do backlog — 2026-10-05
 
-Das **40** entradas sem marca de fecho, **10 já estão fechadas ou decididas** (9 na triagem, mais o 57 fechado no mesmo dia) (marcadas abaixo, com a evidência de cada uma, verificada
-ao vivo na BD ou no código — não por memória) e **30 continuam abertas**. Das 30, **17 precisam de uma decisão tua**, **10 são trabalho
+Das **40** entradas sem marca de fecho, **11 já estão fechadas ou decididas** (9 na triagem, mais o 57 e o 94 fechados no mesmo dia) (marcadas abaixo, com a evidência de cada uma, verificada
+ao vivo na BD ou no código — não por memória) e **29 continuam abertas**. Das 29, **17 precisam de uma decisão tua**, **9 são trabalho
 de código** e **3 só se fecham com a tua medição ou o teu browser**. A extracção automática do backlog **não é fiável** (marcava como
 abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um item sem verificar o estado real.
 
-**Fechados / decididos / superados (10):** 8, 13, 56, 57, 59, 60, 61, 62, 64, 74 — ver a nota no início de cada um.
+**Fechados / decididos / superados (11):** 8, 13, 56, 57, 59, 60, 61, 62, 64, 74, 94 — ver a nota no início de cada um.
 
 **Abertos — decisão tua, sem código (17):**
 - Política e negócio: **50** (`branch_manager` aprova configuração global?), **82** (`finance` escreve limiares de margem sem proposta), **27** (regra
@@ -45,8 +45,8 @@ abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um i
   **107** (categorias duplicadas), **108** (3 produtos sem categoria).
 - Fronteira de segurança: **109** (Server Actions a delegar em `perms.ts`).
 
-**Abertos — trabalho de código (10):** **86** (validação de `settings`; `0` restrições hoje — migração 0022, depois da reunião de 13/10), **91** e **93** (cosméticos,
-bloco C), **94** (`audit_log` com autor nulo: **3314 de 6633**, subiu de 2669 de 5249 — quase tudo `DELETE` de manutenção/smoke; a eliminação do item 57 acrescentou 1), **83** (o smoke deixa o artigo fictício
+**Abertos — trabalho de código (9):** **86** (validação de `settings`; `0` restrições hoje — migração **0023** (a 0022 passou a ser o autor `system` do `audit_log`), depois da reunião de 13/10), **91** e **93** (cosméticos,
+bloco C), **83** (o smoke deixa o artigo fictício
 se rebentar a meio), **55** (a perna off-site não aparece na monitorização; só se mede a idade do dump local), **45**, **46**, **49** (apagar/anonimizar, exportar os
 próprios dados e reter 5 anos — a `/privacy` ainda diz que não existem), **63** (sete rotas cujo único gate é a RLS — endurecimento).
 
@@ -908,7 +908,7 @@ juntas; (c) a página inicial faz `getUser()` + `has_role` ×2 + `pricingConfigR
 `review_days = -5` foram **aceites pela app e pela BD** e ficaram em vigor (auditoria 19:09–19:10,
 `finance.test` como autor); repostos a `0,15` e `90` a seguir (a reposição também está na
 auditoria). Não há `CHECK` nenhum em `tmsi.settings` e `updateSetting`/`setPriceNotice` não
-validam a forma do valor, só o `JSON.parse`. **Base para a migração 0022 (bloco C, depois da
+validam a forma do valor, só o `JSON.parse`. **Base para a migração 0023 (bloco C, depois da
 reunião de 13/10):**
 - `margin_good`, `margin_min`, `margin_target` ∈ ]0, 1[, e `margin_min < margin_target <
   margin_good` (três números, uma ordem — a mesma que o `Alert` do motor assume sem verificar).
@@ -985,7 +985,7 @@ em bruto (é também o que o utilizador tem de escrever de volta — ver item 86
 nenhuma hoje). Um valor que é string por natureza (`fx_source`) não precisa de aspas visíveis
 num campo de texto. Sem prioridade.
 
-**94. `tmsi.audit_log` tem 2669 linhas (de 5249) com `actor` nulo — não só duas** —
+~~**94. `tmsi.audit_log` tem 2669 linhas (de 5249) com `actor` nulo — não só duas**~~ ✅ **FECHADO 2026-10-05 — migração 0022 (`d4dcda3`).** O gatilho `audit()` passa a gravar `coalesce(auth.uid(), tmsi.system_actor())`: fora de um pedido HTTP o autor é `system` (UUID fixo `00000000-0000-0000-0000-000000000001`, que **não é um utilizador**) e nunca nulo; uma restrição `NOT VALID` recusa nulos nas linhas novas. A causa era a prevista (sessões directas sem claims: fixture do smoke, migrações, cascatas) e a correcção está no gatilho, não nos scripts. **Medido:** os nulos pararam em **3328**, depois de 3 corridas completas do smoke (cada uma acrescentava dezenas); o HTTP real já assinava sempre bem. **Decisão tomada: o histórico NÃO se reescreveu** — as 3328 linhas antigas ficam com `actor` nulo e o `/audit` mostra-as como «system (legacy, no identity)»; relabelá-las é um passo à parte, só se o Pedro o pedir. O smoke (bloco `VV`) prova, em cada corrida, que não deixou nenhum nulo novo. _(texto original abaixo)_ —  —
 **REGISTADO 2026-10-03.** O Pedro viu duas (`products T-9698`, `price_proposals 1142`, ambas de
 24/09); **medido, a extensão real é muito maior**: 1865 `DELETE` + 804 de outras acções, de
 2026-09-05 a 2026-09-24, quase todas das próprias rotinas de manutenção (`scripts/smoke.py` a

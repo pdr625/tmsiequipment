@@ -79,6 +79,44 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
 
+## Sessão 05/10 (noite, 10.ª) — item 94: o autor nulo no `audit_log` (2026-10-05)
+
+**Pedido do Pedro:** tratar o item 94. **Mudança de base de dados (migração 0022) e de app (rótulo no `/audit`).**
+
+**Implantado:** revisão `d4dcda3`, digest `sha256:2108c19550fb8f782b7330964e81aa51fda1f1d857854b9ff6968265f2d2482a` (label = commit), `healthy`, CI #75 verde, smoke **215/215**
+nos três modos. **Migração 0022 aplicada** (backup antes: `tmsi-pre-0022-20261005-214916.dump`). Rollback de imagem: `sha256:1f4d43184446cae40230469fda9c5910ee8aa2730e59ad24d64e9bd6aed1889a`.
+Rollback da migração (se algum dia fosse preciso): repor o corpo antigo de `audit()` (`auth.uid()` em vez do `coalesce`), `drop constraint audit_log_actor_not_null`, `drop function tmsi.system_actor()`.
+
+**O problema, medido:** 3314 de 6633 linhas do `audit_log` com `actor` nulo, e a contagem **crescia todos os dias** (98 a 3/out, 210 a 4/out, 351 a 5/out). As 7 identidades que assinavam
+eram todas HTTP reais — o caminho da app já assinava sempre bem. Os nulos vinham **exclusivamente de sessões directas à BD sem claims**: o fixture do smoke, migrações, cascatas
+(a eliminação de uma conta no item 57), manutenção — porque o gatilho `audit()` grava `auth.uid()`, nulo fora de um pedido HTTP.
+
+**A solução está no gatilho, não nos scripts:** `audit()` grava `coalesce(auth.uid(), tmsi.system_actor())`; `system_actor()` devolve o UUID fixo `00000000-0000-0000-0000-000000000001`
+(**não é um utilizador**; `audit_log.actor` não tem chave estrangeira). Assim nenhuma sessão directa futura — do smoke, minha ou de ninguém — volta a gerar nulos, sem ensinar cada rotina
+a assinar. Uma restrição `audit_log_actor_not_null` **NOT VALID** impõe «nunca nulo» às linhas novas.
+
+**Decisão que tomei por ser a mais conservadora — a confirmar pelo Pedro: o histórico NÃO se reescreveu.** As 3328 linhas antigas ficam com `actor` nulo (alterar linhas de um registo de
+auditoria é a última coisa que um registo de auditoria deve fazer em silêncio) e o `/audit` mostra-as como «system (legacy, no identity)», e as novas como «system». Relabelá-las é um
+`UPDATE` deliberado e à parte; só se o Pedro o pedir.
+
+**Ensaio, backup e guardas (procedimento de migração do projecto):** backup novo e verificado; **ensaio** numa transacção revertida — sem claims assina `system`, com claims assina o utilizador
+real, um nulo directo é recusado com a mensagem da restrição, o histórico fica intacto (3328 antes e depois) e **resíduo zero** após o `ROLLBACK`; aplicada como `postgres` (não-superuser); a
+migração termina com `REVOKE` e a guarda do CLAUDE.md (nenhuma função de `tmsi` com `EXECUTE` a `PUBLIC`/`anon`) mais guardas próprias.
+
+**Resultado medido:** depois da migração e de **3 corridas completas do smoke**, os nulos continuam em **3328** (antes cresciam dezenas por corrida) e há 56 linhas assinadas `system`.
+
+**Smoke 206 → 215** (bloco `VV`, 9 asserções): o UUID é o mesmo na migração, em `app/src/lib/system-actor.ts` e na BD; o gatilho usa o `coalesce` e continua definer com `search_path` pinado; a restrição existe e é NOT VALID;
+escrita sem claims assina `system`; escrita com sessão assina o utilizador; nulo directo recusado; o `/audit` usa `actorLabel()`; a lógica do rótulo passa a prova em Node 24 (`scripts/prova-system-actor.mjs`); e —
+a que mais importa — **no fim de cada corrida o smoke prova que escreveu no `audit_log` e que nenhuma linha nova tem autor nulo**. Provas de que sabem falhar: as 4 de base de dados com a função e a restrição **revertidas
+dentro de uma transacção** (sem tocar na produção), a de fim de corrida com a base a 0 (apanha os 3328 antigos), e 5 mutações de ficheiros — todas apanhadas.
+
+**Dois deslizes meus, apanhados antes de sair:** (1) o bloco `VV` ficou com uma asserção que passava sempre (`… or True`), escrita à pressa — removida; uma verificação que não pode falhar dá falsa confiança; (2) o meu primeiro
+ensaio inseria numa tabela que **não é auditada** (`categories`), por isso não geraria linha nenhuma — passou a um `UPDATE` sem alteração em `transport_tiers`.
+
+**Numeração:** a 0022 estava reservada, só em texto, para a validação de `settings` (item 86); passou a **0023** (o `HANDOVER` e o `BACKLOG` foram actualizados; as menções à 0022 nas secções antigas deste ficheiro são registos históricos e ficam).
+
+**O que ainda NÃO está feito:** nada no `/audit` foi visto no browser (só HTTP e testes); o aspecto do rótulo fica para o Pedro.
+
 ## Sessão 05/10 (noite, 9.ª) — item 57: as contas sem papel (2026-10-05)
 
 **Pedido do Pedro:** tratar o item 57. **Só dados e um procedimento: nenhum código, nenhum deploy, sem migração.**
