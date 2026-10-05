@@ -1008,6 +1008,10 @@ antes e depois com `scripts/contar-pedidos.sh`.
 **FECHADO 2026-10-05 — `27640ff`.** 12 removidos; ficam os 2 para a lista de produtos («← Products»).
 Bloco `TT` do smoke impede que voltem.
 
+**106. Escolher o que se imprime (checkbox)** — **PEDIDO 2026-10-05**, por desenhar: depende de o Pedro
+escolher o que são «elementos» — colunas da tabela, linhas (produtos) ou blocos da página (cabeçalho,
+aviso, rodapé). Estimativa de esforço dada na conversa; ver `STATE.md`.
+
 **105. Afinar a impressão depois de o Pedro ver o PDF** — **REGISTADO 2026-10-05**. A correcção da
 impressão (orientação do utilizador, folha aproveitada) está provada por código e pelo CSS publicado,
 **não por browser** — o VPS não tem um e não cabe lá. Os números (letra 12,5/11,5 px, margens 10×8 mm,

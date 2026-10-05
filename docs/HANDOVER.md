@@ -14,7 +14,7 @@ migração pendente de aplicar e sem nenhum comando por correr no host. O bloco 
 
 ## 1. Onde isto está
 
-**Produção:** revisão `ef47f96`, digest `sha256:f05015cb7f76…`, `healthy` (tema + menu lateral + acabamento + impressão corrigida, 05/10). Migrações **ainda
+**Produção:** revisão `ff1a19d`, digest `sha256:f2830d40cad7…`, `healthy` (tema + menu lateral + acabamento + impressão corrigida, 05/10). Migrações **ainda
 0001–0021** (nenhuma migração nesta sessão). Smoke **183/183**, verde nos três modos.
 
 | | |

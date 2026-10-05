@@ -3,8 +3,12 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: impressão corrigida — orientação do utilizador e folha aproveitada — 2026-10-05.**
-Revisão `ef47f96` em produção (digest `sha256:f05015cb7f76…`), migrações **ainda 0001–0021**, smoke
+**Etapa actual: impressão — cabeçalho da tabela a repetir-se (2.ª correcção) — 2026-10-05.** Revisão
+`ff1a19d` em produção (digest `sha256:f2830d40cad7…`), smoke 183/183 nos três modos. Detalhe: primeira
+secção abaixo.
+
+**Etapa anterior: impressão corrigida — orientação do utilizador e folha aproveitada — 2026-10-05.**
+Revisão `ef47f96` (digest `sha256:f05015cb7f76…`), migrações **ainda 0001–0021**, smoke
 **183/183** nos três modos (181 + 2). Só CSS, sem migração. Detalhe: primeira secção abaixo.
 
 **Etapa anterior: acabamento por página (tarefa 3 de 3 da apresentação) — 2026-10-05.** Revisão
@@ -58,6 +62,39 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 05/10 (noite, 2.ª) — impressão: o cabeçalho da tabela não se repetia (2026-10-05)
+
+**Pedido do Pedro:** a impressão ficou boa (orientação e espaço), mas o cabeçalho da tabela **não se
+repetia** nas folhas seguintes. **Defeito meu:** a correcção anterior dizia que o cabeçalho repetia
+(`thead { display: table-header-group }`) e eu só tinha provado a regra, não o PDF.
+
+**Implantado:** revisão `ff1a19d`, digest
+`sha256:f2830d40cad779cd21202954f6b1de57ad5deb4b218727868307bc8af761c6c3` (label = commit), `healthy`,
+CI #69 verde, smoke **183/183** nos três modos. Só CSS. Rollback:
+`sha256:f05015cb7f7656fcedc89a807f89052ba226f1a0c944f4e9ed42cb0aa845cd97`.
+
+**Alteração:** `tr { break-inside: avoid }` → `tbody tr { break-inside: avoid }`. A regra anterior
+apanhava também a linha do `thead`; **hipótese**: o Chrome não repete um cabeçalho cuja linha é
+declarada indivisível. As linhas de dados continuam a não partir entre folhas.
+
+**⚠ É UMA HIPÓTESE, NÃO REPRODUZIDA.** Tentei renderizar a página num Chrome real (a página de teste com
+as classes exactas do `/prices` e o CSS de produção, `chromedp/headless-shell` com limite de 350 MB),
+**quatro vezes, e nunca arrancou neste host** — nem `--dump-dom` de uma página mínima terminou em 100 s,
+com quase zero CPU (à espera de algo, provavelmente o processo de GPU no contentor; com 1 vCPU e ~80 MB
+de RAM livres não insisti). Custou ~8 minutos e 535 MB de imagem, **removida**, sem contentores
+deixados e os 7 serviços de produção `healthy` durante todo o tempo. **Não voltar a tentar Chrome
+neste VPS** sem uma razão nova. O smoke prova a **regra** (`tbody tr`, nenhum `tr`/`thead tr` com
+`break-inside`), **não o PDF.** Se a 2.ª folha continuar sem cabeçalho, a próxima suspeita é a
+combinação `border-collapse: collapse` + linhas com borda no `tr` (o Chromium já teve defeitos aí);
+precisa de saber o navegador e a versão, e de um teste em papel.
+
+**Smoke:** a asserção `TT` da impressão passa a exigir `tbody tr` e a proibir `break-inside` em `tr`
+solto; **4 mutações provadas** (voltar a `tr`, linhas do `tbody` partíveis, cabeçalho não repetido, linha
+do `thead` indivisível).
+
+**A confirmar pelo Pedro:** imprimir `/prices` com mais de uma folha e ver se o cabeçalho aparece na 2.ª
+folha e seguintes. Se não, dizer o navegador e a versão.
 
 ## Sessão 05/10 (noite) — impressão: orientação e aproveitamento da folha (2026-10-05)
 
