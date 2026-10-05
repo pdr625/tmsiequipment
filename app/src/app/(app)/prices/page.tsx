@@ -8,7 +8,15 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getBranding, footerLines } from '@/lib/branding';
 import { PrintButton } from './print-button';
-import { PrintScope, PrintOptions, PrintHeaderRow, PrintFooterRow, type PrintColumn } from './print-scope';
+import {
+  PrintScope,
+  PrintOptions,
+  PrintHeaderRow,
+  PrintFooterRow,
+  PrintCategoriesNote,
+  type PrintColumn,
+} from './print-scope';
+import { SEM_CATEGORIA, type PrintCategory } from '@/lib/print-categorias';
 import { FilterButton } from './filter-button';
 import { alertaDe } from '@/lib/alert';
 import { getPriceNotice } from '@/lib/price-notice';
@@ -120,7 +128,7 @@ export default async function PricesPage({
           }>;
         })();
 
-  const [{ data: rows, error }, { data: branches }, { data: channels }] = await Promise.all([
+  const [{ data: rows, error }, { data: branches }, { data: channels }, { data: cats }] = await Promise.all([
     precos,
     supabase.schema('tmsi').from('branches').select('id, name').eq('active', true).order('id')
       .overrideTypes<Branch[], { merge: false }>(),
@@ -130,6 +138,12 @@ export default async function PricesPage({
     // not a filial with a different name.
     supabase.schema('tmsi').from('channels').select('id, name').eq('active', true).order('id')
       .overrideTypes<Channel[], { merge: false }>(),
+    // Nomes das categorias, para «Print options» (escolher linhas por categoria). 17 linhas, em
+    // paralelo com as outras — mas é UM pedido a mais ao backend: o /prices passou de 8 para 9
+    // (2026-10-05). A alternativa sem custo seria mostrar só os códigos (PUMP_SP, FOAMGEN_SP…),
+    // que não dizem nada a quem imprime.
+    supabase.schema('tmsi').from('categories').select('id, name').order('id')
+      .overrideTypes<{ id: string; name: string }[], { merge: false }>(),
   ]);
   const geradoPor = me?.full_name ?? '—';
 
@@ -163,6 +177,24 @@ export default async function PricesPage({
         pesoAmbito(a.branch_id) - pesoAmbito(b.branch_id) ||
         a.branch_id.localeCompare(b.branch_id),
     );
+
+  // Categorias presentes NESTA lista (já filtrada por filial/estado), na ordem em que a
+  // tabela as agrupa. Há produtos sem categoria (SEM_CATEGORIA) e categorias com o mesmo
+  // nome e códigos diferentes (PUMP/PUMPS, FOAMGEN/FOAM_GEN), por isso o rótulo leva o código.
+  const nomesCat = new Map((cats ?? []).map((c) => [c.id, c.name]));
+  const contagem = new Map<string, number>();
+  for (const r of visiveis) {
+    const id = r.category_id || SEM_CATEGORIA;
+    contagem.set(id, (contagem.get(id) ?? 0) + 1);
+  }
+  const categorias: PrintCategory[] = [...contagem.entries()].map(([id, count]) => {
+    const nome = nomesCat.get(id);
+    return {
+      id,
+      count,
+      label: id === SEM_CATEGORIA ? 'Uncategorised' : nome && nome !== id ? `${nome} (${id})` : id,
+    };
+  });
 
   // Formatação: o custo a duas casas (é dinheiro), a margem em percentagem
   // (está guardada como fracção — 0,15 é o margin_min das settings).
@@ -208,6 +240,7 @@ export default async function PricesPage({
           Generated: {generatedAt.toISOString()} by {geradoPor}
         </p>
       </div>
+      <PrintCategoriesNote />
       {aviso && (
         <p role="note" className="mt-2 text-xs text-warning">
           ⓘ {aviso}
@@ -231,6 +264,7 @@ export default async function PricesPage({
     <PrintScope
       variant={canReadCosts ? 'costs' : 'sales'}
       columns={canReadCosts ? COLS_COSTS : COLS_SALES}
+      categories={categorias}
       className="mx-auto max-w-5xl px-4 py-8"
     >
       <div className="mb-6 flex items-center justify-between print:hidden">
@@ -337,6 +371,7 @@ export default async function PricesPage({
             {(visiveis as LinhaPreco[]).map((r) => (
               <tr
                 key={`${r.product_id}-${r.branch_id}-${r.scope_type ?? 'b'}`}
+                data-cat={r.category_id || SEM_CATEGORIA}
                 className="border-b border-line"
               >
                 <td className="py-2 pr-4">
@@ -384,7 +419,11 @@ export default async function PricesPage({
           </thead>
           <tbody>
             {(visiveis as LinhaPreco[]).map((r) => (
-              <tr key={`${r.product_id}-${r.branch_id}`} className="border-b border-line">
+              <tr
+                key={`${r.product_id}-${r.branch_id}`}
+                data-cat={r.category_id || SEM_CATEGORIA}
+                className="border-b border-line"
+              >
                 <td className="py-2 pr-4">
                   <span className="font-medium">{r.product_id}</span>
                   <span className="text-fg-soft"> — {r.name}</span>

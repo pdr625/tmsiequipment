@@ -2383,6 +2383,44 @@ def block_print_options():
           'className="hidden print:table-row"' in escopo and "colSpan={colunas}" in escopo
           and "columns.length" in escopo and "escondidas" in escopo,
           "hidden print:table-row, colSpan = colunas - escondidas")
+    # --- Linhas por CATEGORIA (2026-10-05) ---
+    lib = (raiz.parent / "lib" / "print-categorias.ts").read_text()
+    lib_limpo = _re.sub(r"//[^\n]*", "", lib)
+    check("UU: as linhas das duas tabelas levam data-cat e a página dá a lista de categorias ao PrintScope",
+          len(_re.findall(r"data-cat=\{r\.category_id \|\| SEM_CATEGORIA\}", pagina)) == 2
+          and "categories={categorias}" in pagina and "from('categories')" in pagina
+          and "<PrintCategoriesNote />" in pagina,
+          "2 × data-cat, categories={categorias}, query a categories, nota de lista parcial")
+    check("UU: o id de categoria só vira CSS se tiver forma de código E existir na página (lista branca)",
+          _re.search(r"ID_OK = /\^\[A-Za-z0-9_\.-\]\{1,40\}\$/", lib_limpo) is not None
+          and "ID_OK.test(id) && validos.has(id)" in lib_limpo
+          and "regrasCategorias(hiddenCats, validos)" in escopo,
+          "ID_OK + validos.has(id) antes de gerar a regra")
+    guardar = escopo[escopo.find("function save("):escopo.find("// Contentor da página")]
+    carregar = escopo[escopo.find("function load("):escopo.find("function save(")]
+    check("UU: a selecção de categorias NÃO se guarda no browser (esconder linhas em silêncio imprimiria uma lista incompleta)",
+          "hiddenCats" not in guardar and "hiddenCats" not in carregar and escopo.count("localStorage.setItem") == 1
+          and _re.search(r"useEffect\(\(\) => \{\s*setHiddenCats\(\[\]\);\s*\}, \[assinatura\]\)", escopo) is not None,
+          "só colunas/blocos vão para o localStorage; repõe-se (useEffect em [assinatura]) quando a lista de categorias muda")
+    nota = escopo[escopo.find("export function PrintCategoriesNote"):escopo.find("export function PrintOptions")]
+    check("UU: a folha diz sempre que a lista é parcial (nota sem caixa nem hook)",
+          "resumo(ctx.categories, ctx.hiddenCats)" in nota and "Partial list" in nota and "data-print" not in nota,
+          "PrintCategoriesNote usa resumo(), sem data-print")
+    check("UU: uma categoria com código fora da forma segura fica «sempre impressa» (não se mostra desmarcável)",
+          "always printed" in escopo and "disabled={fixa}" in escopo and "fixa || !hiddenCats.includes" in escopo,
+          "disabled + (always printed)")
+    # A lógica pura corre a sério, no Node 24 do contentor da app (sem rede, sem escrita).
+    import subprocess as _sp
+    imagem = _sp.run(["docker", "inspect", "tmsi-app", "--format", "{{.Config.Image}}"], capture_output=True, text=True).stdout.strip()
+    if imagem:
+        r = _sp.run(["docker", "run", "--rm", "--memory", "96m", "--network", "none", "--entrypoint", "node",
+                     "-v", f"{raiz.parent.parent.parent}:/r:ro", imagem, "--no-warnings",
+                     "/r/scripts/prova-print-categorias.mjs"], capture_output=True, text=True, timeout=120)
+        falhas = [l for l in r.stdout.splitlines() if l.startswith("XX")]
+        check("UU: a lógica de categorias (ids hostis, lista parcial, contagens) passa a prova em Node 24",
+              r.returncode == 0 and not falhas, "0 divergências" if r.returncode == 0 else f"{len(falhas)}: {falhas[:2]} {r.stderr[-120:]}")
+    else:
+        check("UU: a lógica de categorias passa a prova em Node 24", True, "SKIP — contentor tmsi-app não encontrado")
     check("UU: a preferência guardada é validada por lista branca e o armazenamento pode falhar",
           "TOKEN_OK.test(" in escopo and "catch" in escopo and "localStorage" in escopo
           and _re.search(r"TOKEN_OK = /\^\(c\(\[2-9\]\|1\[0-2\]\)", escopo) is not None,

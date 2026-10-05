@@ -8,6 +8,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
+import { categoriaValida, regrasCategorias, resumo, type PrintCategory } from '@/lib/print-categorias';
 
 // Escolher o que se imprime (colunas e blocos do cabeçalho). Só afecta a
 // IMPRESSÃO: o ecrã mostra sempre tudo. Não há nada aqui que o servidor
@@ -20,6 +21,14 @@ import { createContext, useContext, useEffect, useState } from 'react';
 // regras @media print de globals.css escondem `:nth-child(N)` das tabelas e
 // os elementos `[data-print="…"]`. «cN» é a coluna N (1 = Product, que nunca
 // se esconde).
+//
+// CATEGORIAS (linhas): escolhem-se por categoria de produto, não uma a uma. Diferente
+// das colunas, a selecção de linhas NÃO se guarda no browser: esconder linhas em silêncio
+// numa sessão futura imprimiria uma lista de preços incompleta sem ninguém reparar. Vive só
+// no estado desta página e repõe-se quando a lista de categorias muda (outro filtro). E a
+// folha impressa diz sempre quando é parcial (PrintCategoriesNote, sem caixa para a
+// esconder). As linhas escondem-se com `<style>` gerado por `lib/print-categorias.ts`, que
+// só deixa passar ids com forma de código E que existam nesta página.
 
 export type PrintColumn = { label: string; right?: boolean };
 export type PrintVariant = 'costs' | 'sales';
@@ -41,6 +50,10 @@ type Ctx = {
   columns: PrintColumn[];
   hidden: string[];
   toggle: (token: string) => void;
+  categories: PrintCategory[];
+  hiddenCats: string[];
+  toggleCat: (id: string) => void;
+  setAllCats: (mostrar: boolean) => void;
   reset: () => void;
 };
 const PrintCtx = createContext<Ctx | null>(null);
@@ -69,15 +82,26 @@ function save(variant: PrintVariant, hidden: string[]) {
 export function PrintScope({
   variant,
   columns,
+  categories,
   className,
   children,
 }: {
   variant: PrintVariant;
   columns: PrintColumn[];
+  categories: PrintCategory[];
   className: string;
   children: React.ReactNode;
 }) {
   const [hidden, setHidden] = useState<string[]>([]);
+  const [hiddenCats, setHiddenCats] = useState<string[]>([]);
+  const validos = new Set(categories.map((c) => c.id));
+
+  // A lista de categorias muda com os filtros (filial, estado): a selecção anterior já não
+  // quer dizer o mesmo, por isso repõe-se. Sem persistência, de propósito (ver acima).
+  const assinatura = categories.map((c) => c.id).join('|');
+  useEffect(() => {
+    setHiddenCats([]);
+  }, [assinatura]);
 
   // Lido DEPOIS de montar, para o HTML do servidor e o 1.º render do cliente
   // coincidirem (o servidor não sabe o que está no browser).
@@ -94,12 +118,24 @@ export function PrintScope({
     columns,
     hidden,
     toggle: (token) => update(hidden.includes(token) ? hidden.filter((t) => t !== token) : [...hidden, token]),
-    reset: () => update([]),
+    categories,
+    hiddenCats,
+    toggleCat: (id) =>
+      setHiddenCats(hiddenCats.includes(id) ? hiddenCats.filter((x) => x !== id) : [...hiddenCats, id]),
+    setAllCats: (mostrar) =>
+      setHiddenCats(mostrar ? [] : categories.filter((c) => categoriaValida(c.id, validos)).map((c) => c.id)),
+    reset: () => {
+      update([]);
+      setHiddenCats([]);
+    },
   };
+
+  const cssCategorias = regrasCategorias(hiddenCats, validos);
 
   return (
     <PrintCtx.Provider value={value}>
       <div id="prices-root" className={className} data-hide={hidden.length > 0 ? hidden.join(' ') : undefined}>
+        {cssCategorias !== '' && <style>{cssCategorias}</style>}
         {children}
       </div>
     </PrintCtx.Provider>
@@ -135,17 +171,34 @@ export function PrintFooterRow({ children }: { children: React.ReactNode }) {
   return <FaixaImpressa>{children}</FaixaImpressa>;
 }
 
+// Dentro do cabeçalho impresso: quando só se imprimem algumas categorias, o papel di-lo.
+// Sem caixa nem hook: uma lista de preços parcial tem de se apresentar como parcial.
+export function PrintCategoriesNote() {
+  const ctx = useContext(PrintCtx);
+  if (!ctx) return null;
+  const r = resumo(ctx.categories, ctx.hiddenCats);
+  if (!r.parcial) return null;
+  return (
+    <p className="mt-1 text-sm font-medium">
+      Partial list — {r.categoriasImpressas.length} of {ctx.categories.length} categories printed:{' '}
+      {r.categoriasImpressas.map((c) => c.label).join(', ') || 'none'}
+    </p>
+  );
+}
+
 export function PrintOptions() {
   const ctx = useContext(PrintCtx);
   if (!ctx) return null;
-  const { columns, hidden, toggle, reset } = ctx;
+  const { columns, hidden, toggle, reset, categories, hiddenCats, toggleCat, setAllCats } = ctx;
+  const r = resumo(categories, hiddenCats);
+  const escondidas = hidden.length + (r.parcial ? categories.length - r.categoriasImpressas.length : 0);
 
   return (
     <details className="relative print:hidden">
       <summary className="cursor-pointer list-none rounded-md border border-line-strong px-3 py-1 text-sm font-medium transition-colors hover:bg-surface-alt">
-        Print options{hidden.length > 0 ? ` (${hidden.length} hidden)` : ''}
+        Print options{escondidas > 0 ? ` (${escondidas} hidden)` : ''}
       </summary>
-      <div className="absolute right-0 z-10 mt-2 w-72 rounded-lg border border-line bg-surface p-4 text-sm shadow-md">
+      <div className="absolute right-0 z-10 mt-2 max-h-[75vh] w-80 overflow-y-auto rounded-lg border border-line bg-surface p-4 text-sm shadow-md">
         <p className="mb-3 text-xs text-fg-muted">Only affects the printout; the screen always shows everything.</p>
 
         <fieldset className="mb-3">
@@ -162,6 +215,55 @@ export function PrintOptions() {
             );
           })}
         </fieldset>
+
+        {categories.length > 0 && (
+          <fieldset className="mb-3">
+            <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-muted">Categories</legend>
+            <div className="mb-1 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAllCats(true)}
+                className="rounded-md border border-line-strong px-2 py-0.5 text-xs transition-colors hover:bg-surface-alt"
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllCats(false)}
+                className="rounded-md border border-line-strong px-2 py-0.5 text-xs transition-colors hover:bg-surface-alt"
+              >
+                None
+              </button>
+            </div>
+            <div className="max-h-48 overflow-y-auto">
+              {categories.map((c) => {
+                // Um código fora da forma segura nunca gera regra de CSS: mostrá-lo como
+                // desmarcável seria dizer que não imprime quando imprime. Fica «sempre impressa».
+                const fixa = !categoriaValida(c.id, new Set(categories.map((x) => x.id)));
+                return (
+                  <label key={c.id} className="flex items-center gap-2 py-0.5">
+                    <input
+                      type="checkbox"
+                      checked={fixa || !hiddenCats.includes(c.id)}
+                      disabled={fixa}
+                      onChange={() => toggleCat(c.id)}
+                    />
+                    <span className="flex-1">
+                      {c.label}
+                      {fixa ? ' (always printed)' : ''}
+                    </span>
+                    <span className="text-xs text-fg-muted">{c.count}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className={`mt-1 text-xs ${r.linhasImpressas === 0 ? 'text-danger' : 'text-fg-muted'}`}>
+              {r.linhasImpressas === 0
+                ? 'Nothing selected: the printout would be empty.'
+                : `Printing ${r.linhasImpressas} of ${r.linhasTotal} rows. Not remembered between visits.`}
+            </p>
+          </fieldset>
+        )}
 
         <fieldset className="mb-3">
           <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-muted">Header</legend>
@@ -181,7 +283,7 @@ export function PrintOptions() {
         <button
           type="button"
           onClick={reset}
-          disabled={hidden.length === 0}
+          disabled={escondidas === 0}
           className="rounded-md border border-line-strong px-2 py-1 text-xs font-medium transition-colors hover:bg-surface-alt disabled:opacity-50"
         >
           Print everything

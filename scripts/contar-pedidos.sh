@@ -107,7 +107,9 @@ if [ "${COMPLETOS:-0}" -gt 0 ]; then
   echo "                                        linha dizia antes de 2026-10-03; o middleware"
   echo "                                        (2) e o aviso operacional (1) não entravam na"
   echo "                                        conta. Alvo com o middleware intacto: 8 —"
-  echo "                                        medido em produção a 2026-10-03, item 85.)"
+  echo "                                        medido em produção a 2026-10-03, item 85."
+  echo "                                        Desde 2026-10-05 o /prices tem 9: a leitura"
+  echo "                                        de categories (nomes em «Print options»).)"
 else
   echo "  (sem carregamentos completos na janela — a média não é calculável)"
 fi
