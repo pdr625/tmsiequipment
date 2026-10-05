@@ -104,6 +104,10 @@ longo, cabem menos linhas por folha; se for demais, encurta-se o texto em `/conf
 não só da última; «Print options» a esconder colunas não o desalinha; e quantas linhas de dados cabem.
 Atenção à última folha: o rodapé segue as linhas (não fica colado ao fundo da folha se esta não encher).
 
+**Confirmado pelo Pedro em papel, 2026-10-05:** o rodapé repete-se em todas as folhas. Com isto, a impressão do
+`/prices` (orientação do utilizador, folha aproveitada, «Print options», cabeçalho e rodapé em cada folha)
+fica fechada. Resta a escolha de LINHAS a imprimir (BACKLOG 106, parte 2).
+
 ## Sessão 05/10 (noite, 4.ª) — impressão: o cabeçalho do documento repete-se (2026-10-05)
 
 **Pedido do Pedro:** «o cabeçalho não se repete nas páginas seguintes».
