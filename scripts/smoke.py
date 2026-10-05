@@ -2363,7 +2363,8 @@ def block_print_options():
     while k >= 0:
         avisos.append(pagina[k:pagina.find(")}", k)])
         k = pagina.find("{aviso && (", k + 1)
-    rodape = bloco_de("{footer.length > 0 && (")
+    k = pagina.find("const rodapeImpresso = ")
+    rodape = pagina[k:pagina.find("\n  );", k)] if k >= 0 else ""
     check("UU: o aviso de preços operacionais (todas as cópias) e o rodapé legal não têm hook (saem sempre)",
           bool(avisos) and bool(rodape) and not any("data-print" in a for a in avisos) and "data-print" not in rodape
           and not (chaves_cmp & {"notice", "aviso", "footer", "legal"}),
@@ -2372,6 +2373,12 @@ def block_print_options():
           len(_re.findall(r"<thead>\s*<PrintHeaderRow>\{cabecalhoImpresso\}</PrintHeaderRow>", pagina)) == 2
           and 'className="mb-4 hidden print:block"' not in pagina,
           "2 × PrintHeaderRow no thead; já não há bloco solto antes da tabela")
+    check("UU: o rodapé legal é a linha do <tfoot> das duas tabelas (repete-se em cada folha)",
+          len(_re.findall(r"<tfoot>\s*<PrintFooterRow>\{rodapeImpresso\}</PrintFooterRow>\s*</tfoot>", pagina)) == 2
+          and "mt-6 hidden text-xs text-fg-muted print:block" not in pagina
+          and "export function PrintFooterRow" in escopo
+          and _re.search(r"tfoot\s*\{[^}]*display:\s*table-footer-group", css) is not None,
+          "2 × PrintFooterRow no tfoot; sem bloco solto depois da tabela; tfoot como grupo de rodapé")
     check("UU: a linha do cabeçalho só existe no papel e o colSpan acompanha as colunas visíveis",
           'className="hidden print:table-row"' in escopo and "colSpan={colunas}" in escopo
           and "columns.length" in escopo and "escondidas" in escopo,

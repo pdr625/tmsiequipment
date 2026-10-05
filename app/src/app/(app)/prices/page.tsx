@@ -8,7 +8,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getBranding, footerLines } from '@/lib/branding';
 import { PrintButton } from './print-button';
-import { PrintScope, PrintOptions, PrintHeaderRow, type PrintColumn } from './print-scope';
+import { PrintScope, PrintOptions, PrintHeaderRow, PrintFooterRow, type PrintColumn } from './print-scope';
 import { FilterButton } from './filter-button';
 import { alertaDe } from '@/lib/alert';
 import { getPriceNotice } from '@/lib/price-notice';
@@ -216,6 +216,17 @@ export default async function PricesPage({
     </div>
   );
 
+  // Rodapé do documento impresso (texto de rodapé + texto legal do Branding). Vive na linha
+  // do <tfoot> (PrintFooterRow) para se repetir em cada folha, como o cabeçalho. Sem caixa
+  // em «Print options»: é texto legal, sai sempre.
+  const rodapeImpresso = footer.length > 0 && (
+    <div className="mt-3 text-xs text-fg-muted" style={{ fontFamily: branding.fontFamily }}>
+      {footer.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </div>
+  );
+
   return (
     <PrintScope
       variant={canReadCosts ? 'costs' : 'sales'}
@@ -351,6 +362,11 @@ export default async function PricesPage({
               </tr>
             ))}
           </tbody>
+          {rodapeImpresso && (
+            <tfoot>
+              <PrintFooterRow>{rodapeImpresso}</PrintFooterRow>
+            </tfoot>
+          )}
         </table>
       )}
 
@@ -381,15 +397,12 @@ export default async function PricesPage({
               </tr>
             ))}
           </tbody>
+          {rodapeImpresso && (
+            <tfoot>
+              <PrintFooterRow>{rodapeImpresso}</PrintFooterRow>
+            </tfoot>
+          )}
         </table>
-      )}
-
-      {footer.length > 0 && (
-        <div className="mt-6 hidden text-xs text-fg-muted print:block" style={{ fontFamily: branding.fontFamily }}>
-          {footer.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-        </div>
       )}
     </PrintScope>
   );

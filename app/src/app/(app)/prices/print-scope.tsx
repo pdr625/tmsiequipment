@@ -106,13 +106,15 @@ export function PrintScope({
   );
 }
 
-// Primeira linha do <thead>: o cabeçalho do documento (logo, título, âmbito, moeda,
-// gerado por). Como o Chrome repete o <thead> INTEIRO em cada folha, pô-lo aqui é o
-// que o faz sair em todas — antes era um bloco solto antes da tabela e só saía na
-// 1.ª. No ecrã a linha está escondida (`hidden`); só existe no papel.
+// Faixas do documento que se repetem em cada folha: o cabeçalho (logo, título, âmbito,
+// moeda, gerado por, aviso) é a 1.ª linha do <thead>, o rodapé (texto de rodapé e texto
+// legal do Branding) é a linha do <tfoot>. O Chrome repete o <thead> E o <tfoot>
+// INTEIROS em cada folha — era assim que ambos ficavam de fora quando eram blocos
+// soltos antes/depois da tabela (saíam só na 1.ª folha e só na última). No ecrã a linha
+// está escondida (`hidden`); só existe no papel.
 // `colSpan` acompanha as colunas VISÍVEIS: com colunas escondidas (cN → display:none)
 // um colSpan fixo criaria colunas fantasma e desalinharia a tabela.
-export function PrintHeaderRow({ children }: { children: React.ReactNode }) {
+function FaixaImpressa({ children }: { children: React.ReactNode }) {
   const ctx = useContext(PrintCtx);
   const escondidas = ctx ? ctx.hidden.filter((t) => /^c\d+$/.test(t)).length : 0;
   const colunas = Math.max(1, (ctx ? ctx.columns.length : 1) - escondidas);
@@ -123,6 +125,14 @@ export function PrintHeaderRow({ children }: { children: React.ReactNode }) {
       </td>
     </tr>
   );
+}
+
+export function PrintHeaderRow({ children }: { children: React.ReactNode }) {
+  return <FaixaImpressa>{children}</FaixaImpressa>;
+}
+
+export function PrintFooterRow({ children }: { children: React.ReactNode }) {
+  return <FaixaImpressa>{children}</FaixaImpressa>;
 }
 
 export function PrintOptions() {
