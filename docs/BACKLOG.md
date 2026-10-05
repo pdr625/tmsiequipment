@@ -30,23 +30,23 @@ desenho, não resolvido).
 
 ## Triagem do backlog — 2026-10-05
 
-Das **40** entradas sem marca de fecho, **9 estavam fechadas ou decididas** (marcadas abaixo, com a evidência de cada uma, verificada
-ao vivo na BD ou no código — não por memória) e **31 continuam abertas**. Das 31, **18 precisam de uma decisão tua**, **10 são trabalho
+Das **40** entradas sem marca de fecho, **10 já estão fechadas ou decididas** (9 na triagem, mais o 57 fechado no mesmo dia) (marcadas abaixo, com a evidência de cada uma, verificada
+ao vivo na BD ou no código — não por memória) e **30 continuam abertas**. Das 30, **17 precisam de uma decisão tua**, **10 são trabalho
 de código** e **3 só se fecham com a tua medição ou o teu browser**. A extracção automática do backlog **não é fiável** (marcava como
 abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um item sem verificar o estado real.
 
-**Fechados / decididos / superados (9):** 8, 13, 56, 59, 60, 61, 62, 64, 74 — ver a nota no início de cada um.
+**Fechados / decididos / superados (10):** 8, 13, 56, 57, 59, 60, 61, 62, 64, 74 — ver a nota no início de cada um.
 
-**Abertos — decisão tua, sem código (18):**
+**Abertos — decisão tua, sem código (17):**
 - Política e negócio: **50** (`branch_manager` aprova configuração global?), **82** (`finance` escreve limiares de margem sem proposta), **27** (regra
   dos 90 dias e notificações), **10** (overrides de canal/agente, parcial), **71** (`price_cache`, condicionado), **104** (acabamento visual), **98** (bordas dos campos).
 - Dependem de terceiros ou de dados teus: **32** (base do direito aduaneiro — aguarda o despachante), **7** (entregabilidade de e-mail), **11** (CPI L113-9),
-  **12** (handover §7), **52** e **53** (códigos SAP), **57** (3 contas reais sem papel — atribuir ou apagar), **95** (câmbios de teste de Setembro),
+  **12** (handover §7), **52** e **53** (códigos SAP), **95** (câmbios de teste de Setembro),
   **107** (categorias duplicadas), **108** (3 produtos sem categoria).
 - Fronteira de segurança: **109** (Server Actions a delegar em `perms.ts`).
 
 **Abertos — trabalho de código (10):** **86** (validação de `settings`; `0` restrições hoje — migração 0022, depois da reunião de 13/10), **91** e **93** (cosméticos,
-bloco C), **94** (`audit_log` com autor nulo: **3313 de 6632**, subiu de 2669 de 5249 — quase tudo `DELETE` de manutenção/smoke), **83** (o smoke deixa o artigo fictício
+bloco C), **94** (`audit_log` com autor nulo: **3314 de 6633**, subiu de 2669 de 5249 — quase tudo `DELETE` de manutenção/smoke; a eliminação do item 57 acrescentou 1), **83** (o smoke deixa o artigo fictício
 se rebentar a meio), **55** (a perna off-site não aparece na monitorização; só se mede a idade do dump local), **45**, **46**, **49** (apagar/anonimizar, exportar os
 próprios dados e reter 5 anos — a `/privacy` ainda diz que não existem), **63** (sete rotas cujo único gate é a RLS — endurecimento).
 
@@ -245,7 +245,7 @@ deles corporativo. A uniformização de passwords de 2026-09-23 aplicou-se às s
 **parou aqui de propósito** — a justificação dessa decisão ("são fictícias, só o Pedro acede") não
 se estende a identidades reais.
 
-**57. Três contas reais sem papel atribuído** — **REGISTADO 2026-09-19**, achado da auditoria
+~~**57. Três contas reais sem papel atribuído**~~ ✅ **FECHADO 2026-10-05.** Decidido pelo Pedro conta a conta e executado nesse dia: **`pedro.dacosta@condat.fr`** — deixada como estava (já desativada de forma permanente, nunca entrou); **`pedroalexandre625+verifiteste@gmail.com`** (alias de teste, entrou uma vez a 2026-09-05) — **eliminada**; **`pedro_alexandre625@hotmail.com`** (nunca entrou) — **desativada** de forma permanente (`ban_duration` 876000h). Hoje há **0 contas ativas sem papel**: as 2 que restam sem papel estão desativadas e nunca entraram. Backup antes: `~/backups/tmsi/tmsi-pre-item57-20261005-213856.dump`. Correcção ao texto original: a conta `condat.fr` já estava desativada (o item dizia «todas ativas»). _(texto original abaixo)_ —  — **REGISTADO 2026-09-19**, achado da auditoria
 (C4). Além da conta `admin` do Pedro, existem em `tmsi.profiles` **três contas reais sem
 nenhuma linha em `tmsi.user_roles`**: um endereço pessoal alternativo, um endereço corporativo
 `condat.fr` e um alias `+verifiteste` do endereço principal (este criado, pelo aspecto, para
@@ -1083,6 +1083,13 @@ remover papel, desactivar (`Disable`/`Reactivate`, GoTrue `ban_duration`) e rese
 password — nenhuma função apaga ou anonimiza um utilizador (confirmado por leitura completa
 do ficheiro, zero `deleteUser`). Um pedido de apagamento (RGPD ou não) hoje não tem botão
 nenhum — seria manual, directo à BD, fora de qualquer fluxo da app. Não desenhado aqui.
+
+> **Nota de 2026-10-05 (procedimento, não é o mecanismo pedido):** quando for mesmo necessário apagar uma conta, fez-se assim, para o item 57 —
+> (1) `pg_dump -Fc` novo e verificado em `~/backups/tmsi/`; (2) ensaio `BEGIN … DELETE FROM auth.users WHERE id=… … ROLLBACK` como `supabase_admin`, a
+> confirmar a cascata (`auth.users`, `auth.identities` e `tmsi.profiles` — `profiles_user_id_fkey` é `ON DELETE CASCADE`) e resíduo zero; (3) o `DELETE` real
+> **pelo GoTrue** (`DELETE http://auth:9999/admin/users/<id>`) a partir de **dentro do container `tmsi-app`**, que já tem a `SERVICE_ROLE_KEY` no ambiente
+> (assim a chave nunca aparece no host nem no output), depois de um `GET` a confirmar que o e-mail é exactamente o esperado. Efeito lateral: o gatilho
+> `trg_audit_profiles` regista o `DELETE` com **autor nulo** (+1 no item 94). Isto **não** substitui o mecanismo auditado de que o item precisa.
 
 **46. Sem exportação dos próprios dados (self-service)** — **REGISTADO 2026-09-16**, achado
 de F0 do item 42. Nenhum ecrã deixa um utilizador pedir "os meus dados" (perfil, papel,

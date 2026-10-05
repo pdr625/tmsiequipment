@@ -79,6 +79,31 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
 
+## Sessão 05/10 (noite, 9.ª) — item 57: as contas sem papel (2026-10-05)
+
+**Pedido do Pedro:** tratar o item 57. **Só dados e um procedimento: nenhum código, nenhum deploy, sem migração.**
+
+**Factos (medidos antes de propor nada):** 3 contas reais sem papel, nenhuma com ações no `audit_log`, nenhuma referenciada por outra tabela (só o
+`profiles`). `pedro.dacosta@condat.fr` — **já desativada de forma permanente** e nunca entrou (o item dizia «todas ativas», estava desatualizado);
+`pedroalexandre625+verifiteste@gmail.com` — alias de teste do fluxo de verificação, entrou uma vez a 05/09; `pedro_alexandre625@hotmail.com` — nunca
+entrou, ativa.
+
+**Decisão do Pedro, conta a conta (perguntada com recomendação para cada uma):** condat → deixar como está; alias de teste → **apagar**; hotmail → **desativar**.
+
+**Executado:** (1) backup novo e verificado (`tmsi-pre-item57-20261005-213856.dump`, 700 KB, TOC com `auth.users`, `tmsi.profiles` e `tmsi.user_roles`);
+(2) **ensaio** da eliminação numa transação revertida — a cascata leva `auth.users`, `auth.identities` e `tmsi.profiles` e o `audit_log` sobe 6632→6633; depois do
+`ROLLBACK`, **resíduo zero**; (3) eliminação e desativação **pelo GoTrue** (o mesmo caminho do botão «Disable» da app), a partir de dentro do container `tmsi-app`
+para a chave de serviço nunca sair dele, cada uma precedida de um `GET` a confirmar que o e-mail era exactamente o esperado (`GET 200`, `DELETE 200`, `PUT 200`).
+
+**Estado final (BD):** 9 contas — 7 com papel e 2 sem papel, **ambas desativadas até 2126 e nunca tendo entrado**. Já não há nenhuma conta ativa sem papel. O
+`audit_log` passou a 3314 de 6633 com autor nulo (+1: o gatilho regista o `DELETE` sem autor — item 94). **Smoke 206/206** depois.
+
+**Ressalva de apresentação:** no ensaio, a coluna do meio da saída do `psql` ficou deslocada (o «6633» apareceu sob `refresh_tokens`); a leitura certa
+é a que está acima, e o resultado que conta (resíduo zero depois do rollback) não depende dela.
+
+**Limite que fica:** apagar uma conta continua a **não ter mecanismo na app** (item 45). O procedimento usado está escrito no item 45 do `BACKLOG.md`, mas não substitui
+o mecanismo auditado que ele pede.
+
 ## Sessão 05/10 (noite, 8.ª) — triagem do backlog antigo (2026-10-05)
 
 **Pedido do Pedro:** triar o backlog antigo do TMSI. **Só documentação e provas — nenhum código, nenhum deploy, sem migração.**
