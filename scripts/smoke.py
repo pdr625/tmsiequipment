@@ -125,9 +125,15 @@ def http(method, url, token=None, body=None, prefer=None):
 
 def login(email, password_path):
     password = open(password_path).read().strip()
-    status, body = http(
-        "POST", f"{GOTRUE}/token?grant_type=password", body={"email": email, "password": password}
-    )
+    # item 83: o nginx limita /auth a 10 pedidos/min (burst 5, tmsi-rate-limits.conf) e este modo faz um login por conta — duas
+    # corridas no mesmo minuto davam http_503. O limite é protecção contra força bruta e não se mexe: esperamos e repetimos, SÓ no 503.
+    for tentativa in range(8):
+        status, body = http(
+            "POST", f"{GOTRUE}/token?grant_type=password", body={"email": email, "password": password}
+        )
+        if status != 503:
+            break
+        time.sleep(7)
     if status != 200:
         raise RuntimeError(f"login failed for {email}: http_{status}")
     return body["access_token"]
@@ -2732,6 +2738,19 @@ def delete_smoke_fixture_product():
     )
 
 
+def purge_smoke_leftovers():
+    """Item 83: restos de uma corrida anterior que rebentou a meio. Só toca no que o smoke cria e marca: o artigo T-9698 (as
+    suas linhas dependentes caem por CASCADE) e propostas/lotes cujo `reason` começa por «smoke». Em ordem de FKs: filhos antes dos lotes."""
+    n = psql_rows(f"select (select count(*) from tmsi.products where id = '{SMOKE_FIXTURE_ID}') + "
+                  "(select count(*) from tmsi.price_proposals where reason like 'smoke%') + "
+                  "(select count(*) from tmsi.decision_batches where reason like 'smoke%');")[0][0]
+    psql_rows("delete from tmsi.price_proposals where reason like 'smoke%';")
+    psql_rows("delete from tmsi.decision_batches where reason like 'smoke%';")
+    psql_rows(f"delete from tmsi.products where id = '{SMOKE_FIXTURE_ID}';")
+    if n != "0":
+        print(f"(limpeza prévia: {n} resto(s) de uma corrida anterior removido(s))")
+
+
 def main():
     print(f"=== TMSI smoke — {BASE} — {date.today().isoformat()} ===")
     audit_base = int(psql_rows("select coalesce(max(id), 0) from tmsi.audit_log;")[0][0])
@@ -2762,72 +2781,74 @@ def main():
     else:
         raise RuntimeError(f"unknown TMSI_VERIFY_MODE: {VERIFY_MODE!r} (expected login|jwt)")
 
+    purge_smoke_leftovers()
     create_smoke_fixture_product()
+    try:
+        block_no_cost_role(tokens["logistics"])
+        block_branch_scope(tokens["branch_manager"], claims["branch_manager"])
+        block_cost_role_and_engine(tokens["finance"], claims["finance"], "finance")
+        block_cost_role_and_engine(tokens["product_manager"], claims["product_manager"], "product_manager")
+        block_activation_guard(tokens["product_manager"])
+        block_override_reason_guard(tokens["finance"])
+        block_exw_review_transition(claims["product_manager"])
+        block_proposal_workflow_exchange_rates(tokens["finance"], claims["finance"])
+        block_proposal_workflow_overrides(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
+        block_proposal_workflow_channel(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
+        block_rounding(tokens["finance"])
+        block_origin_country_boundary(tokens["finance"], tokens["logistics"])
+        block_logistics_channel_scope(tokens["logistics"])
+        block_interco_margin(claims["product_manager"])
+        block_branches_admin_only(tokens["finance"])
+        block_batch_decision(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
+        block_bulk_import(tokens["logistics"], tokens["product_manager"])
+        block_audit_content_boundary(tokens["finance"], claims["finance"])
+        block_anon_boundary(tokens["logistics"])
 
-    block_no_cost_role(tokens["logistics"])
-    block_branch_scope(tokens["branch_manager"], claims["branch_manager"])
-    block_cost_role_and_engine(tokens["finance"], claims["finance"], "finance")
-    block_cost_role_and_engine(tokens["product_manager"], claims["product_manager"], "product_manager")
-    block_activation_guard(tokens["product_manager"])
-    block_override_reason_guard(tokens["finance"])
-    block_exw_review_transition(claims["product_manager"])
-    block_proposal_workflow_exchange_rates(tokens["finance"], claims["finance"])
-    block_proposal_workflow_overrides(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
-    block_proposal_workflow_channel(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
-    block_rounding(tokens["finance"])
-    block_origin_country_boundary(tokens["finance"], tokens["logistics"])
-    block_logistics_channel_scope(tokens["logistics"])
-    block_interco_margin(claims["product_manager"])
-    block_branches_admin_only(tokens["finance"])
-    block_batch_decision(tokens["finance"], claims["finance"], tokens["branch_manager"], claims["branch_manager"])
-    block_bulk_import(tokens["logistics"], tokens["product_manager"])
-    block_audit_content_boundary(tokens["finance"], claims["finance"])
-    block_anon_boundary(tokens["logistics"])
+        # item 56: the three roles with no session of their own. Looked up by the
+        # role they hold rather than by a hardcoded address — an account renamed
+        # or recreated must not make this silently skip. sales/agent have accounts
+        # but no password file (so: claims injection, never a token); viewer has
+        # no account at all and is granted inside the rolled-back transaction.
+        sell_side = {}
+        for role in ("sales", "agent"):
+            found = psql_rows(
+                "select p.user_id from tmsi.profiles p join tmsi.user_roles r on r.user_id = p.user_id "
+                f"where r.role = '{role}' limit 1;"
+            )
+            sell_side[role] = found[0][0] if found else None
+        if sell_side["sales"] and sell_side["agent"]:
+            block_sell_side_roles(
+                sell_side["sales"], sell_side["agent"],
+                claims["logistics"], TEST_USERS["logistics"][0],
+            )
+        else:
+            check("CC: sell-side roles", True, "SKIP — no sales/agent account found in tmsi.user_roles")
 
-    # item 56: the three roles with no session of their own. Looked up by the
-    # role they hold rather than by a hardcoded address — an account renamed
-    # or recreated must not make this silently skip. sales/agent have accounts
-    # but no password file (so: claims injection, never a token); viewer has
-    # no account at all and is granted inside the rolled-back transaction.
-    sell_side = {}
-    for role in ("sales", "agent"):
-        found = psql_rows(
-            "select p.user_id from tmsi.profiles p join tmsi.user_roles r on r.user_id = p.user_id "
-            f"where r.role = '{role}' limit 1;"
-        )
-        sell_side[role] = found[0][0] if found else None
-    if sell_side["sales"] and sell_side["agent"]:
-        block_sell_side_roles(
-            sell_side["sales"], sell_side["agent"],
-            claims["logistics"], TEST_USERS["logistics"][0],
-        )
-    else:
-        check("CC: sell-side roles", True, "SKIP — no sales/agent account found in tmsi.user_roles")
+        # 0019: a filial de origem também vende. Depende do lookup acima, por isso
+        # vem a seguir — não antes, como na primeira versão desta chamada.
+        if sell_side.get("sales"):
+            block_origin_branch_sells(sell_side["sales"])
 
-    # 0019: a filial de origem também vende. Depende do lookup acima, por isso
-    # vem a seguir — não antes, como na primeira versão desta chamada.
-    if sell_side.get("sales"):
-        block_origin_branch_sells(sell_side["sales"])
-
-    block_select_contract(tokens)
-    block_docs_guard()
-    block_scope_filter_pushdown()
-    block_presentation_contract(tokens)
-    block_alert_rule()
-    block_price_notice(sell_side.get("sales"))
-    block_me_and_settings(tokens, claims)
-    block_perms_equivalence(tokens, claims)
-    block_home_menu()
-    block_theme()
-    block_print_options()
-    block_audit_system_actor()
-    block_product_alert_column()
-    block_login_link_prefetch()
-    block_settings_save_feedback()
-    block_product_money_formatting()
-    block_retention_text()
-
-    delete_smoke_fixture_product()
+        block_select_contract(tokens)
+        block_docs_guard()
+        block_scope_filter_pushdown()
+        block_presentation_contract(tokens)
+        block_alert_rule()
+        block_price_notice(sell_side.get("sales"))
+        block_me_and_settings(tokens, claims)
+        block_perms_equivalence(tokens, claims)
+        block_home_menu()
+        block_theme()
+        block_print_options()
+        block_audit_system_actor()
+        block_product_alert_column()
+        block_login_link_prefetch()
+        block_settings_save_feedback()
+        block_product_money_formatting()
+        block_retention_text()
+    finally:
+        # item 83: corre mesmo que um bloco rebente — senão o T-9698 fica e a corrida seguinte morre com duplicate key
+        delete_smoke_fixture_product()
     block_audit_no_new_nulls(audit_base)
 
     total = len(RESULTS)

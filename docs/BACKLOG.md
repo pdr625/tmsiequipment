@@ -30,12 +30,12 @@ desenho, não resolvido).
 
 ## Triagem do backlog — 2026-10-05
 
-Das **40** entradas sem marca de fecho, **11 já estão fechadas ou decididas** (9 na triagem, mais o 57 e o 94 fechados no mesmo dia) (marcadas abaixo, com a evidência de cada uma, verificada
-ao vivo na BD ou no código — não por memória) e **29 continuam abertas**. Das 29, **17 precisam de uma decisão tua**, **9 são trabalho
+Das **40** entradas sem marca de fecho, **12 já estão fechadas ou decididas** (9 na triagem, mais o 57, o 94 e o 83 fechados no mesmo dia) (marcadas abaixo, com a evidência de cada uma, verificada
+ao vivo na BD ou no código — não por memória) e **28 continuam abertas**. Das 28, **17 precisam de uma decisão tua**, **8 são trabalho
 de código** e **3 só se fecham com a tua medição ou o teu browser**. A extracção automática do backlog **não é fiável** (marcava como
 abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um item sem verificar o estado real.
 
-**Fechados / decididos / superados (11):** 8, 13, 56, 57, 59, 60, 61, 62, 64, 74, 94 — ver a nota no início de cada um.
+**Fechados / decididos / superados (12):** 8, 13, 56, 57, 59, 60, 61, 62, 64, 74, 83, 94 — ver a nota no início de cada um.
 
 **Abertos — decisão tua, sem código (17):**
 - Política e negócio: **50** (`branch_manager` aprova configuração global?), **82** (`finance` escreve limiares de margem sem proposta), **27** (regra
@@ -45,9 +45,8 @@ abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um i
   **107** (categorias duplicadas), **108** (3 produtos sem categoria).
 - Fronteira de segurança: **109** (Server Actions a delegar em `perms.ts`).
 
-**Abertos — trabalho de código (9):** **86** (validação de `settings`; `0` restrições hoje — migração **0023** (a 0022 passou a ser o autor `system` do `audit_log`), depois da reunião de 13/10), **91** e **93** (cosméticos,
-bloco C), **83** (o smoke deixa o artigo fictício
-se rebentar a meio), **55** (a perna off-site não aparece na monitorização; só se mede a idade do dump local), **45**, **46**, **49** (apagar/anonimizar, exportar os
+**Abertos — trabalho de código (8):** **86** (validação de `settings`; `0` restrições hoje — migração **0023** (a 0022 passou a ser o autor `system` do `audit_log`), depois da reunião de 13/10), **91** e **93** (cosméticos,
+bloco C), **55** (a perna off-site não aparece na monitorização; só se mede a idade do dump local), **45**, **46**, **49** (apagar/anonimizar, exportar os
 próprios dados e reter 5 anos — a `/privacy` ainda diz que não existem), **63** (sete rotas cujo único gate é a RLS — endurecimento).
 
 **Abertos — só se fecham contigo (3):** **73** (medir os pedidos por página em runtime com `scripts/contar-pedidos.sh`; `/prices` está em 9), **103** (`viewer` sem utilizador),
@@ -854,7 +853,7 @@ consegue redefinir o que é «crítico» sem segunda pessoa e sem que fique nada
 `audit_log`. Opções: manter (limiares são configuração de leitura, o audit chega); pô-los no fluxo de
 proposta; ou admin-only (parte os seis formulários do `/config` do `finance`). **Decisão do Pedro.**
 
-**83. O smoke deixa o artigo fictício se rebentar a meio** — **REGISTADO 2026-09-24**, causado e
+~~**83. O smoke deixa o artigo fictício se rebentar a meio**~~ ✅ **FECHADO 2026-10-05 — só `scripts/smoke.py`, sem deploy.** (1) `main()` corre os blocos dentro de `try/finally` que apaga o `T-9698` mesmo que um bloco rebente; (2) `purge_smoke_leftovers()` limpa no arranque o resto de uma corrida morta (o artigo e as propostas/lotes com `reason` a começar por «smoke»); (3) o **503 «não diagnosticado»** tinha causa: o nginx limita `/auth` a 10 pedidos/min (burst 5, `tmsi-rate-limits.conf`) e o modo `login` faz um login por conta — duas corridas no mesmo minuto esgotam-no. O limite é protecção contra força bruta e **não se mexeu**: `login()` espera 7 s e repete, só no 503. **Provado com controlo:** o código antigo, com um bloco a rebentar, deixa 1 `T-9698` e a corrida seguinte morre com chave duplicada; o novo apaga-o; um resto plantado à mão é limpo no arranque; duas corridas `login` seguidas dão 215/215 (antes a 2.ª dava 503). _(texto original abaixo)_ —  — **REGISTADO 2026-09-24**, causado e
 visto nesta sessão. O `T-9698` é criado a seguir ao login e só apagado no fim do `main()`; uma
 excepção no meio (aqui um `IndexError` numa asserção nova) deixa-o em `tmsi.products`, e a corrida
 seguinte rebenta com `duplicate key`. Apagado à mão (só esse id, contagem 63→62 verificada).

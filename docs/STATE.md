@@ -82,6 +82,14 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
 
+## Sessão 05/10 (noite, 11.ª) — item 83: o smoke que deixava lixo (2026-10-05)
+
+**Só `scripts/smoke.py`; nada implantado** (a imagem em produção continua `d4dcda3`, smoke **215/215** — as asserções são as mesmas, o que mudou foi a robustez da corrida).
+Mapeei primeiro tudo o que o smoke escreve: o único resto possível era o `T-9698` (as dependentes caem por `CASCADE`); o resto vai em transacções revertidas ou é apagado no próprio bloco.
+**Corrigido:** `try/finally` à volta dos blocos; `purge_smoke_leftovers()` no arranque; e o `http_503` do login, que tinha causa (limite do nginx a `/auth`, 10/min) — o `login()` repete só no 503, o limite não se tocou.
+**Provado com controlo** (código antigo deixa 1 resto e a corrida seguinte rebenta; o novo não; resto plantado limpo; duas corridas `login` seguidas verdes).
+**Deslize meu, apanhado:** três das minhas provas iniciais eram inválidas (um `INSERT` manual com erro de sintaxe; duas corridas que morreram no login, antes de chegarem ao ponto testado) — só as contei depois de as refazer com a função real e o controlo do código antigo.
+
 ## Sessão 05/10 (noite, 10.ª) — item 94: o autor nulo no `audit_log` (2026-10-05)
 
 **Pedido do Pedro:** tratar o item 94. **Mudança de base de dados (migração 0022) e de app (rótulo no `/audit`).**
