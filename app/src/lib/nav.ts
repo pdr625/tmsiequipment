@@ -6,28 +6,26 @@
  */
 
 import type { Me } from './me';
+import {
+  canManageProducts,
+  canReadAuditLog,
+  canReadDashboard,
+  isAdmin,
+  pricingConfigReadAccess,
+} from './perms';
 
 export type NavItem = { href: string; label: string };
 export type NavSection = { title: string; items: NavItem[] };
 
-// Quem vê que entradas do menu lateral. Replica, a partir de `me()`, as
-// mesmas decisões que a página inicial antiga tomava com 10+ chamadas a
-// has_role()/can_read_costs() — ver lib/auth-guard.ts, que continua a ser a
-// FRONTEIRA real (cada página e cada Server Action tem a sua guarda, e a RLS
-// decide as linhas). Esconder uma entrada é conveniência, nunca segurança.
-//
-// A equivalência é exacta, não aproximada: tmsi.has_role(r) é «existe linha
-// em tmsi.user_roles para auth.uid() com este papel», e `me().roles` é o
-// array_agg dessas mesmas linhas. `can_read_costs` vem de `me()` tal como é.
-// Se uma guarda de auth-guard.ts mudar, esta função muda com ela (o smoke,
-// bloco MM, prova que cada predicado aqui bate com o do auth-guard).
+// Quem vê que entradas do menu lateral. Os critérios vivem em ./perms (espelho puro das guardas
+// de auth-guard.ts sobre o `me()`) — a MESMA fonte que as páginas usam para decidir o que mostram,
+// por isso o menu e a página nunca discordam. Esconder uma entrada é conveniência, nunca segurança:
+// cada página e cada Server Action têm a sua guarda, e a RLS decide as linhas.
 export function navFor(me: Me): NavSection[] {
-  const has = (r: string) => me.roles.includes(r);
-  const admin = has('admin');
-  const readCosts = me.can_read_costs === true;
-  const readLogistics = has('logistics');
-  const canProducts = admin || has('product_manager');
-  const canAudit = admin || has('finance') || has('viewer') || has('branch_manager');
+  const admin = isAdmin(me);
+  const { readCosts, readLogistics } = pricingConfigReadAccess(me);
+  const canProducts = canManageProducts(me);
+  const canAudit = canReadAuditLog(me);
 
   const pricing: NavItem[] = [
     { href: '/prices', label: 'Price list' },
@@ -35,7 +33,7 @@ export function navFor(me: Me): NavSection[] {
     { href: '/overrides', label: 'Overrides' },
     { href: '/proposals', label: 'Proposals' },
   ];
-  if (readCosts) pricing.push({ href: '/dashboard', label: 'Dashboard' });
+  if (canReadDashboard(me)) pricing.push({ href: '/dashboard', label: 'Dashboard' });
 
   const setup: NavItem[] = [];
   if (readCosts || readLogistics) setup.push({ href: '/config', label: 'Pricing configuration' });

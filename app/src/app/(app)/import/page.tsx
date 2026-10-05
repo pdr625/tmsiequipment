@@ -7,7 +7,8 @@
 
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { isAdmin, canManageProducts } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { isAdmin, canManageProducts } from '@/lib/perms';
 import { HsDutyImportPanel, ProductsImportPanel, UndoBatchForm } from './forms';
 
 type Batch = {
@@ -27,8 +28,9 @@ type Batch = {
 // follows canManageProducts() — same admin-or-product_manager boundary
 // products/new already uses, since this ultimately writes the same table.
 export default async function ImportPage() {
-  const admin = await isAdmin();
-  const canProducts = await canManageProducts();
+  const me = await getMe();
+  const admin = isAdmin(me);
+  const canProducts = canManageProducts(me);
   if (!admin && !canProducts) redirect('/');
 
   const supabase = await createSupabaseServerClient();

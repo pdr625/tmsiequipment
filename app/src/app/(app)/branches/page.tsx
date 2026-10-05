@@ -6,7 +6,8 @@
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { isAdmin } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { isAdmin } from '@/lib/perms';
 import { pickActive } from '@/lib/pick-active';
 import { CreateBranchForm, CreateChannelForm } from './forms';
 import { BranchPricingParamsRow, TransportTierRow, TransportTierForm, MarginGridRow, MarginGridForm } from '../config/forms';
@@ -42,7 +43,7 @@ type MarginGrid = {
 // gets the create forms and the per-branch rule editors below.
 export default async function BranchesPage() {
   const supabase = await createSupabaseServerClient();
-  const canWrite = await isAdmin();
+  const canWrite = isAdmin(await getMe());
 
   const [
     { data: branches },

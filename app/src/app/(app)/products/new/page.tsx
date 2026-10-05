@@ -8,7 +8,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { canManageProducts } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { canManageProducts } from '@/lib/perms';
 import { CreateProductForm } from './create-form';
 
 type Branch = { id: string; name: string };
@@ -22,7 +23,7 @@ type Currency = { code: string };
 // to the edit screen, matching the schema's own draft-first lifecycle: a
 // draft genuinely doesn't need them, only activation does.
 export default async function NewProductPage() {
-  if (!(await canManageProducts())) {
+  if (!canManageProducts(await getMe())) {
     redirect('/');
   }
 

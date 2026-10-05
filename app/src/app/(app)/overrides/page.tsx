@@ -7,7 +7,8 @@
 
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { canManageAnyPriceOverride, isAdmin } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { canManageAnyPriceOverride, isAdmin } from '@/lib/perms';
 import { overrideStatus } from '@/lib/override-status';
 import { PriceOverrideForm, HsOverrideForm } from './forms';
 
@@ -61,8 +62,7 @@ export default async function OverridesPage() {
     { data: branches },
     { data: channels },
     { data: hsCodes },
-    canWritePrice,
-    canWriteHs,
+    me,
     { data: pendingOverrideProposals },
   ] = await Promise.all([
     supabase
@@ -81,8 +81,7 @@ export default async function OverridesPage() {
     supabase.schema('tmsi').from('branches').select('id, name').eq('active', true).order('id').overrideTypes<Branch[], { merge: false }>(),
     supabase.schema('tmsi').from('channels').select('id, name').eq('active', true).order('id').overrideTypes<Channel[], { merge: false }>(),
     supabase.schema('tmsi').from('hs_codes').select('code, description').order('code').overrideTypes<HsCode[], { merge: false }>(),
-    canManageAnyPriceOverride(),
-    isAdmin(),
+    getMe(),
     // Visibility is tmsi.proposals_read (RLS, 0007) — whatever this
     // session can see is exactly what's relevant to badge here.
     supabase
@@ -93,6 +92,10 @@ export default async function OverridesPage() {
       .eq('target_table', 'price_overrides')
       .overrideTypes<PendingProposal[], { merge: false }>(),
   ]);
+
+  // Eram cinco chamadas RPC próprias (4 has_role + 1): o me() partilhado com o layout decide-as.
+  const canWritePrice = canManageAnyPriceOverride(me);
+  const canWriteHs = isAdmin(me);
 
   const productName = (id: string) => products?.find((p) => p.id === id)?.name ?? id;
 

@@ -8,7 +8,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { canReadDashboard } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { canReadDashboard } from '@/lib/perms';
 import { BarChart, type BarDatum } from './bar-chart';
 
 type ProductRow = { id: string; name: string; status: string };
@@ -85,7 +86,7 @@ function Tile({ label, value, warn }: { label: string; value: number | string; w
 // This is the app-level convenience gate; the tables/views below still
 // carry their own real RLS regardless of this check (restriction 2).
 export default async function DashboardPage() {
-  if (!(await canReadDashboard())) {
+  if (!canReadDashboard(await getMe())) {
     redirect('/');
   }
 

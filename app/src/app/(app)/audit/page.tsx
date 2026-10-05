@@ -8,7 +8,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { canReadAuditLog } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { canReadAuditLog } from '@/lib/perms';
 
 type AuditEntry = {
   id: number;
@@ -50,7 +51,7 @@ export default async function AuditPage({
 }: {
   searchParams: Promise<{ table?: string; actor?: string; from?: string; to?: string; page?: string }>;
 }) {
-  if (!(await canReadAuditLog())) {
+  if (!canReadAuditLog(await getMe())) {
     redirect('/');
   }
 

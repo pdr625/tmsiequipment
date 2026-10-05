@@ -6,7 +6,8 @@
  */
 
 import { redirect } from 'next/navigation';
-import { isAdmin } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { isAdmin } from '@/lib/perms';
 import { getBranding } from '@/lib/branding';
 import { BrandingForm } from './form';
 
@@ -16,7 +17,7 @@ import { BrandingForm } from './form';
 // re-checked independently inside the Server Action regardless of
 // whether this page ever renders for a given caller.
 export default async function BrandingPage() {
-  if (!(await isAdmin())) {
+  if (!isAdmin(await getMe())) {
     redirect('/');
   }
 

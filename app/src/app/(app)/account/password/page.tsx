@@ -5,28 +5,16 @@
  * distribution is strictly prohibited. See LICENSE at the repository root.
  */
 
-import { createSupabaseServerClient } from '@/lib/supabase-server';
+import { getMe } from '@/lib/me';
 import { ChangePasswordForm } from './change-password-form';
 
 // i9: reachable regardless of the must_change_password flag —
 // middleware.ts exempts this path (and /logout) specifically, since a
 // flagged user has to be able to get here to clear it.
 export default async function AccountPasswordPage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  let forced = false;
-  if (user) {
-    const { data: profile } = await supabase
-      .schema('tmsi')
-      .from('profiles')
-      .select('must_change_password')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    forced = profile?.must_change_password === true;
-  }
+  // Eram dois pedidos (auth.getUser + profiles); o me() traz must_change_password e é partilhado com o layout.
+  const me = await getMe();
+  const forced = me?.must_change_password === true;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">

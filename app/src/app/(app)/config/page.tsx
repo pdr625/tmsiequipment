@@ -8,7 +8,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { canManageFinanceConfig, canManageOperationalConfig, isAdmin, pricingConfigReadAccess } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { canManageFinanceConfig, canManageOperationalConfig, isAdmin, pricingConfigReadAccess } from '@/lib/perms';
 import { PRICE_NOTICE_KEY, PRICE_NOTICE_TEXT, isPriceNoticeOn } from '@/lib/price-notice';
 import { pickActive } from '@/lib/pick-active';
 import {
@@ -93,13 +94,12 @@ function PendingBadge({ count }: { count: number }) {
 export default async function ConfigPage() {
   const supabase = await createSupabaseServerClient();
 
-  const [{ readCosts, readLogistics }, canWriteFinance, canWriteOperational, admin, noticeOn] = await Promise.all([
-    pricingConfigReadAccess(),
-    canManageFinanceConfig(),
-    canManageOperationalConfig(),
-    isAdmin(),
-    isPriceNoticeOn(),
-  ]);
+  const [me, noticeOn] = await Promise.all([getMe(), isPriceNoticeOn()]);
+  // Eram OITO chamadas RPC próprias (4 guardas × 1-3 has_role): o me() partilhado com o layout decide-as todas.
+  const { readCosts, readLogistics } = pricingConfigReadAccess(me);
+  const canWriteFinance = canManageFinanceConfig(me);
+  const canWriteOperational = canManageOperationalConfig(me);
+  const admin = isAdmin(me);
 
   if (!readCosts && !readLogistics) {
     redirect('/');

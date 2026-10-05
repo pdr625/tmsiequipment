@@ -7,7 +7,8 @@
 
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { canManageProducts } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { canManageProducts } from '@/lib/perms';
 
 type ProductRow = {
   id: string;
@@ -33,15 +34,16 @@ type ProductRow = {
 export default async function ProductsPage() {
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: products, error }, canManage] = await Promise.all([
+  const [{ data: products, error }, me] = await Promise.all([
     supabase
       .schema('tmsi')
       .from('v_products')
       .select('id, name, item_type, status, primary_branch, currency, exw_price')
       .order('id')
       .overrideTypes<ProductRow[], { merge: false }>(),
-    canManageProducts(),
+    getMe(),
   ]);
+  const canManage = canManageProducts(me);
 
   const seesCosts = products?.some((p) => p.exw_price !== null) ?? false;
 

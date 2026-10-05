@@ -6,7 +6,8 @@
  */
 
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { isAdmin } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { isAdmin, isBranchManager } from '@/lib/perms';
 import { PendingQueue, type PendingItem } from './forms';
 
 type Proposal = {
@@ -73,7 +74,7 @@ function formatPayload(p: Proposal): string {
 export default async function ProposalsPage() {
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: proposals }, { data: profiles }, admin, { data: isBm }, { data: myBranches }] = await Promise.all([
+  const [{ data: proposals }, { data: profiles }, me] = await Promise.all([
     supabase
       .schema('tmsi')
       .from('price_proposals')
@@ -86,10 +87,13 @@ export default async function ProposalsPage() {
     // RLS-scoped like the audit page's own lookup: admin sees every
     // profile, anyone else only their own — raw UUID shown otherwise.
     supabase.schema('tmsi').from('profiles').select('user_id, email').overrideTypes<Profile[], { merge: false }>(),
-    isAdmin(),
-    supabase.schema('tmsi').rpc('has_role', { r: 'branch_manager' }),
-    supabase.schema('tmsi').rpc('my_branches'),
+    getMe(),
   ]);
+  // Eram três pedidos próprios (has_role admin, has_role branch_manager, my_branches): o me() já traz
+  // os papéis e as filiais (tmsi.my_branches()), partilhado com o layout.
+  const admin = isAdmin(me);
+  const isBm = isBranchManager(me);
+  const myBranches = me?.branches ?? [];
 
   const userLabel = (id: string | null) => (id ? (profiles?.find((p) => p.user_id === id)?.email ?? id) : '—');
   const branches: string[] = Array.isArray(myBranches) ? myBranches : [];

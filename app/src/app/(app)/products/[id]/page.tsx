@@ -8,7 +8,8 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { canManageProducts } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { canManageProducts } from '@/lib/perms';
 import { overrideStatus } from '@/lib/override-status';
 import { alertaDe } from '@/lib/alert';
 import { EditProductForm } from './edit-form';
@@ -110,12 +111,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: product }, canManage, { data: canReadOperational }, { data: canReadCosts }] = await Promise.all([
+  const [{ data: product }, me] = await Promise.all([
     supabase.schema('tmsi').from('v_products').select('*').eq('id', id).maybeSingle<Product>(),
-    canManageProducts(),
-    supabase.schema('tmsi').rpc('can_read_operational'),
-    supabase.schema('tmsi').rpc('can_read_costs'),
+    getMe(),
   ]);
+  // can_read_operational()/can_read_costs() vêm do me() (que as chama), partilhado com o layout:
+  // eram duas chamadas RPC próprias desta página. Booleanos estritos, como antes só valia `=== true`.
+  const canManage = canManageProducts(me);
+  const canReadOperational = me?.can_read_operational === true;
+  const canReadCosts = me?.can_read_costs === true;
 
   if (!product) {
     notFound();
@@ -128,7 +132,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // 0001 §3), so a cost/operational-visible role viewing one of those
   // would wrongly look ungated. currency/exw_price are NOT NULL at the
   // table level (0001 §3), so they'd be safe single-row signals for
-  // canReadCosts specifically, but the direct RPC call is simpler and
+  // canReadCosts specifically, but me() (which calls the same DB functions) is simpler and
   // uniform with canReadOperational, which has no such safe column at all.
 
   const branchIds = Array.from(new Set([product.primary_branch, ...product.sold_in]));

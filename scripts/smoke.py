@@ -2230,25 +2230,89 @@ def block_home_menu():
           "getMe()" in layout and "getMe()" in prices and "cache(" in me_ts,
           "getMe() no layout e no /prices, cache() em me.ts")
 
-    def corpo(fonte, nome):
-        m = _re.search(r"export async function " + nome + r"\b.*?\n}\n", fonte, _re.S)
+    perms = (raiz / "lib" / "perms.ts").read_text()
+
+    def corpo_guarda(nome):
+        m = _re.search(r"export async function " + nome + r"\b.*?\n}\n", guard, _re.S)
+        return m.group(0) if m else ""
+    def corpo_perms(nome):
+        m = _re.search(r"export function " + nome + r"\b.*?\n}\n", perms, _re.S)
         return m.group(0) if m else ""
     def papeis_guarda(nome):
-        return set(_re.findall(r"r: '([a-z_]+)'", corpo(guard, nome)))
-    def papeis_nav(const):
-        m = _re.search(r"const " + const + r" = ([^;]+);", nav)
-        linha = m.group(1) if m else ""
-        return set(_re.findall(r"has\('([a-z_]+)'\)", linha)) | ({"admin"} if _re.search(r"\badmin\b", linha) else set())
-    check("MM: as entradas «Audit log» são para os mesmos papéis que canReadAuditLog()",
-          papeis_nav("canAudit") == papeis_guarda("canReadAuditLog") != set(),
-          f"nav {sorted(papeis_nav('canAudit'))} == guarda {sorted(papeis_guarda('canReadAuditLog'))}")
-    check("MM: a entrada «Bulk import» é para os mesmos papéis que canManageProducts()",
-          papeis_nav("canProducts") == papeis_guarda("canManageProducts") != set(),
-          f"nav {sorted(papeis_nav('canProducts'))} == guarda {sorted(papeis_guarda('canManageProducts'))}")
-    check("MM: «Pricing configuration» usa can_read_costs + logistics, como pricingConfigReadAccess()",
-          "r: 'logistics'" in corpo(guard, "pricingConfigReadAccess") and "has('logistics')" in nav
-          and "me.can_read_costs" in nav and "can_read_costs" in corpo(guard, "pricingConfigReadAccess"),
-          "can_read_costs + has_role('logistics')")
+        return set(_re.findall(r"r: '([a-z_]+)'", corpo_guarda(nome)))
+    def papeis_perms(nome):
+        return set(_re.findall(r"has\(me, '([a-z_]+)'\)", corpo_perms(nome)))
+    # (função em perms.ts, função em auth-guard.ts): o MESMO conjunto de papéis. Sem isto, mudar uma
+    # guarda de auth-guard.ts deixava o menu e as páginas a decidir pelo critério antigo, em silêncio.
+    for nome in ("isAdmin", "canManageProducts", "canManageFinanceConfig", "canManageOperationalConfig",
+                 "canManageAnyPriceOverride", "canReadAuditLog"):
+        check(f"MM: {nome}() em perms.ts exige os mesmos papéis que em auth-guard.ts",
+              papeis_perms(nome) == papeis_guarda(nome) != set(),
+              f"perms {sorted(papeis_perms(nome))} == guarda {sorted(papeis_guarda(nome))}")
+    check("MM: pricingConfigReadAccess() usa can_read_costs + logistics, como a guarda",
+          "has(me, 'logistics')" in corpo_perms("pricingConfigReadAccess") and "can_read_costs" in corpo_perms("pricingConfigReadAccess")
+          and "r: 'logistics'" in corpo_guarda("pricingConfigReadAccess") and "can_read_costs" in corpo_guarda("pricingConfigReadAccess"),
+          "can_read_costs + has_role('logistics') nos dois")
+    check("MM: canReadDashboard() é só can_read_costs, sem papéis, nos dois sítios",
+          "can_read_costs" in corpo_perms("canReadDashboard") and not papeis_perms("canReadDashboard")
+          and "can_read_costs" in corpo_guarda("canReadDashboard") and not papeis_guarda("canReadDashboard"),
+          "sem papéis")
+    nav_sem_papeis = _re.sub(r"//[^\n]*", "", nav)
+    check("MM: o menu decide por perms.ts (nav.ts não escreve papéis)",
+          "from './perms'" in nav and not _re.search(r"has\('|'(admin|finance|logistics|product_manager|branch_manager|viewer)'", nav_sem_papeis),
+          "nav.ts importa ./perms e não tem nomes de papéis")
+
+    import pathlib as _pl2
+    paginas = sorted((app).rglob("page.tsx"))
+    com_guarda = [str(f.relative_to(app)) for f in paginas if "@/lib/auth-guard" in f.read_text()]
+    com_rpc = [str(f.relative_to(app)) for f in paginas
+               if _re.search(r"auth\.getUser\(|\.rpc\('(has_role|can_read_costs|can_read_operational|my_branches)'", f.read_text())]
+    check("MM: nenhuma página pede as guardas à BD (usam o me() partilhado; só as Server Actions usam auth-guard.ts)",
+          not com_guarda and not com_rpc,
+          f"{len(paginas)} páginas sem import de auth-guard nem RPC de identidade" if not (com_guarda or com_rpc)
+          else f"import={com_guarda} rpc={com_rpc}")
+
+
+def block_perms_equivalence(tokens, claims):
+    """MM2 — perms.ts vs a BD, ao vivo. As páginas deixaram de chamar has_role()/can_read_costs()/
+    my_branches() e decidem por perms.ts sobre o me(). Esta prova junta, para cada papel com conta de
+    teste, a linha REAL de me() e as respostas REAIS dessas funções, e corre o perms.ts verdadeiro
+    (Node 24 da imagem da app, sem rede) a compará-las. Admin e viewer não têm conta de teste: ficam
+    cobertos pelos casos escritos à mão no próprio script."""
+    import json as _json
+    import pathlib as _pl
+    import subprocess as _sp
+    raiz = _pl.Path(__file__).resolve().parent.parent
+    papeis_bd = ["admin", "product_manager", "finance", "viewer", "branch_manager", "logistics"]
+    casos = []
+    for papel, tok in tokens.items():
+        st, linhas = http("POST", f"{REST}/rpc/me", token=tok, body={})
+        if st != 200 or not isinstance(linhas, list) or len(linhas) != 1:
+            check(f"MM2: me() de {papel}", False, f"http_{st}")
+            return
+        bd = {}
+        for r in papeis_bd:
+            st, v = http("POST", f"{REST}/rpc/has_role", token=tok, body={"r": r})
+            bd[r] = v if st == 200 else None
+        st1, cc = http("POST", f"{REST}/rpc/can_read_costs", token=tok, body={})
+        st2, mb = http("POST", f"{REST}/rpc/my_branches", token=tok, body={})
+        bd["can_read_costs"] = cc if st1 == 200 else None
+        bd["my_branches"] = mb if st2 == 200 and isinstance(mb, list) else None
+        if any(v is None for v in bd.values()):
+            check(f"MM2: respostas da BD para {papel}", False, f"{bd}")
+            return
+        casos.append({"papel": papel, "me": linhas[0], "bd": bd})
+    imagem = _sp.run(["docker", "inspect", "tmsi-app", "--format", "{{.Config.Image}}"], capture_output=True, text=True).stdout.strip()
+    if not imagem:
+        check("MM2: perms.ts bate com a BD", True, "SKIP — contentor tmsi-app não encontrado")
+        return
+    r = _sp.run(["docker", "run", "--rm", "-i", "--memory", "96m", "--network", "none", "--entrypoint", "node",
+                 "-v", f"{raiz}:/r:ro", imagem, "--no-warnings", "/r/scripts/prova-perms.mjs"],
+                input=_json.dumps(casos), capture_output=True, text=True, timeout=120)
+    falhas = [l for l in r.stdout.splitlines() if l.startswith("XX")]
+    check(f"MM2: perms.ts (real) bate com has_role()/can_read_costs()/my_branches() da BD, {len(casos)} papéis ao vivo",
+          r.returncode == 0 and not falhas and len(casos) >= 5,
+          f"{len(casos)} papéis, 0 divergências" if r.returncode == 0 else f"{len(falhas)}: {falhas[:2]} {r.stderr[-100:]}")
 
 
 def block_theme():
@@ -2691,6 +2755,7 @@ def main():
     block_alert_rule()
     block_price_notice(sell_side.get("sales"))
     block_me_and_settings(tokens, claims)
+    block_perms_equivalence(tokens, claims)
     block_home_menu()
     block_theme()
     block_print_options()

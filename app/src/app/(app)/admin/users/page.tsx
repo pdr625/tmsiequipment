@@ -7,7 +7,8 @@
 
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
-import { isAdmin } from '@/lib/auth-guard';
+import { getMe } from '@/lib/me';
+import { isAdmin } from '@/lib/perms';
 import { InviteForm, AddRoleForm, RemoveRoleButton, BanToggleButton, ResetPasswordForm } from './client-forms';
 
 type Profile = { user_id: string; email: string | null; full_name: string | null };
@@ -17,9 +18,10 @@ type Channel = { id: string; name: string };
 type GoTrueUser = { id: string; email?: string; banned_until?: string };
 
 // Real gate: redirect('/'), not just hiding the "Admin" nav link.
-// isAdmin() asks Postgres (tmsi.has_role), never re-implemented here.
+// isAdmin(me) é o mesmo critério que tmsi.has_role('admin') (me().roles são as linhas de user_roles),
+// sobre o me() partilhado com o layout: zero pedidos a mais. As Server Actions continuam a perguntar à BD.
 export default async function AdminUsersPage() {
-  if (!(await isAdmin())) {
+  if (!isAdmin(await getMe())) {
     redirect('/');
   }
 
