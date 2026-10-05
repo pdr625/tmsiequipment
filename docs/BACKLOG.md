@@ -1014,7 +1014,7 @@ blocos do cabeçalho (ver `STATE.md`, «Print options»). **FICA POR FAZER: esco
 decidir o que acontece à selecção ao mudar de filtro (os filtros recarregam a página), e o botão Excel só
 acompanha a selecção com trabalho no servidor. Decidir também se o aviso/rodapé continuam sem caixa.
 
-**105. Afinar a impressão depois de o Pedro ver o PDF** — **REGISTADO 2026-10-05**. A correcção da
+**105. Afinar a impressão depois de o Pedro ver o PDF** (a parte do cabeçalho repetido foi o `c861d40`, ver `STATE.md`) — **REGISTADO 2026-10-05**. A correcção da
 impressão (orientação do utilizador, folha aproveitada) está provada por código e pelo CSS publicado,
 **não por browser** — o VPS não tem um e não cabe lá. Os números (letra 12,5/11,5 px, margens 10×8 mm,
 células `0,2 rem`) são a primeira estimativa. Se o PDF mostrar linhas apertadas demais ou espaço por

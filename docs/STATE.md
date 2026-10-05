@@ -3,9 +3,12 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: «Print options» — escolher colunas e blocos a imprimir — 2026-10-05.** Revisão
-`6b20594` em produção (digest `sha256:388cff5760f9…`), smoke **189/189** nos três modos (183 + 6).
+**Etapa actual: impressão — o cabeçalho do documento repete-se em cada folha — 2026-10-05.** Revisão
+`c861d40` em produção (digest `sha256:0350c58980dc…`), smoke **191/191** nos três modos (189 + 2).
 Só frontend, sem migração. Detalhe: primeira secção abaixo.
+
+**Etapa anterior: «Print options» — escolher colunas e blocos a imprimir — 2026-10-05.** Revisão
+`6b20594` (digest `sha256:388cff5760f9…`), smoke 189/189.
 
 **Etapa anterior: impressão — cabeçalho da tabela a repetir-se (2.ª correcção) — 2026-10-05.** Revisão
 `ff1a19d` (digest `sha256:f2830d40cad7…`), smoke 183/183.
@@ -65,6 +68,50 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 05/10 (noite, 4.ª) — impressão: o cabeçalho do documento repete-se (2026-10-05)
+
+**Pedido do Pedro:** «o cabeçalho não se repete nas páginas seguintes».
+
+**⚠ Erro de leitura meu, e dois ciclos perdidos.** Entendi «cabeçalho» como a **linha das colunas** da
+tabela (Product, Scope…) e corrigi duas vezes (`ff1a19d`: `break-inside` só no `tbody`; a anterior,
+`ef47f96`, que afirmava a repetição). **Nunca era isso:** o Chrome repete essa linha sozinho (`<thead>`).
+O Pedro tinha em mente o **bloco de cima** — logo, título, âmbito, moeda, «gerado por» —, que estava
+antes da tabela e **só saía na 1.ª folha**. Só o percebi à terceira, quando **perguntei** (colunas / bloco /
+ambos; Chrome/Edge) em vez de adivinhar outra vez. As duas correcções anteriores ficam (inofensivas), mas
+não resolviam este pedido. **Lição: palavra ambígua + defeito que não consigo ver = perguntar à primeira.**
+
+**Implantado:** revisão `c861d40`, digest
+`sha256:0350c58980dc947c4977b86e4d5fc044791a42504e9d69471d8dd03282991fb8` (label = commit), `healthy`, CI
+#71 verde, smoke **191/191** nos três modos. Só frontend, sem migração. Rollback:
+`sha256:388cff5760f960d109f35d5e2fbe7dd696885d6fe920bbc8e6d0bfc77bcb1eaf`.
+
+**Como:** o Chrome repete o `<thead>` INTEIRO em cada folha, por isso o bloco passa a ser a **1.ª linha do
+`<thead>`** de ambas as tabelas (`PrintHeaderRow`, em `print-scope.tsx`): `hidden print:table-row` (só
+existe no papel) e `colSpan` = colunas **visíveis** (com «Print options» a esconder colunas, um colSpan fixo
+criaria colunas fantasma). Layout compacto para não comer a folha: logo + título numa linha, âmbito /
+moeda / gerado por noutra. As caixas de «Print options» continuam a funcionar sobre estes elementos.
+
+**Decisão a confirmar — o aviso de «preços operacionais» (item 32) repete-se também.** Pô-lo por cima do
+logo (onde ficaria se continuasse fora da tabela) seria feio; pô-lo no mesmo bloco é a ordem certa na
+1.ª folha, e para um aviso legal repetir-se em cada folha é a opção prudente (uma folha solta não perde
+o aviso). Custa ~2 linhas por folha. O aviso do ecrã fica `print:hidden` e o smoke `KK` passou a aceitar
+as duas cópias (exige ≥ 1 que se imprima). Reverter = tirar o `{aviso && …}` de `cabecalhoImpresso`.
+
+**Smoke 189 → 191** (`UU`): o cabeçalho é a 1.ª linha do `thead` das duas tabelas e já não há bloco solto
+antes delas; a linha só existe no papel e o `colSpan` acompanha as colunas visíveis. O `UU` do aviso
+passou a olhar para **todas** as cópias. **Seis mutações provadas** (cabeçalho fora do `thead`, bloco
+solto de volta, linha visível no ecrã, `colSpan` fixo, hook no aviso, nenhuma cópia a imprimir — esta
+última pela função de extracção, porque o `KK` precisa de BD).
+
+**NÃO visto:** o PDF. Sem browser no VPS, o resultado é por código + CI + o desenho do HTML; fica para o
+Pedro (e, ao contrário das tentativas anteriores, aqui há uma razão técnica sólida — o Chrome repete o
+`thead` inteiro — em vez de uma suposição).
+
+**A confirmar pelo Pedro, em `/prices` com mais de uma folha:** o logo/título/âmbito/moeda/«gerado por»
+(+ aviso) aparecem no topo de TODAS as folhas, por cima da linha das colunas; «Print options» a esconder
+uma coluna e um bloco continua a funcionar e a tabela não fica desalinhada; quantas linhas de dados cabem
+agora por folha (o cabeçalho ocupa mais).
 
 ## Sessão 05/10 (noite, 3.ª) — «Print options»: colunas e blocos a imprimir (2026-10-05)
 
