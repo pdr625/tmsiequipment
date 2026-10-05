@@ -1038,11 +1038,12 @@ depois de o Pedro ver o resultado no browser decide-se o que vale a pena: (a) bo
 dashboard, que têm cor de borda própria; (d) o `/login` e as páginas de recuperação, sem a «pílula»
 coral da marca; (e) estados vazios com um desenho em vez de uma linha cinzenta. Nenhum é defeito.
 
-**103. Admin e `viewer` sem conta de teste: as entradas do menu deles só estão provadas por código** —
-**REGISTADO 2026-10-04**. A equivalência `me().roles` ≡ `has_role()` foi provada ao vivo para os 6
-papéis com conta de teste; para `admin` (conta pessoal do Pedro, fora do smoke por desenho) e
-`viewer` (papel que existe nas guardas mas sem utilizador) fica a leitura do código e a asserção
-estática `MM`. O Pedro confirma o menu de admin no browser.
+**103. `viewer` sem utilizador: as entradas do menu e as guardas dele só estão provadas por código** —
+**REGISTADO 2026-10-04, ACTUALIZADO 2026-10-05.** O Pedro confirmou no browser (2026-10-05) que as permissões
+estão correctas, incluindo a conta de **admin** — que deixa de ser uma lacuna. Fica só o `viewer`: papel que
+existe nas guardas (`canReadAuditLog`) e em `can_read_costs()` mas **sem nenhum utilizador**, por isso só tem a
+leitura do código, os casos escritos à mão em `scripts/prova-perms.mjs` e a asserção estática `MM`. Quando
+existir um utilizador `viewer`, acrescentar uma conta de teste ao smoke.
 
 **45. Sem mecanismo de apagamento/anonimização de utilizador** — **REGISTADO 2026-09-16**,
 achado de F0 do item 42. `app/src/app/admin/users/actions.ts` tem convidar, atribuir papel,
