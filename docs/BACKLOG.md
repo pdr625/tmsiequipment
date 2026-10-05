@@ -30,12 +30,12 @@ desenho, não resolvido).
 
 ## Triagem do backlog — 2026-10-05
 
-Das **40** entradas sem marca de fecho, **12 já estão fechadas ou decididas** (9 na triagem, mais o 57, o 94 e o 83 fechados no mesmo dia) (marcadas abaixo, com a evidência de cada uma, verificada
-ao vivo na BD ou no código — não por memória) e **28 continuam abertas**. Das 28, **17 precisam de uma decisão tua**, **8 são trabalho
+Das **40** entradas sem marca de fecho, **13 já estão fechadas ou decididas** (9 na triagem, mais o 57, o 94, o 83 e o 63 fechados no mesmo dia) (marcadas abaixo, com a evidência de cada uma, verificada
+ao vivo na BD ou no código — não por memória) e **28 continuam abertas** (uma saiu, uma entrou: o 110). Das 28, **18 precisam de uma decisão tua**, **7 são trabalho
 de código** e **3 só se fecham com a tua medição ou o teu browser**. A extracção automática do backlog **não é fiável** (marcava como
 abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um item sem verificar o estado real.
 
-**Fechados / decididos / superados (12):** 8, 13, 56, 57, 59, 60, 61, 62, 64, 74, 83, 94 — ver a nota no início de cada um.
+**Fechados / decididos / superados (13):** 8, 13, 56, 57, 59, 60, 61, 62, 63, 64, 74, 83, 94 — ver a nota no início de cada um.
 
 **Abertos — decisão tua, sem código (17):**
 - Política e negócio: **50** (`branch_manager` aprova configuração global?), **82** (`finance` escreve limiares de margem sem proposta), **27** (regra
@@ -43,11 +43,11 @@ abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um i
 - Dependem de terceiros ou de dados teus: **32** (base do direito aduaneiro — aguarda o despachante), **7** (entregabilidade de e-mail), **11** (CPI L113-9),
   **12** (handover §7), **52** e **53** (códigos SAP), **95** (câmbios de teste de Setembro),
   **107** (categorias duplicadas), **108** (3 produtos sem categoria).
-- Fronteira de segurança: **109** (Server Actions a delegar em `perms.ts`).
+- Fronteira de segurança: **109** (Server Actions a delegar em `perms.ts`), **110** (`channels.margin_delta` legível por qualquer conta).
 
-**Abertos — trabalho de código (8):** **86** (validação de `settings`; `0` restrições hoje — migração **0023** (a 0022 passou a ser o autor `system` do `audit_log`), depois da reunião de 13/10), **91** e **93** (cosméticos,
+**Abertos — trabalho de código (7):** **86** (validação de `settings`; `0` restrições hoje — migração **0023** (a 0022 passou a ser o autor `system` do `audit_log`), depois da reunião de 13/10), **91** e **93** (cosméticos,
 bloco C), **55** (a perna off-site não aparece na monitorização; só se mede a idade do dump local), **45**, **46**, **49** (apagar/anonimizar, exportar os
-próprios dados e reter 5 anos — a `/privacy` ainda diz que não existem), **63** (sete rotas cujo único gate é a RLS — endurecimento).
+próprios dados e reter 5 anos — a `/privacy` ainda diz que não existem).
 
 **Abertos — só se fecham contigo (3):** **73** (medir os pedidos por página em runtime com `scripts/contar-pedidos.sh`; `/prices` está em 9), **103** (`viewer` sem utilizador),
 **105** (afinar a impressão depois de veres o PDF).
@@ -317,7 +317,7 @@ em `audit()`. **Não é explorável hoje** — os corpos qualificam tudo, e `aut
 têm `CREATE` em `public`, `tmsi`, `auth` nem na base, logo não há onde plantar um objecto que
 capture um nome. Dívida de defesa em profundidade, não incidente. Corrigir é migração.
 
-**63. Sete rotas cujo único gate é a RLS por baixo** — **ACHADO 2026-09-19.** `/products/export`
+~~**63. Sete rotas cujo único gate é a RLS por baixo**~~ ✅ **FECHADO 2026-10-05 — verificado, sem alteração à app; smoke 215 → 223.** Reverificado rota a rota (o item é de 19/09 e a app mudou): `/products/export` já tem o gate explícito (⚠️10, via `me()`); `/` só redirecciona para `/prices`; as outras páginas escondem controlos por `lib/perms.ts` e leem pela RLS **por desenho** (dados de referência e vistas por papel). **A medição que faltava:** papel a papel (finance, product_manager, branch_manager, logistics, sales, agent e uma identidade sem papel), o que as rotas conseguem ler em 13 tabelas/vistas — a RLS faz o que se pretende: vendas e agentes não lêem overrides, propostas, transporte, margens, taxas nem auditoria; sem papel não lê artigos nem overrides. Como a RLS é a única barreira, **a matriz passou a ser vigiada** (bloco `WW`, 8 asserções) e provada com políticas estragadas numa transacção revertida: 6 mutações (overrides, artigos, propostas, margens, taxas e a vista de auditoria), todas apanhadas. Em `v_audit_log` há duas barreiras (a política **e** o `WHERE has_role(...)` da própria vista). **Fica por decidir (item novo 110):** `channels.margin_delta` (e a lista de canais) é legível por **qualquer** conta autenticada, vendas e sem-papel incluídas (`ref_read … true`); a 0009 diz que a coluna é legada e sem leitores no motor. _(texto original abaixo)_ —  — **ACHADO 2026-09-19.** `/products/export`
 (a mais séria — é a única rota de export que não ramifica por `can_read_costs()`, ⚠️10),
 `/products`, `/products/[id]`, `/overrides`, `/proposals`, `/branches` e `/`. Nenhuma verifica
 papel; todas dependem da RLS da vista ou tabela por baixo. Funciona hoje, e é a última linha de
@@ -1046,6 +1046,11 @@ Bloco `TT` do smoke impede que voltem.
 ~~**106. Escolher o que se imprime (checkbox)**~~ ✅ **FECHADO 2026-10-05.** Parte 1 (colunas e blocos do
 cabeçalho): `6b20594`. Parte 2 (linhas): `b5bb689`, **por categoria de produto** e não uma a uma, a pedido do
 Pedro. Ver `STATE.md`, «Print options: linhas por categoria». Custo assumido: o `/prices` passa a 9 pedidos.
+
+**110. `channels.margin_delta` é legível por qualquer conta autenticada** — **REGISTADO 2026-10-05**, achado ao fechar o 63. A política `ref_read` de `tmsi.channels` é `using (true)` e `authenticated` tem
+`SELECT` na coluna: um vendedor, um agente e até uma conta **sem papel** lêem `margin_delta` (hoje `APAC → TBM → -0.10`) e a lista de canais; `/branches` mostra-a a todos. A 0009 diz que a coluna é **legada, sem leitores no motor**
+(a margem de canal vem agora de `price_overrides`), logo é um valor de margem que já não serve a nada e que o lado de vendas não devia ver. **Opções (decisão tua):** (a) `REVOKE SELECT (margin_delta)` aos papéis de venda e sem papel e a
+página `/branches` deixa de a pedir a quem não a pode ler; (b) retirar a coluna da página e da base de dados; (c) aceitar (é dado de referência, valor legado). Recomendo (a) ou (b); é migração + página + smoke.
 
 **107. Categorias duplicadas no catálogo** — **REGISTADO 2026-10-05**, achado ao listar as categorias para
 «Print options». Pares com o mesmo nome e códigos diferentes: BRUSH / BRUSHSY («Brush systems»), FOAM_GEN /

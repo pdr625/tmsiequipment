@@ -2381,6 +2381,61 @@ def block_audit_no_new_nulls(base_id):
           int(novas) > 0 and nulos == "0", f"{novas} linhas novas, {nulos} com autor nulo")
 
 
+# item 63: as rotas /, /products, /products/[id], /overrides, /proposals, /branches (e o export) não têm um gate de papel
+# próprio: leem tabelas e vistas e deixam a RLS decidir. É uma escolha, não um esquecimento — mas então a RLS é a ÚNICA barreira,
+# e uma política alargada por engano (ou um GRANT) abria a leitura sem nenhuma outra camada a travar. Esta matriz fixa, por papel,
+# o que cada rota consegue LER. Só distingue 0 / >0 (as contagens exactas mudam com os dados). «sem papel» é uma identidade
+# fabricada (UUID sem linha em user_roles) — não depende de existir uma conta assim.
+_ROUTE_TABLES = ["v_products", "products", "price_overrides", "price_proposals", "profiles", "branches", "channels",
+                 "branch_pricing_params", "transport_tiers", "margin_grids", "customs_rates", "exchange_rates", "v_audit_log"]
+# 1 = tem de ver linhas; 0 = tem de ver zero. Ordem = _ROUTE_TABLES. Medido ao vivo em 2026-10-05 e confirmado contra a intenção
+# documentada de cada papel (docs/STATE.md, 0001-0021).
+_ROUTE_MATRIX = {
+    "finance":         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "product_manager": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+    "branch_manager":  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "logistics":       [1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0],
+    "sales":           [1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+    "agent":           [1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+    "sem papel":       [0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],  # profiles=0: a identidade fabricada não tem perfil próprio (uma conta real vê o seu)
+}
+
+
+def _route_counts(uuid, pre=""):
+    """Contagens por tabela como `authenticated` com estas claims. `pre` corre ANTES, como postgres, dentro de uma transacção
+    que é sempre revertida — é como se prova que a asserção sabe falhar (uma política estragada a sério, sem tocar na produção)."""
+    sel = "".join(f"select '{t}', count(*) from tmsi.{t};\n" for t in _ROUTE_TABLES)
+    script = ("begin;\n" + pre + "\n"
+              "do $$ begin perform set_config('request.jwt.claims', "
+              f"'{{\"sub\":\"{uuid}\",\"role\":\"authenticated\"}}', true); end $$;\n"
+              "set local role authenticated;\n" + sel + "reset role;\nrollback;")
+    rc, out, err = psql(script)
+    if rc != 0:
+        raise RuntimeError(f"psql failed: {err}")
+    return {l.split("|")[0]: int(l.split("|")[1]) for l in out.splitlines() if "|" in l}
+
+
+def block_route_visibility(claims):
+    SEM_PAPEL = "00000000-0000-4000-8000-0000000000aa"
+    ids = {**{r: claims[r] for r in ("finance", "product_manager", "branch_manager", "logistics")}}
+    sell = {}
+    for role in ("sales", "agent"):
+        f = psql_rows(f"select user_id from tmsi.user_roles where role = '{role}' limit 1;")
+        sell[role] = f[0][0] if f else None
+    ids.update(sell)
+    ids["sem papel"] = SEM_PAPEL
+    for role, expected in _ROUTE_MATRIX.items():
+        if not ids.get(role):
+            check(f"WW: {role} — o que as rotas conseguem ler", True, "SKIP — sem conta com este papel")
+            continue
+        got = _route_counts(ids[role])
+        bad = [f"{t}={got[t]}(esperado {'>0' if e else '0'})" for t, e in zip(_ROUTE_TABLES, expected) if (got[t] > 0) != bool(e)]
+        check(f"WW: {role} — o que as rotas conseguem ler (13 tabelas/vistas, só 0 vs >0)", not bad, "; ".join(bad) or "matriz igual à esperada")
+    # a ponta mais sensível: a conta sem papel e o vendedor NUNCA vêem custos nem acordos de preço
+    check("WW: uma conta sem papel não lê nenhum artigo nem override (as rotas ficam vazias, não abertas)",
+          all(_route_counts(SEM_PAPEL)[t] == 0 for t in ("v_products", "products", "price_overrides", "price_proposals")), "0 em todas")
+
+
 def block_theme():
     """TT — tema (2026-10-04). Três coisas que se estragam em silêncio:
     (1) uma cor fixa (`bg-gray-100`, `text-red-700`, `bg-white`…) escrita à mão
@@ -2837,6 +2892,7 @@ def main():
         block_price_notice(sell_side.get("sales"))
         block_me_and_settings(tokens, claims)
         block_perms_equivalence(tokens, claims)
+        block_route_visibility(claims)
         block_home_menu()
         block_theme()
         block_print_options()

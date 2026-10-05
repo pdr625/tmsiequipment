@@ -82,6 +82,15 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
 
+## Sessão 05/10 (noite, 13.ª) — item 63: as rotas protegidas só pela RLS (2026-10-05)
+
+**Só `scripts/smoke.py` e docs; nada implantado** (produção continua `d4dcda3`; smoke **215 → 223**, verde nos três modos).
+**Reverificado rota a rota** (o item é de 19/09): `/products/export` já tinha o gate explícito (⚠️10, via `me()`); `/` só redirecciona; as restantes escondem controlos por `lib/perms.ts` e leem pela RLS por desenho.
+**O que faltava era a medição:** papel a papel + uma identidade sem papel, o que as rotas lêem em 13 tabelas/vistas. A RLS faz o pretendido (vendas/agentes não lêem overrides, propostas, transporte, margens, taxas, auditoria; sem papel não lê artigos).
+Como é a única barreira, ficou **vigiada** (bloco `WW`, 8 asserções) e **provada com 6 políticas estragadas numa transacção revertida** (overrides, artigos, propostas, margens, taxas, vista de auditoria — esta com duas barreiras, política e `WHERE` da vista), todas apanhadas, resíduo zero.
+**Achado novo → item 110:** `channels.margin_delta` (legado, sem leitores no motor) é legível por qualquer conta, vendas e sem-papel incluídas — decisão tua.
+**Deslizes meus:** a chamada do bloco novo ficou com o recuo errado (o `main()` tem agora `try/finally`); e a minha expectativa para «sem papel» esperava um perfil que uma identidade fabricada não tem — corrigi a expectativa, não a RLS; a 6.ª mutação (auditoria) falhou a primeira vez por eu estragar a política em vez da vista, e só a contei depois de a refazer na vista.
+
 ## Sessão 05/10 (noite, 12.ª) — item 55: a cópia off-site passa a ser visível (PARCIAL) (2026-10-05)
 
 **Nada na app TMSI; mudança no gerador do `status.json` do VPS (`~/atelier-vps/vps-stats.sh`, cópia de segurança `.bak` feita antes) e na pasta `~/backups/tmsi-offsite-ack/`.**
