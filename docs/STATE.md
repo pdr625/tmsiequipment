@@ -3,10 +3,13 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: «Print options» — escolher as LINHAS a imprimir por categoria — 2026-10-05.** Revisão
-`b5bb689` em produção (digest `sha256:42a3974f50b9…`), smoke **198/198** nos três modos (192 + 6). Só
-frontend, sem migração, mas **o `/prices` passou de 8 para 9 pedidos ao backend** (nomes das categorias).
-Detalhe: primeira secção abaixo.
+**Etapa actual: páginas com `getMe()` partilhado, sem guardas nem RPCs próprias — 2026-10-05.** Revisão
+`f52510d` em produção (digest `sha256:1f4d43184446…`), smoke **206/206** nos três modos (198 − 3 + 11).
+Só frontend, sem migração. 13 páginas deixaram de fazer 1 a 8 chamadas ao backend cada. Detalhe:
+primeira secção abaixo.
+
+**Etapa anterior: «Print options» — escolher as LINHAS a imprimir por categoria — 2026-10-05.** Revisão
+`b5bb689` (digest `sha256:42a3974f50b9…`), smoke 198/198; o `/prices` ficou em 9 pedidos.
 
 **Etapa anterior: impressão — o rodapé também se repete em cada folha — 2026-10-05.** Revisão `4b3e2a8`
 (digest `sha256:b439377d3ac3…`), smoke 192/192.
@@ -75,6 +78,70 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 05/10 (noite, 7.ª) — páginas com `getMe()` partilhado (item 101) (2026-10-05)
+
+**Pedido do Pedro:** migrar as páginas para o `getMe()`.
+
+**Implantado:** revisão `f52510d`, digest
+`sha256:1f4d43184446cae40230469fda9c5910ee8aa2730e59ad24d64e9bd6aed1889a` (label = commit), `healthy`, CI
+#74 verde (typecheck incluído), smoke **206/206** nos três modos. **Sem migração.** Rollback:
+`sha256:42a3974f50b9a82b6f01258dd7dc7561b645bad506eb089964e9d68e09260e16`.
+
+**Porquê:** o menu lateral fez o layout pedir o `me()` em todas as páginas, e as páginas continuavam a
+pagar as suas próprias guardas (`isAdmin()`, `canReadAuditLog()`…, cada uma 1 a 4 `has_role`) mais, em
+alguns casos, RPCs soltos. O `me()` já traz tudo — papéis, `can_read_costs`, `can_read_operational`,
+filiais, `must_change_password` — e `getMe()` sem argumento partilha o resultado com o layout no mesmo
+render (`cache()` do React). Passar as páginas a decidir sobre ele tira-lhes essas idas à BD.
+
+**Como (para quem mexer):** `lib/perms.ts` tem as 8 guardas de `auth-guard.ts` como **funções puras sobre o
+`me()`** (`isAdmin(me)`, `canReadAuditLog(me)`, `pricingConfigReadAccess(me)`…). `has_role(r)` é «existe
+linha em `user_roles` para `auth.uid()`» e `me().roles` é o `array_agg` dessas linhas — equivalência exacta,
+não aproximação. O `nav.ts` passou a usar a mesma fonte (menu e página nunca discordam).
+
+**Chamadas ao backend retiradas, por visita (contagem estática do que cada página fazia):** `/config` 8,
+`/overrides` 5, `/audit` 4, `/products/[id]` 4 (2 de `canManageProducts` + `can_read_operational` +
+`can_read_costs`), `/import` 3, `/proposals` 3 (`isAdmin`, `has_role` branch_manager, `my_branches`),
+`/products` 2, `/products/new` 2, `/account/password` 2 (`getUser` + `profiles`), e 1 em cada de
+`/dashboard`, `/branches`, `/admin/users`, `/config/branding`. **Total: 37 chamadas** retiradas das 13
+páginas. O `/prices` não muda (já usava `getMe()`; fica nos 9 por causa de `categories`).
+**Contagem estática, NÃO medida em runtime** — a medição (`scripts/contar-pedidos.sh`) precisa de um
+carregamento de browser do Pedro.
+
+**⚠ O que NÃO mudou, de propósito: as Server Actions.** Continuam a usar `auth-guard.ts` e a perguntar à BD.
+São directamente invocáveis independentemente do que a UI mostra, não partilham render com ninguém, e a
+fronteira real é a RLS mais a guarda da própria acção. Migrá-las seria outra decisão (BACKLOG 109).
+Seis páginas usam estas guardas como **porta real** (`redirect('/')`: `admin/users`, `audit`, `import`,
+`config/branding`, `dashboard`, `products/new`) — por isso a equivalência foi provada, não suposta.
+
+**Provas:**
+- **Ao vivo, contra a BD:** `scripts/prova-perms.mjs` corre o `perms.ts` REAL no Node 24 da imagem (sem
+  rede) e compara as 10 decisões com as respostas reais de `has_role()`, `can_read_costs()` e
+  `my_branches()` para os **6 papéis com conta de teste** (agent, branch_manager, finance, logistics,
+  product_manager, sales): **0 divergências**. Está no smoke (`MM2`). `admin` e `viewer` **não têm conta de
+  teste**: ficam provados por casos escritos à mão no mesmo script (e o menu de admin, BACKLOG 103,
+  continua a precisar do browser do Pedro).
+- **Estático (`MM`, reescrito):** cada função de `perms.ts` exige o **mesmo conjunto de papéis** que a do
+  mesmo nome em `auth-guard.ts` (6 comparadas, mais `pricingConfigReadAccess` e `canReadDashboard`);
+  `nav.ts` não escreve papéis; **nenhuma das 16 páginas** importa `auth-guard` nem faz
+  `auth.getUser()`/RPC de identidade — uma regressão que voltasse a somar pedidos parte o smoke.
+- **15 mutações provadas:** 6 no `perms.ts` contra os dados reais da BD (finance fora da config, logistics
+  sem leitura, dashboard aberto a todos, auditoria com um papel a mais, `admin` mal escrito, `me` nulo a
+  passar por admin) e 9 estáticas (página com import/RPC/getUser de volta, `perms` ≠ `auth-guard`, menu com
+  papéis à mão…).
+
+**Smoke 198 → 206:** o `MM` troca 3 asserções por 10 e nasce o `MM2` (1).
+
+**Ao vivo, sem sessão:** as 10 páginas protegidas continuam a dar 307 para `/login`.
+**NÃO visto:** as páginas autenticadas a funcionar com cada papel — sem browser no VPS, e sem fabricar
+sessões (regra do projecto).
+
+**A confirmar pelo Pedro, no browser, com contas diferentes:** uma conta `sales`/`agent` a abrir `/audit`,
+`/config`, `/dashboard`, `/import` e `/admin/users` deve ser mandada para `/prices`; `logistics` a abrir
+`/config` deve ver só as secções operacionais e a ser recusada em `/dashboard` e `/audit`; `finance` deve
+ver `/config` completo; `branch_manager` deve decidir só propostas da sua filial; a tua conta de admin deve
+ver tudo, incluindo os formulários de `/branches`. E, se quiseres o número, `scripts/contar-pedidos.sh` num
+carregamento de `/config` (era 9 + 1 do layout, esperado agora 5 + 1…).
 
 ## Sessão 05/10 (noite, 6.ª) — «Print options»: linhas por categoria de produto (2026-10-05)
 

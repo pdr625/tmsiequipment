@@ -152,7 +152,7 @@ services:
     # (curl against the published endpoint, B4/B7).
 
   tmsi-app:
-    image: ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:42a3974f50b9a82b6f01258dd7dc7561b645bad506eb089964e9d68e09260e16
+    image: ghcr.io/pdr625/tmsiequipment/tmsi-app@sha256:1f4d43184446cae40230469fda9c5910ee8aa2730e59ad24d64e9bd6aed1889a
     container_name: tmsi-app
     restart: unless-stopped
     mem_limit: 192m

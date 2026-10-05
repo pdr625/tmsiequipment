@@ -997,12 +997,16 @@ achado ao copiar a paleta para o TMSI. O TMSI usa `#5f6b7e` (4,86:1). Corrigir n
 ~~**100. Seletor de tema provisório (botão flutuante)**~~ ✅ **FECHADO 2026-10-04 — `a8885bd`.**
 Passou para o rodapé do menu lateral; flutuante só nas páginas sem menu.
 
-**101. Páginas autenticadas que não usam `getMe()` pagam um pedido a mais** (o `/prices` está agora em 9, não 8, por causa de `categories` — ver «Print options») — **REGISTADO
-2026-10-04**, consequência assumida do menu lateral (o layout pede `me()`; só o `/prices` e os
-exports já o usam). As outras páginas (`products`, `config`, `dashboard`, `overrides`, `audit`…)
-continuam a fazer as suas chamadas a `getUser()`/`has_role()`/`can_read_costs()`. Migrá-las para
-`getMe()` **sem argumento** (partilhado com o layout) tira-lhes pedidos em vez de os somar. Medir
-antes e depois com `scripts/contar-pedidos.sh`.
+~~**101. Páginas autenticadas que não usam `getMe()` pagam um pedido a mais**~~ ✅ **FECHADO 2026-10-05 —
+`f52510d`.** 13 páginas passaram a decidir por `lib/perms.ts` sobre o `me()` partilhado; 37 chamadas ao
+backend retiradas por visita (contagem estática). **Medir em runtime fica para o Pedro** com
+`scripts/contar-pedidos.sh`.
+
+**109. Server Actions continuam a perguntar à BD (guardas de `auth-guard.ts`)** — **REGISTADO 2026-10-05**,
+de propósito: são directamente invocáveis e a fronteira real. Se um dia se quiser reduzir também aí, as
+guardas de `auth-guard.ts` podiam passar a delegar em `perms.ts` sobre `getMe()` (equivalência já provada),
+ficando UMA só definição de «quem pode o quê». É uma decisão sobre a fronteira de segurança, por isso não
+foi feita ao correr; o `MM` do smoke já falha se as duas definições divergirem.
 
 ~~**102. Os links «Back» das páginas apontam para `/`, que agora redirecciona para `/prices`**~~ ✅
 **FECHADO 2026-10-05 — `27640ff`.** 12 removidos; ficam os 2 para a lista de produtos («← Products»).
