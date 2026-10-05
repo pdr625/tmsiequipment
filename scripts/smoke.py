@@ -2315,6 +2315,66 @@ def block_perms_equivalence(tokens, claims):
           f"{len(casos)} papéis, 0 divergências" if r.returncode == 0 else f"{len(falhas)}: {falhas[:2]} {r.stderr[-100:]}")
 
 
+def block_audit_system_actor():
+    """VV — migração 0022 (item 94): o audit_log nunca tem autor nulo. O gatilho assina como `system` fora de um pedido HTTP,
+    com o utilizador real quando há sessão, e uma restrição NOT VALID recusa nulos novos sem reescrever o passado.
+    O fixture do próprio smoke é escrito sem claims — é a fonte do crescimento que isto veio parar."""
+    import re as _re
+    import pathlib as _pl
+    import subprocess as _sp
+    raiz = _pl.Path(__file__).resolve().parent.parent
+    mig = (raiz / "supabase" / "migrations" / "0022_audit_system_actor.sql").read_text()
+    ts = (raiz / "app" / "src" / "lib" / "system-actor.ts").read_text()
+    pagina = (raiz / "app" / "src" / "app" / "(app)" / "audit" / "page.tsx").read_text()
+    uuid_ts = (_re.search(r"SYSTEM_ACTOR_ID = '([0-9a-f-]{36})'", ts) or [None, None])[1]
+    uuid_sql = (_re.search(r"select '([0-9a-f-]{36})'::uuid", mig) or [None, None])[1]
+    uuid_bd = psql_rows("select tmsi.system_actor()::text;")[0][0]
+    check("VV: o UUID de system é o mesmo na migração, no código da app e na BD",
+          bool(uuid_ts) and uuid_ts == uuid_sql == uuid_bd, f"app={uuid_ts} migração={uuid_sql} bd={uuid_bd}")
+    r = psql_rows("select (pg_get_functiondef('tmsi.audit()'::regprocedure) like '%coalesce(auth.uid(), tmsi.system_actor())%')::text, "
+                  "prosecdef::text, (proconfig @> array['search_path=tmsi, pg_temp'])::text from pg_proc where oid = 'tmsi.audit()'::regprocedure;")[0]
+    check("VV: audit() usa coalesce(auth.uid(), system_actor()), é SECURITY DEFINER e tem search_path pinado",
+          r == ["true", "true", "true"], f"coalesce={r[0]} definer={r[1]} search_path={r[2]}")
+    c = psql_rows("select convalidated::text from pg_constraint where conrelid = 'tmsi.audit_log'::regclass and conname = 'audit_log_actor_not_null';")
+    check("VV: a restrição «nunca nulo» existe e é NOT VALID (o histórico não se reescreve)", c == [["false"]], f"convalidated={c}")
+
+    # Comportamento, numa transacção revertida (zero resíduo): sem claims -> system; com claims -> o utilizador; nulo directo -> recusado.
+    user = psql_rows("select user_id::text from tmsi.user_roles where role = 'finance' limit 1;")[0][0]
+    rc, out, err = psql(
+        "begin;\n"
+        "update tmsi.transport_tiers set cost = cost where id = (select id from tmsi.transport_tiers order by id limit 1);\n"
+        "select 'a|' || (actor = tmsi.system_actor())::text from tmsi.audit_log where table_name = 'transport_tiers' order by id desc limit 1;\n"
+        f"select set_config('request.jwt.claims', '{{\"sub\":\"{user}\",\"role\":\"authenticated\"}}', true) \\g /dev/null\n"
+        "update tmsi.transport_tiers set cost = cost where id = (select id from tmsi.transport_tiers order by id limit 1);\n"
+        f"select 'b|' || (actor = '{user}'::uuid)::text from tmsi.audit_log where table_name = 'transport_tiers' order by id desc limit 1;\n"
+        "rollback;")
+    linhas = {l.split("|")[0]: l.split("|")[1] for l in out.splitlines() if "|" in l and l[0] in "ab"}
+    check("VV: uma escrita directa SEM claims (o caso do smoke) assina como system", rc == 0 and linhas.get("a") == "true", f"rc={rc} a={linhas.get('a')} {err[:80]}")
+    check("VV: uma escrita COM sessão assina como esse utilizador (o caminho HTTP não mudou)", rc == 0 and linhas.get("b") == "true", f"rc={rc} b={linhas.get('b')}")
+    rc2, out2, err2 = psql("begin;\ninsert into tmsi.audit_log(actor, table_name, row_pk, action) values (null, 'x', 'y', 'INSERT');\nrollback;")
+    check("VV: inserir um autor nulo directamente no audit_log é recusado", rc2 != 0 and "audit_log_actor_not_null" in err2, f"rc={rc2} {err2[:90]}")
+
+    check("VV: o /audit rotula o autor com actorLabel() (system e linhas antigas legíveis)",
+          "actorLabel(" in pagina and "from '@/lib/system-actor'" in pagina and "system-actor" in pagina, "actorLabel importado e usado")
+    imagem = _sp.run(["docker", "inspect", "tmsi-app", "--format", "{{.Config.Image}}"], capture_output=True, text=True).stdout.strip()
+    if imagem:
+        p = _sp.run(["docker", "run", "--rm", "--memory", "96m", "--network", "none", "--entrypoint", "node", "-v", f"{raiz}:/r:ro",
+                     imagem, "--no-warnings", "/r/scripts/prova-system-actor.mjs"], capture_output=True, text=True, timeout=120)
+        falhas = [l for l in p.stdout.splitlines() if l.startswith("XX")]
+        check("VV: a lógica do rótulo (system / legado / e-mail / UUID) passa a prova em Node 24",
+              p.returncode == 0 and not falhas, "0 divergências" if p.returncode == 0 else f"{len(falhas)}: {falhas[:2]} {p.stderr[-100:]}")
+    else:
+        check("VV: a lógica do rótulo passa a prova em Node 24", True, "SKIP — contentor tmsi-app não encontrado")
+
+
+def block_audit_no_new_nulls(base_id):
+    """VV (fim da corrida) — a prova que mais importa: esta corrida do smoke escreveu no audit_log (o fixture, as transacções de
+    prova) e NENHUMA dessas linhas tem autor nulo. Antes da 0022, cada corrida acrescentava dezenas."""
+    novas, nulos = psql_rows(f"select count(*)::text, count(*) filter (where actor is null)::text from tmsi.audit_log where id > {base_id};")[0]
+    check("VV: nesta corrida o smoke escreveu no audit_log e nenhuma linha nova tem autor nulo",
+          int(novas) > 0 and nulos == "0", f"{novas} linhas novas, {nulos} com autor nulo")
+
+
 def block_theme():
     """TT — tema (2026-10-04). Três coisas que se estragam em silêncio:
     (1) uma cor fixa (`bg-gray-100`, `text-red-700`, `bg-white`…) escrita à mão
@@ -2674,6 +2734,7 @@ def delete_smoke_fixture_product():
 
 def main():
     print(f"=== TMSI smoke — {BASE} — {date.today().isoformat()} ===")
+    audit_base = int(psql_rows("select coalesce(max(id), 0) from tmsi.audit_log;")[0][0])
     block_health()
     block_privacy_notice()
 
@@ -2759,6 +2820,7 @@ def main():
     block_home_menu()
     block_theme()
     block_print_options()
+    block_audit_system_actor()
     block_product_alert_column()
     block_login_link_prefetch()
     block_settings_save_feedback()
@@ -2766,6 +2828,7 @@ def main():
     block_retention_text()
 
     delete_smoke_fixture_product()
+    block_audit_no_new_nulls(audit_base)
 
     total = len(RESULTS)
     print(f"\n=== {total - FAILURES}/{total} passed ===")

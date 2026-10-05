@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getMe } from '@/lib/me';
 import { canReadAuditLog } from '@/lib/perms';
+import { actorLabel } from '@/lib/system-actor';
 
 type AuditEntry = {
   id: number;
@@ -83,7 +84,7 @@ export default async function AuditPage({
     supabase.schema('tmsi').from('profiles').select('user_id, email').overrideTypes<Profile[], { merge: false }>(),
   ]);
 
-  const actorEmail = (id: string | null) => (id ? (profiles?.find((p) => p.user_id === id)?.email ?? id) : '—');
+  const actorEmail = (id: string | null) => actorLabel(id, (uid) => profiles?.find((p) => p.user_id === uid)?.email ?? undefined);
 
   const qs = (overrides: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
@@ -99,7 +100,10 @@ export default async function AuditPage({
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Audit log</h1>
       </div>
-      <p className="mb-4 text-xs text-fg-muted">Read-only. Per-item audit is also on each product&apos;s own page.</p>
+      <p className="mb-4 text-xs text-fg-muted">
+        Read-only. Per-item audit is also on each product&apos;s own page. <strong>system</strong> is not a person: it is a
+        direct database session (maintenance, tests, migrations). Rows from before 2026-10-05 show &ldquo;system (legacy)&rdquo;.
+      </p>
 
       <form className="mb-4 flex flex-wrap items-end gap-2 rounded-lg border border-line p-3 text-sm">
         <div>
