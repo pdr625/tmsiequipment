@@ -136,6 +136,10 @@ Seis páginas usam estas guardas como **porta real** (`redirect('/')`: `admin/us
 **NÃO visto:** as páginas autenticadas a funcionar com cada papel — sem browser no VPS, e sem fabricar
 sessões (regra do projecto).
 
+**Confirmado pelo Pedro, 2026-10-05:** as permissões estão correctas com as contas testadas no browser. Fecha o
+item 101. Continuam sem prova ao vivo própria o `viewer` (sem utilizador) e o número de pedidos em runtime
+(`contar-pedidos.sh`).
+
 **A confirmar pelo Pedro, no browser, com contas diferentes:** uma conta `sales`/`agent` a abrir `/audit`,
 `/config`, `/dashboard`, `/import` e `/admin/users` deve ser mandada para `/prices`; `logistics` a abrir
 `/config` deve ver só as secções operacionais e a ser recusada em `/dashboard` e `/audit`; `finance` deve
