@@ -129,6 +129,9 @@ foi reprovada de novo.
 **NÃO visto:** o painel a funcionar e o efeito no papel — React de cliente, sem browser no VPS. A lógica
 pura foi executada; a interface não.
 
+**Confirmado pelo Pedro, 2026-10-05:** a selecção por categoria funciona. Com isto, «Print options» fica
+fechado nas três partes (colunas, blocos do cabeçalho, linhas por categoria).
+
 **A confirmar pelo Pedro, em `/prices`:** abrir «Print options», desmarcar uma categoria e ver, na
 pré-visualização, as linhas dela sumirem e a linha «Partial list — … categories printed» aparecer em
 CADA folha; «All»/«None»; que mudar de filial repõe a selecção; que o grupo «Uncategorised» existe (com
