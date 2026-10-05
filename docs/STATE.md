@@ -82,6 +82,14 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
 
+## Sessão 05/10 (noite, 12.ª) — item 55: a cópia off-site passa a ser visível (PARCIAL) (2026-10-05)
+
+**Nada na app TMSI; mudança no gerador do `status.json` do VPS (`~/atelier-vps/vps-stats.sh`, cópia de segurança `.bak` feita antes) e na pasta `~/backups/tmsi-offsite-ack/`.**
+Decisão do Pedro (entre recibo do homelab / inferência por `atime` / só documentar): **recibo do homelab**. O `atime` foi descartado por ser frágil — qualquer leitura local, incluindo as minhas
+verificações com `pg_restore -l`, parece um pull — e não tenho acesso aos logs do ssh (não estou em `adm`).
+**Feito e em produção:** o VPS lê o recibo, valida-o por formato e publica `tmsi_offsite_status` e `tmsi_offsite_ack_age_h`; provado com 7 recibos sintéticos (bom, velho, futuro, lixo, caminho, vazio, inexistente) e
+confirmado no `status.json` real (`missing`). **Falta (homelab, fora deste host):** o passo no `tmsi-offsite-pull.sh` e o tile/alerta — `docs/OFFSITE-ACK.md`. Item **aberto até haver um pull real a dar `ok`**.
+
 ## Sessão 05/10 (noite, 11.ª) — item 83: o smoke que deixava lixo (2026-10-05)
 
 **Só `scripts/smoke.py`; nada implantado** (a imagem em produção continua `d4dcda3`, smoke **215/215** — as asserções são as mesmas, o que mudou foi a robustez da corrida).

@@ -193,7 +193,7 @@ limite funciona hoje (provado ao vivo a 19/09: seis pedidos passam, do 7.º ao 9
 10.º volta a passar — `rate=10r/m burst=5`). Falta versionar o ficheiro da zona, ou registá-lo
 explicitamente no `deploy/DEPLOY.md` como passo manual de restauro.
 
-**55. A perna off-site é invisível à monitorização** — **REGISTADO 2026-09-19.** O
+**55. A perna off-site é invisível à monitorização** 🟡 **PARCIAL 2026-10-05 — lado do VPS feito, falta o do homelab.** Desenho escolhido pelo Pedro: o homelab deixa um **recibo** no VPS após cada pull verificado; o `vps-stats.sh` valida-o (formato estrito, trata-o como dados) e o `status.json` passa a publicar `tmsi_offsite_status` (`ok`/`stale` ≥30 h/`missing`/`invalid`) e `tmsi_offsite_ack_age_h`. Em produção hoje: `missing` (verdade: o homelab ainda não escreve o recibo). **Falta:** o passo no `tmsi-offsite-pull.sh` e o tile/alerta do digest — tudo em `docs/OFFSITE-ACK.md`. O item só fecha quando o estado passar a `ok` com um pull real. _(texto original abaixo)_ —  — **REGISTADO 2026-09-19.** O
 `status.json` publica `tmsi_backup_age_h` (idade do dump **no VPS**) e nada sobre o off-site.
 A 19/09 confirmou-se, pelo padrão de `atime` dos dumps, que o pull nocturno do homelab corre e
 apanha os ficheiros `-window` (16/09 lido a 17/09 03:08, 17/09 lido a 18/09 03:05, 18/09 lido
