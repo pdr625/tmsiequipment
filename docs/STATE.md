@@ -3,9 +3,13 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: impressão — o rodapé também se repete em cada folha — 2026-10-05.** Revisão `4b3e2a8`
-em produção (digest `sha256:b439377d3ac3…`), smoke **192/192** nos três modos (191 + 1). Só frontend,
-sem migração. Detalhe: primeira secção abaixo.
+**Etapa actual: «Print options» — escolher as LINHAS a imprimir por categoria — 2026-10-05.** Revisão
+`b5bb689` em produção (digest `sha256:42a3974f50b9…`), smoke **198/198** nos três modos (192 + 6). Só
+frontend, sem migração, mas **o `/prices` passou de 8 para 9 pedidos ao backend** (nomes das categorias).
+Detalhe: primeira secção abaixo.
+
+**Etapa anterior: impressão — o rodapé também se repete em cada folha — 2026-10-05.** Revisão `4b3e2a8`
+(digest `sha256:b439377d3ac3…`), smoke 192/192.
 
 **Etapa anterior: impressão — o cabeçalho do documento repete-se em cada folha — 2026-10-05.** Revisão
 `c861d40` (digest `sha256:0350c58980dc…`), smoke 191/191.
@@ -71,6 +75,65 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 05/10 (noite, 6.ª) — «Print options»: linhas por categoria de produto (2026-10-05)
+
+**Pedido do Pedro:** seleccionar as linhas a imprimir **por categoria de produto, e não individualmente**.
+
+**Implantado:** revisão `b5bb689`, digest
+`sha256:42a3974f50b9a82b6f01258dd7dc7561b645bad506eb089964e9d68e09260e16` (label = commit), `healthy`, CI
+#73 verde (typecheck incluído), smoke **198/198** nos três modos. **Sem migração.** Rollback:
+`sha256:b439377d3ac342ad0061eae17150bbc8d65728512df07a4de7432c27dc0ea71f`.
+
+**O que é:** em «Print options», uma secção **Categories** com uma caixa por categoria presente na lista
+que se está a ver (já filtrada por filial/estado), com o nº de linhas de cada uma, e botões **All / None**.
+Desmarcar uma categoria esconde, **só na impressão**, as suas linhas; o ecrã mostra sempre tudo. Mostra
+«Printing x of y rows» e avisa se a selecção ficar vazia.
+
+**Três decisões de desenho, todas por segurança da informação impressa — a confirmar pelo Pedro:**
+1. **A selecção de categorias NÃO se guarda no browser** (as colunas e blocos guardam-se). Esconder
+   *linhas* em silêncio numa sessão futura imprimiria uma lista de preços **incompleta** sem ninguém
+   reparar; esconder uma coluna não tem esse risco. Repõe-se ao mudar de filial/estado e ao recarregar.
+2. **A folha impressa diz sempre quando é parcial:** «Partial list — n of m categories printed: …», no
+   cabeçalho repetido, **sem caixa para a esconder** (`PrintCategoriesNote`). Uma lista parcial tem de se
+   apresentar como parcial.
+3. **Um id de categoria só vira CSS se tiver forma de código** (`^[A-Za-z0-9_.-]{1,40}$`) **E existir na
+   página** (`lib/print-categorias.ts`). Um código fora dessa forma não gera regra, por isso é mostrado
+   como «(always printed)» e não-desmarcável — mostrá-lo desmarcável seria dizer que não imprime quando
+   imprime.
+
+**Como:** cada `<tr>` leva `data-cat`; as categorias escondidas geram um `<style>` `@media print`
+(`#prices-root tr[data-cat="X"]{display:none}`) a partir de `lib/print-categorias.ts`. Os 3 produtos sem
+categoria formam o grupo **Uncategorised** (`__none`). O rótulo é «Nome (CÓDIGO)» porque há **categorias
+com o mesmo nome e códigos diferentes** (BRUSH/BRUSHSY «Brush systems», FOAMGEN/FOAM_GEN «Foam
+generators», PUMP/PUMPS «Pumps») — problema de dados, BACKLOG 107.
+
+**⚠ Custo: o `/prices` passa de 8 para 9 pedidos ao backend.** Os nomes vêm de `tmsi.categories`
+(17 linhas, em paralelo com as outras consultas). Alternativa sem custo: mostrar só os códigos
+(`PUMP_SP`, `FOAMGEN_SP`…), que dizem pouco a quem imprime. Foi escolha minha trocar 1 pedido por
+legibilidade; **`scripts/contar-pedidos.sh` já diz 9 desde esta data** (o alvo escrito era 8). O Pedro
+decide se prefere os códigos. **Não medido** (precisa de browser dele).
+
+**Prova da lógica pura, a sério:** o Node 24 da imagem da app executa o `print-categorias.ts` **real**
+(`scripts/prova-print-categorias.mjs`, no smoke, sem rede) com **14 ids hostis** — quebra de atributo,
+`</style><script>`, aspas, chavetas, `;`, quebras de linha, 41 caracteres… — mesmo que o atacante os
+«registasse» na lista de válidos: nenhum gera regra. Provado a falhar com 3 validações afrouxadas.
+
+**Smoke 192 → 198** (`UU`, 6 asserções): `data-cat` nas duas tabelas e a lista dada ao `PrintScope`; a
+lista branca antes de gerar CSS; a selecção **não** vai para o `localStorage` e repõe-se ao mudar a lista;
+a nota de lista parcial sem hook; categoria insegura «sempre impressa»; e a prova em Node. **13 mutações
+provadas.** **Uma asserção era fraca:** «repõe-se ao mudar a lista» passava com o `useEffect` apagado
+porque o `reset()` também chama `setHiddenCats([])` — passou a exigir o `useEffect(…, [assinatura])` e
+foi reprovada de novo.
+
+**NÃO visto:** o painel a funcionar e o efeito no papel — React de cliente, sem browser no VPS. A lógica
+pura foi executada; a interface não.
+
+**A confirmar pelo Pedro, em `/prices`:** abrir «Print options», desmarcar uma categoria e ver, na
+pré-visualização, as linhas dela sumirem e a linha «Partial list — … categories printed» aparecer em
+CADA folha; «All»/«None»; que mudar de filial repõe a selecção; que o grupo «Uncategorised» existe (com
+estado `all`/`draft`, que é onde estão os 3 sem categoria); e que colunas escondidas + categorias
+escondidas funcionam em conjunto sem desalinhar a tabela.
 
 ## Sessão 05/10 (noite, 5.ª) — impressão: o rodapé repete-se em cada folha (2026-10-05)
 

@@ -997,7 +997,7 @@ achado ao copiar a paleta para o TMSI. O TMSI usa `#5f6b7e` (4,86:1). Corrigir n
 ~~**100. Seletor de tema provisório (botão flutuante)**~~ ✅ **FECHADO 2026-10-04 — `a8885bd`.**
 Passou para o rodapé do menu lateral; flutuante só nas páginas sem menu.
 
-**101. Páginas autenticadas que não usam `getMe()` pagam um pedido a mais** — **REGISTADO
+**101. Páginas autenticadas que não usam `getMe()` pagam um pedido a mais** (o `/prices` está agora em 9, não 8, por causa de `categories` — ver «Print options») — **REGISTADO
 2026-10-04**, consequência assumida do menu lateral (o layout pede `me()`; só o `/prices` e os
 exports já o usam). As outras páginas (`products`, `config`, `dashboard`, `overrides`, `audit`…)
 continuam a fazer as suas chamadas a `getUser()`/`has_role()`/`can_read_costs()`. Migrá-las para
@@ -1008,11 +1008,18 @@ antes e depois com `scripts/contar-pedidos.sh`.
 **FECHADO 2026-10-05 — `27640ff`.** 12 removidos; ficam os 2 para a lista de produtos («← Products»).
 Bloco `TT` do smoke impede que voltem.
 
-**106. Escolher o que se imprime (checkbox)** — **PARTE 1 FECHADA 2026-10-05 — `6b20594`:** colunas e
-blocos do cabeçalho (ver `STATE.md`, «Print options»). **FICA POR FAZER: escolher LINHAS (produtos).**
-É a parte média: a tabela passa a ter estado de selecção (~283 linhas), é preciso «seleccionar tudo» e
-decidir o que acontece à selecção ao mudar de filtro (os filtros recarregam a página), e o botão Excel só
-acompanha a selecção com trabalho no servidor. Decidir também se o aviso/rodapé continuam sem caixa.
+~~**106. Escolher o que se imprime (checkbox)**~~ ✅ **FECHADO 2026-10-05.** Parte 1 (colunas e blocos do
+cabeçalho): `6b20594`. Parte 2 (linhas): `b5bb689`, **por categoria de produto** e não uma a uma, a pedido do
+Pedro. Ver `STATE.md`, «Print options: linhas por categoria». Custo assumido: o `/prices` passa a 9 pedidos.
+
+**107. Categorias duplicadas no catálogo** — **REGISTADO 2026-10-05**, achado ao listar as categorias para
+«Print options». Pares com o mesmo nome e códigos diferentes: BRUSH / BRUSHSY («Brush systems»), FOAM_GEN /
+FOAMGEN («Foam generators»), PUMP / PUMPS («Pumps»); e FOAM_SYS («Foam systems») ao lado de FOAMGEN. Para
+quem imprime por categoria significa escolher duas caixas para o mesmo conceito. É decisão de dados do
+Pedro (fundir? qual código fica?) — mexe em `products.category_id` e na carga do catálogo, não só no ecrã.
+
+**108. 3 produtos sem categoria** — **REGISTADO 2026-10-05**. Aparecem em «Print options» como
+«Uncategorised». Dados do Pedro (atribuir categoria), não código.
 
 **105. Afinar a impressão depois de o Pedro ver o PDF** (a parte do cabeçalho repetido foi o `c861d40`, ver `STATE.md`) — **REGISTADO 2026-10-05**. A correcção da
 impressão (orientação do utilizador, folha aproveitada) está provada por código e pelo CSS publicado,
