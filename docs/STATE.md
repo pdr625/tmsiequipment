@@ -3,9 +3,12 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: impressão — cabeçalho da tabela a repetir-se (2.ª correcção) — 2026-10-05.** Revisão
-`ff1a19d` em produção (digest `sha256:f2830d40cad7…`), smoke 183/183 nos três modos. Detalhe: primeira
-secção abaixo.
+**Etapa actual: «Print options» — escolher colunas e blocos a imprimir — 2026-10-05.** Revisão
+`6b20594` em produção (digest `sha256:388cff5760f9…`), smoke **189/189** nos três modos (183 + 6).
+Só frontend, sem migração. Detalhe: primeira secção abaixo.
+
+**Etapa anterior: impressão — cabeçalho da tabela a repetir-se (2.ª correcção) — 2026-10-05.** Revisão
+`ff1a19d` (digest `sha256:f2830d40cad7…`), smoke 183/183.
 
 **Etapa anterior: impressão corrigida — orientação do utilizador e folha aproveitada — 2026-10-05.**
 Revisão `ef47f96` (digest `sha256:f05015cb7f76…`), migrações **ainda 0001–0021**, smoke
@@ -62,6 +65,51 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 05/10 (noite, 3.ª) — «Print options»: colunas e blocos a imprimir (2026-10-05)
+
+**Pedido do Pedro:** poder escolher, com caixas, os elementos a imprimir. Perguntado o que eram
+«elementos», respondeu **«colunas e blocos primeiro»** (linhas/produtos ficam para depois, BACKLOG 106).
+
+**Implantado:** revisão `6b20594`, digest
+`sha256:388cff5760f960d109f35d5e2fbe7dd696885d6fe920bbc8e6d0bfc77bcb1eaf` (label = commit), `healthy`,
+CI #70 verde à primeira (typecheck incluído), smoke **189/189** nos três modos. **Só frontend, sem
+migração.** Rollback: `sha256:f2830d40cad779cd21202954f6b1de57ad5deb4b218727868307bc8af761c6c3`.
+
+**O que é:** um painel **«Print options»** ao lado de «Print / Save as PDF» no `/prices`, com caixas
+para as **colunas** (todas menos *Product*, que fica sempre) e para os **blocos do cabeçalho impresso**
+(logo, tagline, âmbito, moeda, «gerado em/por»). **Só afecta a impressão**; o ecrã mostra sempre tudo.
+«Print everything» repõe. A escolha fica no browser (`localStorage`, uma lista por vista).
+
+**Como (para quem mexer):** `(app)/prices/print-scope.tsx` é um componente de cliente que envolve a
+página e escreve `data-hide="c5 c6 b-logo …"` no contentor; `@media print` em `globals.css` esconde
+`[data-hide~='cN'] table tr > :nth-child(N)` e `[data-hide~='b-x'] [data-print='x']`. O estado é React
+(sem mexer no DOM à mão). **As duas listas de colunas (`COLS_COSTS`, `COLS_SALES`) são agora a fonte
+única** do `<th>` e das caixas — o HTML dos `<th>` é idêntico ao de antes. Esconder uma coluna é só CSS
+sobre o que a página já recebeu: **não abre nenhuma fronteira** (um papel sem custos nem tem as colunas
+de custo na página).
+
+**Decisão de desenho, a confirmar pelo Pedro — o que NÃO tem caixa:** o **aviso de «preços
+operacionais»** (item 32 — o smoke KK já exige que saia na impressão) e o **rodapé legal** (o texto do
+NOTICE, i10) **saem sempre.** Foi escolha minha por serem requisitos já escritos; mudá-lo é pôr um
+`data-print` e uma regra (e o smoke `UU` tem de ser actualizado, porque hoje impede-o de propósito).
+
+**Smoke 183 → 189** (bloco `UU`, 6 asserções): os `<th>` vêm das listas; «Product» é a 1.ª coluna e cada
+coluna 2..N tem regra de impressão; a numeração das caixas (`c${i+2}`) bate com `:nth-child`; os blocos
+batem entre página, componente e CSS; aviso e rodapé não têm hook; a preferência guardada passa por
+lista branca e o armazenamento pode falhar. **11 mutações provadas** (th à mão, coluna a mais sem regra,
+1.ª coluna trocada, numeração desfasada, regra da coluna 5 apagada, bloco sem regra, hook só na página,
+aviso e rodapé com hook, sem lista branca, sem try/catch).
+
+**Prova ao vivo (sem sessão):** o CSS publicado traz as **11 regras de coluna** (c2..c12) e os **5
+blocos**. **O painel e o efeito na impressão NÃO foram vistos** — é React de cliente e o VPS não corre
+um browser (ver sessão anterior); o typecheck e o build passaram no CI, mas o comportamento fica para o
+Pedro.
+
+**A confirmar pelo Pedro, em `/prices`:** abrir «Print options», desmarcar uma coluna e uma linha do
+cabeçalho, imprimir (ou pré-visualizar) e ver que desaparecem e que a tabela ocupa a largura toda; que
+o ecrã continua completo; recarregar a página e ver a escolha mantida; «Print everything» a repor; e
+nos dois papéis (com custos / sem custos), que as caixas listam as colunas certas de cada um.
 
 ## Sessão 05/10 (noite, 2.ª) — impressão: o cabeçalho da tabela não se repetia (2026-10-05)
 

@@ -1008,9 +1008,11 @@ antes e depois com `scripts/contar-pedidos.sh`.
 **FECHADO 2026-10-05 — `27640ff`.** 12 removidos; ficam os 2 para a lista de produtos («← Products»).
 Bloco `TT` do smoke impede que voltem.
 
-**106. Escolher o que se imprime (checkbox)** — **PEDIDO 2026-10-05**, por desenhar: depende de o Pedro
-escolher o que são «elementos» — colunas da tabela, linhas (produtos) ou blocos da página (cabeçalho,
-aviso, rodapé). Estimativa de esforço dada na conversa; ver `STATE.md`.
+**106. Escolher o que se imprime (checkbox)** — **PARTE 1 FECHADA 2026-10-05 — `6b20594`:** colunas e
+blocos do cabeçalho (ver `STATE.md`, «Print options»). **FICA POR FAZER: escolher LINHAS (produtos).**
+É a parte média: a tabela passa a ter estado de selecção (~283 linhas), é preciso «seleccionar tudo» e
+decidir o que acontece à selecção ao mudar de filtro (os filtros recarregam a página), e o botão Excel só
+acompanha a selecção com trabalho no servidor. Decidir também se o aviso/rodapé continuam sem caixa.
 
 **105. Afinar a impressão depois de o Pedro ver o PDF** — **REGISTADO 2026-10-05**. A correcção da
 impressão (orientação do utilizador, folha aproveitada) está provada por código e pelo CSS publicado,
