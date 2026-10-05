@@ -3,9 +3,12 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: impressão — o cabeçalho do documento repete-se em cada folha — 2026-10-05.** Revisão
-`c861d40` em produção (digest `sha256:0350c58980dc…`), smoke **191/191** nos três modos (189 + 2).
-Só frontend, sem migração. Detalhe: primeira secção abaixo.
+**Etapa actual: impressão — o rodapé também se repete em cada folha — 2026-10-05.** Revisão `4b3e2a8`
+em produção (digest `sha256:b439377d3ac3…`), smoke **192/192** nos três modos (191 + 1). Só frontend,
+sem migração. Detalhe: primeira secção abaixo.
+
+**Etapa anterior: impressão — o cabeçalho do documento repete-se em cada folha — 2026-10-05.** Revisão
+`c861d40` (digest `sha256:0350c58980dc…`), smoke 191/191.
 
 **Etapa anterior: «Print options» — escolher colunas e blocos a imprimir — 2026-10-05.** Revisão
 `6b20594` (digest `sha256:388cff5760f9…`), smoke 189/189.
@@ -68,6 +71,38 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 05/10 (noite, 5.ª) — impressão: o rodapé repete-se em cada folha (2026-10-05)
+
+**Pedido do Pedro:** o cabeçalho já se repete em todas as folhas (confirmado no papel), mas a mensagem de
+**rodapé** só aparecia no fim do documento — deve aparecer em todas as folhas.
+
+**Implantado:** revisão `4b3e2a8`, digest
+`sha256:b439377d3ac342ad0061eae17150bbc8d65728512df07a4de7432c27dc0ea71f` (label = commit), `healthy`, CI
+#72 verde, smoke **192/192** nos três modos. Só frontend, sem migração. Rollback:
+`sha256:0350c58980dc947c4977b86e4d5fc044791a42504e9d69471d8dd03282991fb8`.
+
+**Causa e correcção, o mesmo mecanismo do cabeçalho:** o rodapé (texto de rodapé + texto legal do
+Branding) era um bloco solto DEPOIS da tabela, por isso só saía uma vez, na última folha. O Chrome repete
+o `<thead>` **e o `<tfoot>`** em cada folha; o rodapé passa a ser a linha do `<tfoot>` de ambas as tabelas
+(`PrintFooterRow`, partilha com o cabeçalho a mesma faixa `hidden print:table-row` com `colSpan` =
+colunas visíveis). `tfoot { display: table-footer-group }` explícito no `@media print`. Continua **sem
+caixa** em «Print options» (é texto legal, sai sempre).
+
+**Smoke 191 → 192** (`UU`): o rodapé é a linha do `tfoot` das duas tabelas, já não há bloco solto depois
+delas, e o `tfoot` é grupo de rodapé no CSS. A extracção do rodapé na asserção «sem hook» passou a ler
+`rodapeImpresso`. **Cinco mutações provadas** (rodapé fora do `tfoot`, bloco solto de volta, componente
+removido, `tfoot` sem repetir, rodapé com hook).
+
+**NÃO visto:** o PDF (sem browser no VPS). O cabeçalho foi confirmado pelo Pedro pelo mesmo mecanismo
+(`thead`); o `tfoot` é a contraparte directa, mas a confirmação em papel é dele.
+
+**Custo a ter presente:** o rodapé ocupa espaço em CADA folha (como o cabeçalho). Se o texto legal for
+longo, cabem menos linhas por folha; se for demais, encurta-se o texto em `/config/branding`.
+
+**A confirmar pelo Pedro, em `/prices` com mais de uma folha:** o rodapé aparece no fim de TODAS as folhas,
+não só da última; «Print options» a esconder colunas não o desalinha; e quantas linhas de dados cabem.
+Atenção à última folha: o rodapé segue as linhas (não fica colado ao fundo da folha se esta não encher).
 
 ## Sessão 05/10 (noite, 4.ª) — impressão: o cabeçalho do documento repete-se (2026-10-05)
 
