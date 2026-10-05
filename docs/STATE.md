@@ -3,7 +3,10 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: páginas com `getMe()` partilhado, sem guardas nem RPCs próprias — 2026-10-05.** Revisão
+**Etapa actual: item 94 — o `audit_log` deixa de ter autor nulo (migração 0022) — 2026-10-05.** Revisão `d4dcda3` em produção (digest `sha256:2108c19550fb…`), migrações **0001–0022**, smoke **215/215**
+nos três modos. O gatilho `audit()` assina `system` fora de um pedido HTTP; o histórico (3328 linhas) não se reescreveu. Detalhe: primeira secção abaixo.
+
+**Etapa anterior:** **páginas com `getMe()` partilhado, sem guardas nem RPCs próprias — 2026-10-05.** Revisão
 `f52510d` em produção (digest `sha256:1f4d43184446…`), smoke **206/206** nos três modos (198 − 3 + 11).
 Só frontend, sem migração. 13 páginas deixaram de fazer 1 a 8 chamadas ao backend cada. Detalhe:
 primeira secção abaixo.
