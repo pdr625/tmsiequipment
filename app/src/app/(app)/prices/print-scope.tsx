@@ -106,6 +106,25 @@ export function PrintScope({
   );
 }
 
+// Primeira linha do <thead>: o cabeçalho do documento (logo, título, âmbito, moeda,
+// gerado por). Como o Chrome repete o <thead> INTEIRO em cada folha, pô-lo aqui é o
+// que o faz sair em todas — antes era um bloco solto antes da tabela e só saía na
+// 1.ª. No ecrã a linha está escondida (`hidden`); só existe no papel.
+// `colSpan` acompanha as colunas VISÍVEIS: com colunas escondidas (cN → display:none)
+// um colSpan fixo criaria colunas fantasma e desalinharia a tabela.
+export function PrintHeaderRow({ children }: { children: React.ReactNode }) {
+  const ctx = useContext(PrintCtx);
+  const escondidas = ctx ? ctx.hidden.filter((t) => /^c\d+$/.test(t)).length : 0;
+  const colunas = Math.max(1, (ctx ? ctx.columns.length : 1) - escondidas);
+  return (
+    <tr className="hidden print:table-row">
+      <td colSpan={colunas} className="text-left font-normal">
+        {children}
+      </td>
+    </tr>
+  );
+}
+
 export function PrintOptions() {
   const ctx = useContext(PrintCtx);
   if (!ctx) return null;

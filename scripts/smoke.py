@@ -1989,12 +1989,19 @@ def block_price_notice(sales_uuid):
 
     pagina = (raiz / "app" / "(app)" / "prices" / "page.tsx").read_text()
     rota = (raiz / "app" / "(app)" / "prices" / "export" / "route.ts").read_text()
-    i = pagina.find("{aviso && (")
-    bloco_aviso = pagina[i:pagina.find(")}", i)] if i >= 0 else ""
+    # 2026-10-05: o aviso tem duas cópias — a do ecrã (print:hidden) e a do
+    # cabeçalho repetido em cada folha (a que se imprime). Basta que EXISTA uma
+    # que se imprima, e que a do ecrã seja a única com print:hidden.
+    blocos_aviso = []
+    k = pagina.find("{aviso && (")
+    while k >= 0:
+        blocos_aviso.append(pagina[k:pagina.find(")}", k)])
+        k = pagina.find("{aviso && (", k + 1)
+    impressos = [b for b in blocos_aviso if "print:hidden" not in b]
     check(
-        "KK: o aviso aparece no /prices e na impressão (sem print:hidden)",
-        bool(bloco_aviso) and "print:hidden" not in bloco_aviso,
-        "presente, sem print:hidden" if bloco_aviso else "bloco do aviso não encontrado",
+        "KK: o aviso aparece no /prices e na impressão (pelo menos uma cópia sem print:hidden)",
+        len(blocos_aviso) >= 1 and len(impressos) >= 1,
+        f"{len(blocos_aviso)} cópia(s), {len(impressos)} impressa(s)" if blocos_aviso else "bloco do aviso não encontrado",
     )
     check(
         "KK: o aviso abre o rodapé do export nos dois ramos",
@@ -2352,11 +2359,23 @@ def block_print_options():
     def bloco_de(abertura):
         i = pagina.find(abertura)
         return pagina[i:pagina.find(")}", i)] if i >= 0 else ""
-    aviso, rodape = bloco_de("{aviso && ("), bloco_de("{footer.length > 0 && (")
-    check("UU: o aviso de preços operacionais e o rodapé legal não têm hook (saem sempre)",
-          bool(aviso) and bool(rodape) and "data-print" not in aviso and "data-print" not in rodape
+    avisos, k = [], pagina.find("{aviso && (")
+    while k >= 0:
+        avisos.append(pagina[k:pagina.find(")}", k)])
+        k = pagina.find("{aviso && (", k + 1)
+    rodape = bloco_de("{footer.length > 0 && (")
+    check("UU: o aviso de preços operacionais (todas as cópias) e o rodapé legal não têm hook (saem sempre)",
+          bool(avisos) and bool(rodape) and not any("data-print" in a for a in avisos) and "data-print" not in rodape
           and not (chaves_cmp & {"notice", "aviso", "footer", "legal"}),
           "aviso e rodapé sem data-print, fora da lista de blocos")
+    check("UU: o cabeçalho do documento é a 1.ª linha do <thead> das duas tabelas (repete-se em cada folha)",
+          len(_re.findall(r"<thead>\s*<PrintHeaderRow>\{cabecalhoImpresso\}</PrintHeaderRow>", pagina)) == 2
+          and 'className="mb-4 hidden print:block"' not in pagina,
+          "2 × PrintHeaderRow no thead; já não há bloco solto antes da tabela")
+    check("UU: a linha do cabeçalho só existe no papel e o colSpan acompanha as colunas visíveis",
+          'className="hidden print:table-row"' in escopo and "colSpan={colunas}" in escopo
+          and "columns.length" in escopo and "escondidas" in escopo,
+          "hidden print:table-row, colSpan = colunas - escondidas")
     check("UU: a preferência guardada é validada por lista branca e o armazenamento pode falhar",
           "TOKEN_OK.test(" in escopo and "catch" in escopo and "localStorage" in escopo
           and _re.search(r"TOKEN_OK = /\^\(c\(\[2-9\]\|1\[0-2\]\)", escopo) is not None,

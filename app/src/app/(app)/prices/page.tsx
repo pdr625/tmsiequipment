@@ -8,7 +8,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getBranding, footerLines } from '@/lib/branding';
 import { PrintButton } from './print-button';
-import { PrintScope, PrintOptions, type PrintColumn } from './print-scope';
+import { PrintScope, PrintOptions, PrintHeaderRow, type PrintColumn } from './print-scope';
 import { FilterButton } from './filter-button';
 import { alertaDe } from '@/lib/alert';
 import { getPriceNotice } from '@/lib/price-notice';
@@ -183,29 +183,45 @@ export default async function PricesPage({
   const [branding, aviso] = await Promise.all([getBranding(), getPriceNotice()]);
   const footer = footerLines(branding);
 
+  // Cabeçalho do documento impresso. Vive na 1.ª linha do <thead> (PrintHeaderRow) para
+  // se repetir em cada folha. Inclui o aviso de «preços operacionais» (item 32): o aviso
+  // sai sempre e agora também em todas as folhas — uma folha solta não perde o aviso.
+  const cabecalhoImpresso = (
+    <div className="mb-3" style={{ fontFamily: branding.fontFamily }}>
+      <div className="flex items-center gap-3">
+        {branding.logoId !== null && (
+          <img src="/api/branding/logo" alt="" data-print="logo" className="h-9 w-auto" />
+        )}
+        <div>
+          <h1 className="text-lg font-bold" style={{ color: branding.primaryColor }}>
+            {branding.displayName} — Price list
+          </h1>
+          {branding.tagline !== '' && (
+            <p data-print="tagline" className="text-sm text-fg-soft">{branding.tagline}</p>
+          )}
+        </div>
+      </div>
+      <div className="mt-1 flex flex-wrap gap-x-4 text-sm">
+        <p data-print="scope">Scope: {rotuloAmbito}</p>
+        <p data-print="currency">Currency: {currencies.join(', ') || '—'}</p>
+        <p data-print="generated">
+          Generated: {generatedAt.toISOString()} by {geradoPor}
+        </p>
+      </div>
+      {aviso && (
+        <p role="note" className="mt-2 text-xs text-warning">
+          ⓘ {aviso}
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <PrintScope
       variant={canReadCosts ? 'costs' : 'sales'}
       columns={canReadCosts ? COLS_COSTS : COLS_SALES}
       className="mx-auto max-w-5xl px-4 py-8"
     >
-      <div className="mb-4 hidden print:block" style={{ fontFamily: branding.fontFamily }}>
-        {branding.logoId !== null && (
-          <img src="/api/branding/logo" alt="" data-print="logo" className="mb-2 h-10 w-auto" />
-        )}
-        <h1 className="text-lg font-bold" style={{ color: branding.primaryColor }}>
-          {branding.displayName} — Price list
-        </h1>
-        {branding.tagline !== '' && (
-          <p data-print="tagline" className="text-sm text-fg-soft">{branding.tagline}</p>
-        )}
-        <p data-print="scope" className="text-sm">Scope: {rotuloAmbito}</p>
-        <p data-print="currency" className="text-sm">Currency: {currencies.join(', ') || '—'}</p>
-        <p data-print="generated" className="text-sm">
-          Generated: {generatedAt.toISOString()} by {geradoPor}
-        </p>
-      </div>
-
       <div className="mb-6 flex items-center justify-between print:hidden">
         <h1 className="text-2xl font-bold tracking-tight">Price list</h1>
         <div className="flex items-center gap-4">
@@ -221,9 +237,10 @@ export default async function PricesPage({
       </div>
 
       {/* Item 32: preços operacionais até o despachante confirmar a base do
-          direito aduaneiro. Sem print:hidden — sai também na impressão. */}
+          direito aduaneiro. Este é o do ECRÃ; na impressão sai a cópia que vai
+          no cabeçalho repetido (cabecalhoImpresso), por isso aqui é print:hidden. */}
       {aviso && (
-        <p role="note" className="mb-4 text-xs text-warning">
+        <p role="note" className="mb-4 text-xs text-warning print:hidden">
           ⓘ {aviso}
         </p>
       )}
@@ -296,6 +313,7 @@ export default async function PricesPage({
       {!error && visiveis.length > 0 && canReadCosts && (
         <table className="w-full border-collapse text-sm">
           <thead>
+            <PrintHeaderRow>{cabecalhoImpresso}</PrintHeaderRow>
             <tr className="border-b border-line text-left text-fg-muted">
               {COLS_COSTS.map((c) => (
                 <th key={c.label} className={c.right ? 'py-2 pr-4 text-right' : 'py-2 pr-4'}>
@@ -339,6 +357,7 @@ export default async function PricesPage({
       {!error && visiveis.length > 0 && !canReadCosts && (
         <table className="w-full border-collapse text-sm">
           <thead>
+            <PrintHeaderRow>{cabecalhoImpresso}</PrintHeaderRow>
             <tr className="border-b border-line text-left text-fg-muted">
               {COLS_SALES.map((c) => (
                 <th key={c.label} className={c.right ? 'py-2 pr-4 text-right' : 'py-2 pr-4'}>
