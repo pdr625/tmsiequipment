@@ -2311,6 +2311,58 @@ def block_theme():
           ":focus-visible global (sem seletor à frente) com contorno de 2px")
 
 
+def block_print_options():
+    """UU — «Print options» do /prices (2026-10-05): escolher colunas e blocos do
+    cabeçalho a imprimir. O que se estraga em silêncio: (1) a coluna N da lista
+    ser outra que a `:nth-child(N)` que o CSS esconde; (2) uma coluna sem regra
+    de CSS (a caixa não faria nada); (3) um bloco com hook na página mas sem
+    regra, ou ao contrário; (4) o aviso de preços operacionais (item 32) ou o
+    rodapé legal ganharem um hook e passarem a poder ser escondidos."""
+    import re as _re
+    import pathlib as _pl
+    raiz = _pl.Path(__file__).resolve().parent.parent / "app" / "src" / "app"
+    pagina = (raiz / "(app)" / "prices" / "page.tsx").read_text()
+    escopo = (raiz / "(app)" / "prices" / "print-scope.tsx").read_text()
+    css = _re.sub(r"/\*.*?\*/", "", (raiz / "globals.css").read_text(), flags=_re.S)
+
+    def rotulos(nome):
+        m = _re.search(r"const " + nome + r": PrintColumn\[\] = \[(.*?)\n\];", pagina, _re.S)
+        return _re.findall(r"label: '([^']+)'", m.group(1)) if m else []
+    custos, vendas = rotulos("COLS_COSTS"), rotulos("COLS_SALES")
+    cols_css = {int(n) for n in _re.findall(r"\[data-hide~='c(\d+)'\] table tr > :nth-child\(\1\)", css)}
+
+    check("UU: as duas vistas do /prices geram os <th> das listas COLS_* (fonte única)",
+          "<PrintScope" in pagina and "COLS_COSTS.map(" in pagina and "COLS_SALES.map(" in pagina
+          and not _re.search(r"<th[^>]*>\s*(Product|Scope|Margin|Currency)\s*</th>", pagina),
+          f"{len(custos)} + {len(vendas)} colunas, sem <th> escritos à mão")
+    check("UU: a 1.ª coluna é «Product» (nunca se esconde) e cada coluna 2..N tem regra de impressão",
+          custos[:1] == ["Product"] and vendas[:1] == ["Product"]
+          and set(range(2, len(custos) + 1)) <= cols_css and set(range(2, len(vendas) + 1)) <= cols_css,
+          f"custos={len(custos)}, vendas={len(vendas)}, regras para c{min(cols_css, default=0)}..c{max(cols_css, default=0)}")
+    check("UU: a numeração das caixas bate com :nth-child (a coluna i+1 da lista = cN com N=i+2 a partir da 2.ª)",
+          "`c${i + 2}`" in escopo and "columns.slice(1)" in escopo, "slice(1) + c${i + 2}")
+
+    chaves_pag = set(_re.findall(r'data-print="([a-z]+)"', pagina))
+    chaves_cmp = set(_re.findall(r"key: '([a-z]+)', label:", escopo))
+    chaves_css = set(_re.findall(r"\[data-hide~='b-([a-z]+)'\] \[data-print='\1'\]", css))
+    check("UU: os blocos do cabeçalho batem entre a página, o componente e o CSS",
+          chaves_pag == chaves_cmp == chaves_css != set(),
+          f"página={sorted(chaves_pag)} componente={sorted(chaves_cmp)} css={sorted(chaves_css)}")
+
+    def bloco_de(abertura):
+        i = pagina.find(abertura)
+        return pagina[i:pagina.find(")}", i)] if i >= 0 else ""
+    aviso, rodape = bloco_de("{aviso && ("), bloco_de("{footer.length > 0 && (")
+    check("UU: o aviso de preços operacionais e o rodapé legal não têm hook (saem sempre)",
+          bool(aviso) and bool(rodape) and "data-print" not in aviso and "data-print" not in rodape
+          and not (chaves_cmp & {"notice", "aviso", "footer", "legal"}),
+          "aviso e rodapé sem data-print, fora da lista de blocos")
+    check("UU: a preferência guardada é validada por lista branca e o armazenamento pode falhar",
+          "TOKEN_OK.test(" in escopo and "catch" in escopo and "localStorage" in escopo
+          and _re.search(r"TOKEN_OK = /\^\(c\(\[2-9\]\|1\[0-2\]\)", escopo) is not None,
+          "TOKEN_OK + try/catch")
+
+
 def block_product_alert_column():
     """NN — item 79: a coluna Alert de /products/[id] só existe para quem lê
     custos, e o colSpan da linha de erro acompanha as colunas que há."""
@@ -2577,6 +2629,7 @@ def main():
     block_me_and_settings(tokens, claims)
     block_home_menu()
     block_theme()
+    block_print_options()
     block_product_alert_column()
     block_login_link_prefetch()
     block_settings_save_feedback()

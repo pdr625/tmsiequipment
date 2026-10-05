@@ -8,10 +8,34 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getBranding, footerLines } from '@/lib/branding';
 import { PrintButton } from './print-button';
+import { PrintScope, PrintOptions, type PrintColumn } from './print-scope';
 import { FilterButton } from './filter-button';
 import { alertaDe } from '@/lib/alert';
 import { getPriceNotice } from '@/lib/price-notice';
 import { getMe } from '@/lib/me';
+
+// As colunas de cada vista, numa só lista: alimenta o <th> e as caixas de
+// «Print options». A ordem É o número da coluna (`:nth-child`) que a impressão
+// esconde — por isso o <th> é gerado daqui e não escrito à mão ao lado.
+const COLS_COSTS: PrintColumn[] = [
+  { label: 'Product' },
+  { label: 'Scope' },
+  { label: 'Status' },
+  { label: 'Currency' },
+  { label: 'Total cost (EUR)', right: true },
+  { label: 'Margin', right: true },
+  { label: 'Min price', right: true },
+  { label: 'Ref price', right: true },
+  { label: 'Alert' },
+];
+const COLS_SALES: PrintColumn[] = [
+  { label: 'Product' },
+  { label: 'Scope' },
+  { label: 'Currency' },
+  { label: 'Min price', right: true },
+  { label: 'Ref price', right: true },
+  { label: 'Lead time (days)', right: true },
+];
 
 type Branch = { id: string; name: string };
 type Channel = { id: string; name: string };
@@ -160,18 +184,24 @@ export default async function PricesPage({
   const footer = footerLines(branding);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <PrintScope
+      variant={canReadCosts ? 'costs' : 'sales'}
+      columns={canReadCosts ? COLS_COSTS : COLS_SALES}
+      className="mx-auto max-w-5xl px-4 py-8"
+    >
       <div className="mb-4 hidden print:block" style={{ fontFamily: branding.fontFamily }}>
         {branding.logoId !== null && (
-          <img src="/api/branding/logo" alt="" className="mb-2 h-10 w-auto" />
+          <img src="/api/branding/logo" alt="" data-print="logo" className="mb-2 h-10 w-auto" />
         )}
         <h1 className="text-lg font-bold" style={{ color: branding.primaryColor }}>
           {branding.displayName} — Price list
         </h1>
-        {branding.tagline !== '' && <p className="text-sm text-fg-soft">{branding.tagline}</p>}
-        <p className="text-sm">Scope: {rotuloAmbito}</p>
-        <p className="text-sm">Currency: {currencies.join(', ') || '—'}</p>
-        <p className="text-sm">
+        {branding.tagline !== '' && (
+          <p data-print="tagline" className="text-sm text-fg-soft">{branding.tagline}</p>
+        )}
+        <p data-print="scope" className="text-sm">Scope: {rotuloAmbito}</p>
+        <p data-print="currency" className="text-sm">Currency: {currencies.join(', ') || '—'}</p>
+        <p data-print="generated" className="text-sm">
           Generated: {generatedAt.toISOString()} by {geradoPor}
         </p>
       </div>
@@ -185,6 +215,7 @@ export default async function PricesPage({
           >
             Export to Excel
           </a>
+          <PrintOptions />
           <PrintButton />
         </div>
       </div>
@@ -266,15 +297,11 @@ export default async function PricesPage({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left text-fg-muted">
-              <th className="py-2 pr-4">Product</th>
-              <th className="py-2 pr-4">Scope</th>
-              <th className="py-2 pr-4">Status</th>
-              <th className="py-2 pr-4">Currency</th>
-              <th className="py-2 pr-4 text-right">Total cost (EUR)</th>
-              <th className="py-2 pr-4 text-right">Margin</th>
-              <th className="py-2 pr-4 text-right">Min price</th>
-              <th className="py-2 pr-4 text-right">Ref price</th>
-              <th className="py-2 pr-4">Alert</th>
+              {COLS_COSTS.map((c) => (
+                <th key={c.label} className={c.right ? 'py-2 pr-4 text-right' : 'py-2 pr-4'}>
+                  {c.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -313,12 +340,11 @@ export default async function PricesPage({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-line text-left text-fg-muted">
-              <th className="py-2 pr-4">Product</th>
-              <th className="py-2 pr-4">Scope</th>
-              <th className="py-2 pr-4">Currency</th>
-              <th className="py-2 pr-4 text-right">Min price</th>
-              <th className="py-2 pr-4 text-right">Ref price</th>
-              <th className="py-2 pr-4 text-right">Lead time (days)</th>
+              {COLS_SALES.map((c) => (
+                <th key={c.label} className={c.right ? 'py-2 pr-4 text-right' : 'py-2 pr-4'}>
+                  {c.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -346,6 +372,6 @@ export default async function PricesPage({
           ))}
         </div>
       )}
-    </div>
+    </PrintScope>
   );
 }

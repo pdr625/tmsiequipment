@@ -241,6 +241,77 @@
   }
 }
 
+/* Escolher o que se imprime (/prices, «Print options»): o contentor da página
+ * leva `data-hide="c5 b-logo …"` (print-scope.tsx) e estas regras escondem, SÓ na
+ * impressão, a coluna N da tabela (`cN`, 1 = Product, que não se esconde) e os
+ * blocos do cabeçalho impresso. O aviso de preços operacionais e o rodapé legal
+ * não têm hook de propósito: saem sempre. 12 colunas é o tecto da lista branca. */
+@media print {
+  [data-hide~='c2'] table tr > :nth-child(2) {
+    display: none;
+  }
+
+  [data-hide~='c3'] table tr > :nth-child(3) {
+    display: none;
+  }
+
+  [data-hide~='c4'] table tr > :nth-child(4) {
+    display: none;
+  }
+
+  [data-hide~='c5'] table tr > :nth-child(5) {
+    display: none;
+  }
+
+  [data-hide~='c6'] table tr > :nth-child(6) {
+    display: none;
+  }
+
+  [data-hide~='c7'] table tr > :nth-child(7) {
+    display: none;
+  }
+
+  [data-hide~='c8'] table tr > :nth-child(8) {
+    display: none;
+  }
+
+  [data-hide~='c9'] table tr > :nth-child(9) {
+    display: none;
+  }
+
+  [data-hide~='c10'] table tr > :nth-child(10) {
+    display: none;
+  }
+
+  [data-hide~='c11'] table tr > :nth-child(11) {
+    display: none;
+  }
+
+  [data-hide~='c12'] table tr > :nth-child(12) {
+    display: none;
+  }
+
+  [data-hide~='b-logo'] [data-print='logo'] {
+    display: none;
+  }
+
+  [data-hide~='b-tagline'] [data-print='tagline'] {
+    display: none;
+  }
+
+  [data-hide~='b-scope'] [data-print='scope'] {
+    display: none;
+  }
+
+  [data-hide~='b-currency'] [data-print='currency'] {
+    display: none;
+  }
+
+  [data-hide~='b-generated'] [data-print='generated'] {
+    display: none;
+  }
+}
+
 @media print and (orientation: portrait) {
   html {
     font-size: 11.5px;
