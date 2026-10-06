@@ -12,7 +12,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { canManageFinanceConfig, canManageOperationalConfig, isAdmin } from '@/lib/auth-guard';
 import { PRICE_NOTICE_KEY } from '@/lib/price-notice';
 import { proposeChange } from '@/lib/propose-change';
-import { validateSetting } from '@/lib/settings-validation';
+import { parseSettingInput, validateSetting } from '@/lib/settings-validation';
 import type { ActionState } from '@/lib/action-state';
 
 export type ConfigActionState = ActionState;
@@ -182,12 +182,9 @@ export async function updateSetting(_prevState: ConfigActionState, formData: For
   // O aviso de preços operacionais é do admin (setPriceNotice, abaixo).
   if (key === PRICE_NOTICE_KEY && !(await isAdmin())) return { error: 'Forbidden' };
 
-  let value: unknown;
-  try {
-    value = JSON.parse(rawValue);
-  } catch {
-    return { error: `Invalid JSON value: ${rawValue}` };
-  }
+  const parsed = parseSettingInput(key, rawValue);
+  if (!parsed.ok) return { error: parsed.error };
+  const value = parsed.value;
 
   // item 86 (0024): a forma de cada chave. A BD recusa na mesma (settings_value_shape + a ordem das margens); isto dá a mensagem útil.
   const invalid = validateSetting(key, value);

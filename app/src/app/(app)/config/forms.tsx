@@ -9,6 +9,7 @@
 
 import { useActionState } from 'react';
 import { ErrorText } from '@/lib/error-text';
+import { TEXT_SETTING_KEYS, settingInputText } from '@/lib/settings-validation';
 import {
   addExchangeRate,
   updateTransportTier,
@@ -569,7 +570,8 @@ export function SettingRow({
 }) {
   const [state, formAction, pending] = useActionState<ConfigActionState, FormData>(updateSetting, undefined);
   const formId = `set-${setting.key}`;
-  const rawValue = JSON.stringify(setting.value);
+  const rawValue = settingInputText(setting.key, setting.value);
+  const isText = TEXT_SETTING_KEYS.includes(setting.key);
 
   return (
     <tr className="border-b border-line">
@@ -587,7 +589,7 @@ export function SettingRow({
             form={formId}
             name="value"
             defaultValue={rawValue}
-            title='Raw JSON value, e.g. 0.15 or "SAP"'
+            title={isText ? 'Text, e.g. SAP' : 'Raw JSON value, e.g. 0.15 or true'}
             className="w-24 rounded-md border border-line-strong px-2 py-1 text-sm"
           />
         ) : (

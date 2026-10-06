@@ -44,3 +44,31 @@ function describe(v: unknown): string {
   if (typeof v === 'boolean') return `${v}`;
   return Array.isArray(v) ? 'uma lista' : 'um objecto';
 }
+
+// item 93: `fx_source` é texto por natureza e aparecia como `"SAP"`, com aspas — o JSON em bruto. Nas chaves de texto o campo mostra e
+// aceita o texto simples (SAP); o resto continua a ser JSON em bruto (0.15, true…). Decidido PELA CHAVE no servidor, nunca por um
+// campo que o cliente mande: o que o cliente pode escolher é só o texto, e a forma é validada na mesma por validateSetting + a BD.
+export const TEXT_SETTING_KEYS = ['fx_source'];
+
+export function settingInputText(key: string, value: unknown): string {
+  return TEXT_SETTING_KEYS.includes(key) && typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+export function parseSettingInput(key: string, raw: string): { ok: true; value: unknown } | { ok: false; error: string } {
+  if (TEXT_SETTING_KEYS.includes(key)) {
+    const t = raw.trim();
+    // quem ainda escreve as aspas (como antes) não fica com aspas dentro do valor
+    try {
+      const j: unknown = JSON.parse(t);
+      if (typeof j === 'string') return { ok: true, value: j };
+    } catch {
+      /* texto simples */
+    }
+    return { ok: true, value: t };
+  }
+  try {
+    return { ok: true, value: JSON.parse(raw) };
+  } catch {
+    return { ok: false, error: `Invalid JSON value: ${raw}` };
+  }
+}

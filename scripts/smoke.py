@@ -2533,6 +2533,14 @@ def block_settings_validation(claims, mutate=""):
     check(f"YY: a BD e a app decidem igual nos {len(casos)} casos de forma (negativos, zero, um, texto, null, vazio, inteiro…)",
           bool(casos) and rc == 0 and not diverge,
           "; ".join(diverge[:3]) or f"{len(casos)} casos iguais ({sum(1 for v in bd.values() if v == 'ok')} aceites, {sum(1 for v in bd.values() if v == 'recusa')} recusados)")
+    prova_ok = bool(imagem) and p.returncode == 0 and not any(l.startswith("# XX") for l in p.stdout.splitlines()) and any(l.startswith("# OK") for l in p.stdout.splitlines())
+    check("YY: apresentação e leitura do texto de cada chave passam a prova em Node (item 93: fx_source sem aspas, com ou sem elas ao escrever)",
+          prova_ok, f"{sum(1 for l in p.stdout.splitlines() if l.startswith('# OK'))} casos OK" if imagem else "SEM imagem")
+    forms = (raiz / "app" / "src" / "app" / "(app)" / "config" / "forms.tsx").read_text()
+    acts0 = (raiz / "app" / "src" / "app" / "(app)" / "config" / "actions.ts").read_text()
+    check("YY: o campo de /config mostra settingInputText() (e não o JSON.stringify em bruto) e a ação lê com parseSettingInput()",
+          "settingInputText(setting.key, setting.value)" in forms and "JSON.stringify(setting.value)" not in forms
+          and "parseSettingInput(key, rawValue)" in acts0 and "JSON.parse(rawValue)" not in acts0, "forms e action alinhados")
     check("YY: há casos aceites E recusados (a comparação não é trivial)", "ok" in bd.values() and "recusa" in bd.values(), f"{len(set(bd.values()))} resultados distintos")
 
     # a ordem das margens, no estado em vigor (como finance: é quem a app deixa escrever)
