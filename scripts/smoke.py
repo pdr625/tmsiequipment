@@ -2496,6 +2496,81 @@ def block_channel_margin_delta(claims, mutate=""):
           f"selects de channels: {sel}")
 
 
+def block_settings_validation(claims, mutate=""):
+    """YY — migração 0024 (item 86): tmsi.settings valida a forma de cada chave (CHECK) e a ordem das margens (gatilho). A app tem um
+    espelho puro da forma (lib/settings-validation.ts) para dar mensagens úteis; a BD é a barreira. Corre os MESMOS casos nas duas
+    e exige que decidam igual. `mutate` (SQL, só em transacção revertida) serve às provas de que as asserções sabem falhar."""
+    import json as _json
+    import pathlib as _pl
+    import subprocess as _sp
+    raiz = _pl.Path(__file__).resolve().parent.parent
+    pre = (mutate + "\n") if mutate else ""
+    imagem = _sp.run(["docker", "inspect", "tmsi-app", "--format", "{{.Config.Image}}"], capture_output=True, text=True).stdout.strip()
+    app = {}
+    if imagem:
+        p = _sp.run(["docker", "run", "--rm", "--memory", "96m", "--network", "none", "--entrypoint", "node", "-v", f"{raiz}:/r:ro", imagem,
+                     "--no-warnings", "/r/scripts/prova-settings-validation.mjs"], capture_output=True, text=True, timeout=120)
+        for l in p.stdout.splitlines():
+            k, j, r = l.rsplit("|", 2) if l.count("|") >= 2 else (None, None, None)
+            if k:
+                app[(k, j)] = r
+    casos = list(app)
+    # a BD: cada caso num bloco com excepção (reverte-se sozinho), numa transacção que se reverte no fim; gatilho da ORDEM desligado
+    # para isolar a FORMA (a ordem testa-se abaixo).
+    corpo = "".join(
+        "do $$ declare r text := 'ok'; begin begin "
+        f"insert into tmsi.settings (key, value) values ({_q(k)}, {_q(j)}::jsonb) on conflict (key) do update set value = excluded.value; "
+        "exception when check_violation then r := 'recusa'; end; "
+        f"perform set_config('smoke.r', r, true); end $$;\nselect {_q(k)} || '|' || {_q(j)} || '|' || current_setting('smoke.r');\n"
+        for k, j in casos)
+    rc, out, err = psql("begin;\n" + pre + "alter table tmsi.settings disable trigger trg_settings_margin_order;\n" + corpo + "rollback;")
+    bd = {}
+    for l in out.splitlines():
+        if l.count("|") >= 2:
+            k, j, r = l.rsplit("|", 2)
+            bd[(k, j)] = r
+    diverge = [f"{k}={j}: app={app[(k, j)]} bd={bd.get((k, j), '?')}" for k, j in casos if app[(k, j)] != bd.get((k, j))]
+    check(f"YY: a BD e a app decidem igual nos {len(casos)} casos de forma (negativos, zero, um, texto, null, vazio, inteiro…)",
+          bool(casos) and rc == 0 and not diverge,
+          "; ".join(diverge[:3]) or f"{len(casos)} casos iguais ({sum(1 for v in bd.values() if v == 'ok')} aceites, {sum(1 for v in bd.values() if v == 'recusa')} recusados)")
+    check("YY: há casos aceites E recusados (a comparação não é trivial)", "ok" in bd.values() and "recusa" in bd.values(), f"{len(set(bd.values()))} resultados distintos")
+
+    # a ordem das margens, no estado em vigor (como finance: é quem a app deixa escrever)
+    fin = claims["finance"]
+    def tenta(sqls):
+        rc2, out2, err2 = psql("begin;\n" + pre +
+            f"do $$ begin perform set_config('request.jwt.claims', '{{\"sub\":\"{fin}\",\"role\":\"authenticated\"}}', true); end $$;\n"
+            "set local role authenticated;\n" + sqls + "\nselect 'FIM';\nreset role;\nrollback;")
+        return ("FIM" in out2 and rc2 == 0), err2
+    up = lambda k, v: f"update tmsi.settings set value = '{v}' where key = '{k}';"
+    ok1, e1 = tenta(up("margin_min", "0.30"))
+    check("YY: margin_min acima de margin_target é recusado, com mensagem que diz como proceder", (not ok1) and "margin_target" in e1 and "suba primeiro" in e1, e1[:90] or "aceite")
+    ok2, e2 = tenta(up("margin_target", "0.35"))
+    check("YY: margin_target igual a margin_good é recusado", (not ok2) and "margin_good" in e2, e2[:90] or "aceite")
+    ok3, e3 = tenta(up("margin_target", "0.10"))
+    check("YY: margin_target abaixo de margin_min é recusado", not ok3, e3[:90] or "aceite")
+    ok4, e4 = tenta(up("margin_good", "0.6") + up("margin_target", "0.5") + up("margin_min", "0.3"))
+    check("YY: subir as três pela ordem certa (good, target, min) é aceite — a regra não impede editar", ok4, e4[:90] or "aceite")
+    rc3, out3, err3 = psql(
+        "begin;\n" + pre +
+        "select (select convalidated::text from pg_constraint where conrelid = 'tmsi.settings'::regclass and conname = 'settings_value_shape') || ',' || "
+        "(select count(*)::text from pg_trigger where tgrelid = 'tmsi.settings'::regclass and tgname = 'trg_settings_margin_order' and not tgisinternal) || ',' || "
+        "coalesce((select (prosecdef and proconfig @> array['search_path=tmsi, pg_temp'])::text from pg_proc where oid = 'tmsi.settings_margin_order()'::regprocedure), 'sem-funcao') || ',' || "
+        "(select count(*)::text from tmsi.settings where key in ('margin_min','margin_target','margin_good') and jsonb_typeof(value) = 'number');\nrollback;")
+    estado = out3.split()[-1].split(",") if rc3 == 0 and out3.split() else ["erro", err3[:50]]
+    check("YY: restrição validada, gatilho presente, função definer com search_path pinado, as três margens guardadas",
+          estado == ["true", "1", "true", "3"], f"{estado}")
+    acts = (raiz / "app" / "src" / "app" / "(app)" / "config" / "actions.ts").read_text()
+    i = acts.find("export async function updateSetting")
+    corpo_up = acts[i:acts.find("export async function", i + 10)]
+    check("YY: updateSetting valida a forma ANTES de escrever", "validateSetting(key, value)" in corpo_up
+          and corpo_up.index("validateSetting(") < corpo_up.index(".update({ value, note })"), "validateSetting antes do update")
+
+
+def _q(x):
+    return "'" + x.replace("'", "''") + "'"
+
+
 def block_theme():
     """TT — tema (2026-10-04). Três coisas que se estragam em silêncio:
     (1) uma cor fixa (`bg-gray-100`, `text-red-700`, `bg-white`…) escrita à mão
@@ -2954,6 +3029,7 @@ def main():
         block_perms_equivalence(tokens, claims)
         block_route_visibility(claims)
         block_channel_margin_delta(claims)
+        block_settings_validation(claims)
         block_home_menu()
         block_theme()
         block_print_options()
