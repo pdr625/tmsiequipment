@@ -966,7 +966,7 @@ massa) imprime a mesma frase em todas as linhas que ele tocou. **Bloco C:** abre
 completo em `title` (hover), ou trocar por um id do lote com link para `/import`. Cosmético, sem
 migração.
 
-**91. `/products/[id]`: a coluna `Overridden` mostra «—» a quem não lê custos** — **REGISTADO
+~~**91. `/products/[id]`: a coluna `Overridden` mostra «—» a quem não lê custos**~~ ✅ **FECHADO 2026-10-06 (`28f34de`).** Só código de app: `th` e `td` da coluna `Overridden` condicionados a `canReadCosts`, e o `colSpan` da linha de erro acompanha (2 + 2 quando se lêem custos). A premissa verificou-se ao vivo: o motor devolve `overrides = NULL` a vendas/agentes mesmo onde há override. Smoke 240 → 243 (3 asserções + a premissa), 3 mutações apanhadas. _(texto original abaixo)_ — — **REGISTADO
 2026-10-03**, achado do Pedro, da mesma família do item 79 (a `Alert` já ficou condicionada a
 `canReadCosts`). `Overridden` não devolve dados de custo em si (é só uma etiqueta — "margin",
 "transport", "coef"), mas aparecer sempre vazia para `sales`/`agent`/`logistics` é o mesmo
