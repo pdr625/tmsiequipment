@@ -30,12 +30,12 @@ desenho, não resolvido).
 
 ## Triagem do backlog — 2026-10-05
 
-Das **40** entradas sem marca de fecho, **14 já estão fechadas ou decididas** (9 na triagem, mais o 57, o 94, o 83, o 63 e o 110 fechados no mesmo dia) (marcadas abaixo, com a evidência de cada uma, verificada
-ao vivo na BD ou no código — não por memória) e **27 continuam abertas** (o 63 e o 110 fechados). Das 27, **17 precisam de uma decisão tua**, **7 são trabalho
+Das **40** entradas sem marca de fecho, **15 já estão fechadas ou decididas** (9 na triagem, mais o 57, o 94, o 83, o 63, o 110 e o 86 fechados no mesmo dia) (marcadas abaixo, com a evidência de cada uma, verificada
+ao vivo na BD ou no código — não por memória) e **26 continuam abertas** (o 63 e o 110 fechados). Das 26, **17 precisam de uma decisão tua**, **6 são trabalho
 de código** e **3 só se fecham com a tua medição ou o teu browser**. A extracção automática do backlog **não é fiável** (marcava como
 abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um item sem verificar o estado real.
 
-**Fechados / decididos / superados (14):** 8, 13, 56, 57, 59, 60, 61, 62, 63, 64, 74, 83, 94, 110 — ver a nota no início de cada um.
+**Fechados / decididos / superados (15):** 8, 13, 56, 57, 59, 60, 61, 62, 63, 64, 74, 83, 86, 94, 110 — ver a nota no início de cada um.
 
 **Abertos — decisão tua, sem código (17):**
 - Política e negócio: **50** (`branch_manager` aprova configuração global?), **82** (`finance` escreve limiares de margem sem proposta), **27** (regra
@@ -45,7 +45,7 @@ abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um i
   **107** (categorias duplicadas), **108** (3 produtos sem categoria).
 - Fronteira de segurança: **109** (Server Actions a delegar em `perms.ts`).
 
-**Abertos — trabalho de código (7):** **86** (validação de `settings`; `0` restrições hoje — migração **0024** (a 0022 é o autor `system` do `audit_log`, a 0023 a privacidade de `margin_delta`), depois da reunião de 13/10), **91** e **93** (cosméticos,
+**Abertos — trabalho de código (6):** **91** e **93** (cosméticos,
 bloco C), **55** (a perna off-site não aparece na monitorização; só se mede a idade do dump local), **45**, **46**, **49** (apagar/anonimizar, exportar os
 próprios dados e reter 5 anos — a `/privacy` ainda diz que não existem).
 
@@ -902,7 +902,7 @@ devolve (`must_change_password`) — mexe no middleware, que o item 76 mandou n�
 juntas; (c) a página inicial faz `getUser()` + `has_role` ×2 + `pricingConfigReadAccess` +
 `canReadAuditLog` + branding — `me()` cobre quase tudo. Só com gatilho de medição.*
 
-**86. `tmsi.settings` não valida nada — valores negativos aceites e em vigor** — **REGISTADO
+~~**86. `tmsi.settings` não valida nada — valores negativos aceites e em vigor**~~ ✅ **FECHADO 2026-10-06 — migração 0024 (`36acc1e`), antecipada a pedido do Pedro.** `CHECK settings_value_shape` (margens e `fx_tolerance` em ]0,1[, `review_days` inteiro > 0, `fx_source` texto não vazio, `operational_price_notice` booleano; chaves desconhecidas passam, quem acrescentar uma chave nova deve acrescentá-la ao CHECK) **mais** um gatilho `trg_settings_margin_order` para `margin_min < margin_target < margin_good` — três linhas, não cabe num CHECK. A ordem vale em **cada estado em vigor**, e a app grava uma chave de cada vez: para subir o mínimo acima do alvo sobe-se primeiro `margin_good`, depois `margin_target`, depois `margin_min` (a mensagem de erro diz-o). Ensaio: 27 casos (incluindo `-5` e `-5` de 03/10, que antes eram aceites) e a subida pela ordem certa; a app ganhou `lib/settings-validation.ts` (espelho puro, mensagens por chave) chamada em `updateSetting` antes de escrever. Smoke 232 → 240 (bloco `YY`): **os mesmos 38 casos corridos na BD e na app têm de decidir igual**, a ordem das margens e o estado do catálogo; **13 mutações** apanhadas. **Não coberto:** apagar uma das chaves de margem (o motor falha fechado, 0017) e alterar `note`. _(texto original abaixo)_ —  — **REGISTADO
 2026-10-03, achado do Pedro (sessão de 03/10).** Como `finance.test`, `margin_min = -5` e
 `review_days = -5` foram **aceites pela app e pela BD** e ficaram em vigor (auditoria 19:09–19:10,
 `finance.test` como autor); repostos a `0,15` e `90` a seguir (a reposição também está na

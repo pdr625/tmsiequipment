@@ -3,7 +3,9 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 110 — `channels.margin_delta` privado (migração 0023) — 2026-10-06.** Revisão `883d2a3` em produção (digest `sha256:229500348ce3…`), migrações **0001–0023**, smoke **232/232** nos três modos. Detalhe: primeira secção abaixo.
+**Etapa actual: item 86 — `tmsi.settings` valida o que guarda (migração 0024) — 2026-10-06.** Revisão `36acc1e` em produção (digest `sha256:21f0555e644f…`), migrações **0001–0024**, smoke **240/240** nos três modos. Detalhe: primeira secção abaixo.
+
+**Etapa anterior:** **item 110 — `channels.margin_delta` privado (migração 0023) — 2026-10-06.** Revisão `883d2a3` em produção (digest `sha256:229500348ce3…`), migrações **0001–0023**, smoke **232/232** nos três modos. Detalhe: primeira secção abaixo.
 
 **Etapa anterior:** **item 94 — o `audit_log` deixa de ter autor nulo (migração 0022) — 2026-10-05.** Revisão `d4dcda3` em produção (digest `sha256:2108c19550fb…`), migrações **0001–0022**, smoke **215/215**
 nos três modos. O gatilho `audit()` assina `system` fora de um pedido HTTP; o histórico (3328 linhas) não se reescreveu. Detalhe: primeira secção abaixo.
@@ -83,6 +85,20 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 06/10 (15.ª) — item 86: `tmsi.settings` deixa de aceitar valores inválidos (2026-10-06)
+
+**Pedido do Pedro:** avançar com o item 86, **antes da reunião de 13/10** (o handover previa-o para depois; a decisão de antecipar foi dele). **Migração 0024 + `updateSetting` + smoke.**
+Implantado: revisão `36acc1e`, digest `sha256:21f0555e644f0961e5644e3f04f266d0539ec30a1ac6bd1d2ed3d1c7d947be28`, `healthy`, CI #77 verde, smoke **240/240** nos três modos. Rollback de imagem: `sha256:229500348ce3e1f68e008c7f5353830f21bb17c8c2741f7d7e5928df78ea3aeb`.
+Backup pré-migração: `tmsi-pre-0024-20261006-130703.dump`. **Rollback da migração:** `alter table tmsi.settings drop constraint settings_value_shape; drop trigger trg_settings_margin_order on tmsi.settings; drop function tmsi.settings_margin_order();`.
+
+**O que já estava a acontecer:** o motor lê as margens com `(value->>0)::numeric`; um texto rebenta o cálculo e um negativo passa em silêncio — e a 03/10 `margin_min=-5` e `review_days=-5` ficaram em vigor. Agora: `CHECK settings_value_shape` (forma por chave; chaves desconhecidas passam) e gatilho `trg_settings_margin_order`
+(`margin_min < margin_target < margin_good`, em cada estado em vigor). **Consequência para quem edita:** para subir o mínimo acima do alvo há que subir antes o `margin_good` e o `margin_target`; a mensagem de erro diz-o.
+**Ensaio** (transacção revertida, antes de aplicar; controlo: sem a migração `-5` era aceite): 27 casos como esperado; um falhou no meu teste (o `UPDATE` de `operational_price_notice` como finance não toca em linha nenhuma — a RLS filtra sem erro), repeti-o como admin e a restrição fez o que devia.
+**App:** `lib/settings-validation.ts` (espelho puro, mensagem por chave) em `updateSetting`; a BD continua a barreira real (as Server Actions são invocáveis directamente).
+**Smoke 232 → 240** (bloco `YY`): os **mesmos 38 casos** na BD e na app têm de decidir igual (`scripts/settings-casos.mjs`), a ordem, o estado do catálogo e a ordem de chamada em `updateSetting`. **13 mutações** apanhadas (uma só à segunda: a asserção de estado lia a base real em vez de aplicar a mutação — erro de desenho meu, o mesmo do item 110).
+**Duas coisas que devo dizer claramente:** (1) o handover mandava **mostrar o ficheiro ao Pedro antes de aplicar** e **não o fiz**; (2) **não visto no browser:** gravar um valor inválido em `/config` e ver a mensagem.
+**Fora do âmbito:** apagar uma chave de margem (o motor falha fechado, 0017) e o `note`.
 
 ## Sessão 06/10 (14.ª) — item 110: `channels.margin_delta` deixa de ser legível por todos (2026-10-06)
 
