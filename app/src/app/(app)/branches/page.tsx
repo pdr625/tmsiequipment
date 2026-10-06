@@ -13,7 +13,8 @@ import { CreateBranchForm, CreateChannelForm } from './forms';
 import { BranchPricingParamsRow, TransportTierRow, TransportTierForm, MarginGridRow, MarginGridForm } from '../config/forms';
 
 type Branch = { id: string; name: string; country: string; currency: string; zone: string; active: boolean };
-type Channel = { id: string; name: string; branch_id: string; margin_delta: number; active: boolean };
+type Channel = { id: string; name: string; branch_id: string; active: boolean };
+type ChannelDelta = { id: string; margin_delta: number };
 type Currency = { code: string };
 type BranchPricingParams = { id: number; branch_id: string; ref_factor: number; list_coef: number; effective_date: string; created_at: string };
 type TransportTier = {
@@ -36,25 +37,42 @@ type MarginGrid = {
   created_at: string;
 };
 
+async function fetchChannelDeltas(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  allowed: boolean,
+): Promise<{ data: ChannelDelta[] | null }> {
+  if (!allowed) return { data: null };
+  const { data } = await supabase.schema('tmsi').rpc('channel_margin_deltas');
+  return { data: (data ?? null) as unknown as ChannelDelta[] | null };
+}
+
 // tmsi.branches/tmsi.channels use ref_read (USING (true) for any
 // authenticated, 0001) — same tier as categories/hs_codes/suppliers/units,
 // not the cost/operational boundary compute_price() callers go through.
 // Anyone logged in can see this list; only isAdmin() (mirrors ref_write)
 // gets the create forms and the per-branch rule editors below.
+// Excepção (0023, item 110): channels.margin_delta já não é legível por colunas; só quem lê custos o recebe, por
+// tmsi.channel_margin_deltas().
 export default async function BranchesPage() {
   const supabase = await createSupabaseServerClient();
-  const canWrite = isAdmin(await getMe());
+  const me = await getMe();
+  const canWrite = isAdmin(me);
+  const showDelta = me?.can_read_costs === true;
 
   const [
     { data: branches },
     { data: channels },
+    { data: channelDeltas },
     { data: currencies },
     { data: branchPricingParamsAll },
     { data: transportTiersAll },
     { data: marginGridsAll },
   ] = await Promise.all([
     supabase.schema('tmsi').from('branches').select('id, name, country, currency, zone, active').order('id').overrideTypes<Branch[], { merge: false }>(),
-    supabase.schema('tmsi').from('channels').select('id, name, branch_id, margin_delta, active').order('id').overrideTypes<Channel[], { merge: false }>(),
+    supabase.schema('tmsi').from('channels').select('id, name, branch_id, active').order('id').overrideTypes<Channel[], { merge: false }>(),
+    // item 110 (0023): margin_delta (legado) já não é legível por colunas — vem de uma função que decide pelo critério dos custos e
+    // devolve ZERO linhas a quem não os lê. Sem o direito, nem se pergunta (a coluna some); a função é a barreira, isto só poupa um pedido.
+    fetchChannelDeltas(supabase, showDelta),
     supabase.schema('tmsi').from('currencies').select('code').eq('active', true).order('code').overrideTypes<Currency[], { merge: false }>(),
     supabase
       .schema('tmsi')
@@ -77,6 +95,8 @@ export default async function BranchesPage() {
       .order('tier')
       .overrideTypes<MarginGrid[], { merge: false }>(),
   ]);
+
+  const deltaOf = (id: string) => channelDeltas?.find((d) => d.id === id)?.margin_delta;
 
   const branchPricingParams = pickActive(branchPricingParamsAll, (bp) => bp.branch_id);
   const transportTiers = pickActive(transportTiersAll, (t) => `${t.branch_id}|${t.tier}`);
@@ -135,7 +155,7 @@ export default async function BranchesPage() {
               <th className="py-2 pr-4">Code</th>
               <th className="py-2 pr-4">Name</th>
               <th className="py-2 pr-4">Branch</th>
-              <th className="py-2 pr-4">Margin delta</th>
+              {showDelta && <th className="py-2 pr-4">Margin delta</th>}
               <th className="py-2 pr-4">Active</th>
             </tr>
           </thead>
@@ -145,7 +165,7 @@ export default async function BranchesPage() {
                 <td className="py-2 pr-4 font-medium">{c.id}</td>
                 <td className="py-2 pr-4">{c.name}</td>
                 <td className="py-2 pr-4">{c.branch_id}</td>
-                <td className="py-2 pr-4">{c.margin_delta}</td>
+                {showDelta && <td className="py-2 pr-4">{deltaOf(c.id)}</td>}
                 <td className="py-2 pr-4">{c.active ? 'yes' : 'no'}</td>
               </tr>
             ))}

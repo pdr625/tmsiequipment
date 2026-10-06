@@ -2436,6 +2436,66 @@ def block_route_visibility(claims):
           all(_route_counts(SEM_PAPEL)[t] == 0 for t in ("v_products", "products", "price_overrides", "price_proposals")), "0 em todas")
 
 
+def block_channel_margin_delta(claims, mutate=""):
+    """XX — migração 0023 (item 110): channels.margin_delta (legado) já não é legível por qualquer conta autenticada. Privilégios
+    de coluna são por papel de BD (`authenticated` = todos), por isso a coluna deixou de ser legível e quem a pode ver (can_read_costs)
+    lê-a por tmsi.channel_margin_deltas(). `mutate` só serve às provas de que as asserções sabem falhar."""
+    import pathlib as _pl
+    raiz = _pl.Path(__file__).resolve().parent.parent
+    pagina = (raiz / "app" / "src" / "app" / "(app)" / "branches" / "page.tsx").read_text()
+    pre = (mutate + "\n") if mutate else ""
+    def col(c, op):  # privilégio de coluna para `authenticated`, com a mutação aplicada numa transacção revertida
+        rc, out, err = psql("begin;\n" + pre + f"select has_column_privilege('authenticated','tmsi.channels','{c}','{op}');\nrollback;")
+        return out.split()[-1] if rc == 0 and out.split() else f"erro:{err[:60]}"
+    check("XX: authenticated NÃO lê channels.margin_delta (nem por `select *`)", col("margin_delta", "select") == "f", f"has_column_privilege={col('margin_delta','select')}")
+    check("XX: as colunas que as páginas usam continuam legíveis (id, name, branch_id, active)",
+          all(col(c, "select") == "t" for c in ("id", "name", "branch_id", "active")), "4 colunas")
+    check("XX: escrever margin_delta continua possível (o admin cria canais com ele)", col("margin_delta", "insert") == "t" and col("margin_delta", "update") == "t", "insert e update")
+
+    def deltas(uuid):
+        sql = ("begin;\n" + pre +
+               "do $$ begin perform set_config('request.jwt.claims', "
+               f"'{{\"sub\":\"{uuid}\",\"role\":\"authenticated\"}}', true); end $$;\n"
+               "set local role authenticated;\nselect count(*) from tmsi.channel_margin_deltas();\nreset role;\nrollback;")
+        rc, out, err = psql(sql)
+        return int(out.split()[-1]) if rc == 0 and out.split() else None
+    sell = {}
+    for role in ("sales", "agent"):
+        f = psql_rows(f"select user_id from tmsi.user_roles where role = '{role}' limit 1;")
+        sell[role] = f[0][0] if f else None
+    pode = {"finance": claims["finance"], "product_manager": claims["product_manager"], "branch_manager": claims["branch_manager"]}
+    nao = {"logistics": claims["logistics"], "sem papel": "00000000-0000-4000-8000-0000000000aa", **{k: v for k, v in sell.items() if v}}
+    got_p = {r: deltas(u) for r, u in pode.items()}
+    got_n = {r: deltas(u) for r, u in nao.items()}
+    check("XX: quem lê custos recebe os deltas pela função (finance, product_manager, branch_manager)",
+          all(v and v > 0 for v in got_p.values()), str(got_p))
+    check("XX: quem NÃO lê custos recebe zero linhas (logistics, vendas, agentes, conta sem papel)",
+          all(v == 0 for v in got_n.values()), str(got_n))
+    # a leitura directa da coluna tem de falhar a uma conta de vendas, e a função não pode estar aberta a anon/PUBLIC
+    if sell.get("sales"):
+        rc, _o, err = psql("select margin_delta from tmsi.channels;", sell["sales"])
+        check("XX: um vendedor que peça a coluna directamente recebe «permission denied»", rc != 0 and "permission denied" in err, err[:70] or "aceite")
+    rc_a, out_a, _e = psql("begin;\n" + pre + "select has_function_privilege('anon','tmsi.channel_margin_deltas()','execute')::text || ',' || "
+                           "has_function_privilege('authenticated','tmsi.channel_margin_deltas()','execute')::text;\nrollback;")
+    acl = out_a.split()[-1].split(",") if rc_a == 0 and out_a.split() else ["erro"]
+    check("XX: a função não é executável por anon, só por authenticated", acl == ["false", "true"], f"anon,authenticated={acl}")
+    admin = psql_rows("select user_id from tmsi.user_roles where role = 'admin' limit 1;")
+    if admin:
+        rc, out, err = psql(
+            "begin;\n"
+            "do $$ begin perform set_config('request.jwt.claims', "
+            f"'{{\"sub\":\"{admin[0][0]}\",\"role\":\"authenticated\"}}', true); end $$;\n"
+            "set local role authenticated;\n"
+            "insert into tmsi.channels (id, name, branch_id, margin_delta) values ('SMOKEXX', 'smoke xx', 'SA', 0.05);\n"
+            "select 'ok';\nreset role;\nrollback;")
+        check("XX: o admin continua a conseguir criar um canal com margin_delta (transacção revertida)", rc == 0 and "ok" in out, err[:90] or "criado e revertido")
+    import re as _re
+    sel = _re.findall(r"from\('channels'\)\s*\.select\('([^']*)'\)", pagina.replace("\n", " "))
+    check("XX: /branches não pede margin_delta à tabela (só à função, e só a quem lê custos)",
+          sel and all("margin_delta" not in x for x in sel) and "channel_margin_deltas" in pagina and "can_read_costs === true" in pagina,
+          f"selects de channels: {sel}")
+
+
 def block_theme():
     """TT — tema (2026-10-04). Três coisas que se estragam em silêncio:
     (1) uma cor fixa (`bg-gray-100`, `text-red-700`, `bg-white`…) escrita à mão
@@ -2893,6 +2953,7 @@ def main():
         block_me_and_settings(tokens, claims)
         block_perms_equivalence(tokens, claims)
         block_route_visibility(claims)
+        block_channel_margin_delta(claims)
         block_home_menu()
         block_theme()
         block_print_options()
