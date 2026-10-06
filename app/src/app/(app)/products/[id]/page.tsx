@@ -293,7 +293,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 <th className="py-2 pr-4">Min price</th>
                 <th className="py-2 pr-4">Ref price</th>
                 {canReadCosts === true && <th className="py-2 pr-4">Alert</th>}
-                <th className="py-2 pr-4">Overridden</th>
+                {canReadCosts === true && <th className="py-2 pr-4">Overridden</th>}
               </tr>
             </thead>
             <tbody>
@@ -328,22 +328,24 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                         )}
                       </td>
                     )}
-                    <td className="py-2 pr-4">
-                      {overriddenInputs.length === 0 ? (
-                        '—'
-                      ) : (
-                        <span className="rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary-fg" title={hsOverride ? `HS: ${hsOverride.hs_code}` : undefined}>
-                          {overriddenInputs.join(', ')}
-                        </span>
-                      )}
-                    </td>
+                    {canReadCosts === true && (
+                      <td className="py-2 pr-4">
+                        {overriddenInputs.length === 0 ? (
+                          '—'
+                        ) : (
+                          <span className="rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary-fg" title={hsOverride ? `HS: ${hsOverride.hs_code}` : undefined}>
+                            {overriddenInputs.join(', ')}
+                          </span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {priceErrors.map((e) => (
                 <tr key={`error-${e.branchId}`} className="border-b border-line">
                   <td className="py-2 pr-4">{e.branchId}</td>
-                  <td colSpan={(seesCosts ? 2 : 0) + 3 + (canReadCosts === true ? 1 : 0)} role="alert" className="py-2 pr-4 text-danger">
+                  <td colSpan={(seesCosts ? 2 : 0) + 2 + (canReadCosts === true ? 2 : 0)} role="alert" className="py-2 pr-4 text-danger">
                     Calculation error: {e.message}
                   </td>
                 </tr>

@@ -2760,8 +2760,27 @@ def block_product_alert_column():
     antes = t[max(0, i - 400):i]
     check("NN: o <td> do Alert está dentro de canReadCosts === true", i > 0 and "canReadCosts === true &&" in antes,
           "td condicionado" if i > 0 else "alertaDe não encontrado")
-    check("NN: o colSpan da linha de erro conta a coluna Alert só quando ela existe",
-          "(canReadCosts === true ? 1 : 0)" in t and "colSpan={seesCosts ? 6 : 4}" not in t, "colSpan dinâmico")
+    check("NN: o colSpan da linha de erro conta as colunas Alert e Overridden só quando existem (item 91)",
+          "(canReadCosts === true ? 2 : 0)" in t and "colSpan={seesCosts ? 6 : 4}" not in t and "+ 3 +" not in t, "colSpan dinâmico")
+    # item 91: Overridden também só para quem lê custos (a premissa — o motor devolve overrides NULL a vendas/agentes — verifica-se ao vivo)
+    ov = 'canReadCosts === true && <th className="py-2 pr-4">Overridden</th>'
+    check("NN: o <th> Overridden do /products/[id] está condicionado a canReadCosts, sem th solto",
+          ov in t and '<th className="py-2 pr-4">Overridden</th>' not in t.replace(ov, ''), "th condicionado")
+    k = t.find("overriddenInputs.length === 0")
+    check("NN: o <td> do Overridden está dentro de canReadCosts === true", k > 0 and "canReadCosts === true && (" in t[max(0, k - 160):k],
+          "td condicionado" if k > 0 else "overriddenInputs não encontrado")
+    pares = psql_rows("select product_id, scope_id from tmsi.price_overrides where scope_type = 'branch';")
+    sales = psql_rows("select user_id from tmsi.user_roles where role = 'sales' limit 1;")
+    if sales and pares:
+        vis = {r[0] for r in psql_rows("select id from tmsi.v_products;", sales[0][0])}
+        hit = [(p, b) for p, b in pares if p in vis]
+        vistos = []
+        for p, b in hit[:3]:
+            r = psql_rows(f"select coalesce(overrides::text, 'NULL') from tmsi.compute_price('{p}', 'branch', '{b}');", sales[0][0])
+            vistos += [x[0] for x in r]
+        check("NN: a premissa do 91 — o motor devolve overrides NULL a um vendedor mesmo onde existe override", bool(vistos) and all(v == "NULL" for v in vistos), f"{vistos}")
+    else:
+        check("NN: a premissa do 91", True, "SKIP — sem conta de vendas ou sem overrides")
 
 
 def block_retention_text():
