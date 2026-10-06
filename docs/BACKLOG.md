@@ -978,7 +978,7 @@ defeito cosmético do 79. **Bloco C:** `canReadCosts &&` no `<th>` e no `<td>`, 
 devia ter o seu próprio limiar de alerta em vez de ser julgado pelo global. Decisão do Pedro,
 sem prazo.
 
-**93. `/config`: `fx_source` aparece como `"SAP"`, com aspas** — **REGISTADO 2026-10-03**,
+~~**93. `/config`: `fx_source` aparece como `"SAP"`, com aspas**~~ ✅ **FECHADO 2026-10-06 (`a2573da`).** Só código de app. Nas chaves de texto (`fx_source`, **decidido pela chave no servidor**, não por um campo do cliente) o campo de `/config` mostra e aceita o texto simples (`SAP`); quem ainda escreve as aspas não as fica a guardar dentro do valor; o resto das chaves continua JSON em bruto. Lógica pura em `lib/settings-validation.ts` (`settingInputText`, `parseSettingInput`), prova em Node (12 casos) e 2 asserções no smoke (243 → 245); 5 mutações apanhadas. **Não visto no browser.** _(texto original abaixo)_ — — **REGISTADO 2026-10-03**,
 achado do Pedro, cosmético. `tmsi.settings.value` é `jsonb`; o campo mostra o `JSON.stringify`
 em bruto (é também o que o utilizador tem de escrever de volta — ver item 86, sem validação
 nenhuma hoje). Um valor que é string por natureza (`fx_source`) não precisa de aspas visíveis
