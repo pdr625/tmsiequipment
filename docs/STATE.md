@@ -3,7 +3,9 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 94 — o `audit_log` deixa de ter autor nulo (migração 0022) — 2026-10-05.** Revisão `d4dcda3` em produção (digest `sha256:2108c19550fb…`), migrações **0001–0022**, smoke **215/215**
+**Etapa actual: item 110 — `channels.margin_delta` privado (migração 0023) — 2026-10-06.** Revisão `883d2a3` em produção (digest `sha256:229500348ce3…`), migrações **0001–0023**, smoke **232/232** nos três modos. Detalhe: primeira secção abaixo.
+
+**Etapa anterior:** **item 94 — o `audit_log` deixa de ter autor nulo (migração 0022) — 2026-10-05.** Revisão `d4dcda3` em produção (digest `sha256:2108c19550fb…`), migrações **0001–0022**, smoke **215/215**
 nos três modos. O gatilho `audit()` assina `system` fora de um pedido HTTP; o histórico (3328 linhas) não se reescreveu. Detalhe: primeira secção abaixo.
 
 **Etapa anterior:** **páginas com `getMe()` partilhado, sem guardas nem RPCs próprias — 2026-10-05.** Revisão
@@ -81,6 +83,20 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 06/10 (14.ª) — item 110: `channels.margin_delta` deixa de ser legível por todos (2026-10-06)
+
+**Pedido do Pedro:** opção (a) do item 110. **Migração 0023 + `/branches` + smoke.** Implantado: revisão `883d2a3`, digest `sha256:229500348ce3e1f68e008c7f5353830f21bb17c8c2741f7d7e5928df78ea3aeb`, `healthy`, CI #76 verde, smoke **232/232** nos três modos.
+Rollback de imagem: `sha256:2108c19550fb8f782b7330964e81aa51fda1f1d857854b9ff6968265f2d2482a`. Backup pré-migração: `tmsi-pre-0023-20261006-111319.dump`.
+**Rollback da migração:** `grant select on tmsi.channels to authenticated; drop function tmsi.channel_margin_deltas();` (e repor a imagem anterior, que pede a coluna).
+
+**A armadilha do desenho:** os privilégios de coluna do Postgres são por papel de BD, e todos os utilizadores da app são `authenticated` — um `REVOKE` na coluna tiraria-a também ao admin. Solução: a coluna deixa de ser legível
+(tabela: `REVOKE SELECT` + `GRANT` de 4 colunas) e lê-se por `tmsi.channel_margin_deltas()` (SECURITY DEFINER, critério `can_read_costs()`: admin, product_manager, finance, branch_manager, viewer; zero linhas aos restantes).
+Antes de mexer confirmei que **nenhuma função da BD nem vista lê a coluna** (só `/branches`, o formulário do admin e um `POST` do smoke).
+**Ensaio** em transacção revertida (por papel: admin, finance, product_manager e branch_manager recebem o delta; logistics, vendas e agentes zero; leitura directa e `select *` dão `permission denied`); migração com a guarda do repo e guardas próprias.
+**Smoke 223 → 232** (bloco `XX`), **12 mutações** apanhadas (a sério, em transacção revertida, sem tocar na produção).
+**Deslizes meus:** (1) duas mutações não foram apanhadas à primeira — o `REVOKE` de coluna não retira um grant de tabela, e a asserção do `anon` não aplicava a mutação; eram falhas do meu teste, corrigidas e refeitas antes de concluir; (2) um erro de `psql_rows` a partir um valor que eu já juntava com `|`; (3) a mensagem do commit diz 231 asserções, o certo é 232.
+**Não visto no browser:** `/branches` como admin (coluna «Margin delta» presente) e como vendedor (coluna ausente) — só por HTTP, SQL e testes. Convém abrires como admin.
 
 ## Sessão 05/10 (noite, 13.ª) — item 63: as rotas protegidas só pela RLS (2026-10-05)
 

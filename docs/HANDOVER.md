@@ -6,7 +6,7 @@ Copyright © 2026 Pedro Alexandre. Proprietary — see ../LICENSE.
 antes/depois da reunião», **actualizado no mesmo dia depois de o Pedro aplicar os dois comandos
 sudo no host** (ambos confirmados em produção — ver §2). **Estado:** a app está estável, sem
 migração pendente de aplicar e sem nenhum comando por correr no host. O bloco grande (migração
-0023 + página inicial + protocolo n.º 8) fica para depois da **reunião com a direcção,
+0024 + página inicial + protocolo n.º 8) fica para depois da **reunião com a direcção,
 2026-10-13**. A versão anterior deste ficheiro (sessão 0021) está no git
 (`git show 3371131:docs/HANDOVER.md`).
 
@@ -14,8 +14,8 @@ migração pendente de aplicar e sem nenhum comando por correr no host. O bloco 
 
 ## 1. Onde isto está
 
-**Produção:** revisão `d4dcda3`, digest `sha256:2108c19550fb…`, `healthy` (tema + menu lateral + acabamento + impressão corrigida, 05/10). Migrações **ainda
-0001–0021** (nenhuma migração nesta sessão). Smoke **215/215**, verde nos três modos. Migrações **0001–0022** (a 0022 é o autor `system` do `audit_log`; a validação de `settings`, item 86, passou a **0023**).
+**Produção:** revisão `883d2a3`, digest `sha256:229500348ce3…`, `healthy` (06/10). Migrações **0001–0023** (a 0022 é o autor `system` do `audit_log`; a 0023 tira `channels.margin_delta` à leitura geral;
+a validação de `settings`, item 86, passou a **0024**). Smoke **232/232**, verde nos três modos.
 
 | | |
 |---|---|
@@ -67,7 +67,7 @@ política de backup mudou e está activa no host (diário com purga + semanal, s
 
 ## 4. Decisões que são tuas — só as novas desta sessão
 
-1. **Item 86 — a 0023 (validação de `settings`) está só esboçada**, não escrita nem ensaiada.
+1. **Item 86 — a 0024 (validação de `settings`) está só esboçada**, não escrita nem ensaiada.
    Antes da reunião, se quiseres antecipar: confirma os limiares exactos (`margin_min <
    margin_target < margin_good`, os intervalos) — estão no item 86 do `BACKLOG.md`, é a base
    que uso para escrever a migração no bloco C.
@@ -79,7 +79,7 @@ política de backup mudou e está activa no host (diário com purga + semanal, s
 
 ## 5. O que NÃO fazer já
 
-- **Migração 0023** — só depois da reunião de 2026-10-13 (bloco C).
+- **Migração 0024** — só depois da reunião de 2026-10-13 (bloco C).
 - **Página inicial com `me()` + `cache()` no branding (item 88)** — bloco C, prova por
   `contar-pedidos.sh`.
 - **Item 71 (`price_cache`)** — só com gatilho: 4 s no «All branches» com host calmo.
@@ -97,5 +97,5 @@ seguinte, nenhum vermelho. O que pesou foi fora do repo: **sudo sem password/TTY
 deixou dois comandos para o Pedro correr à parte (logrotate, backup) — ambos aplicados e
 confirmados por ele no mesmo dia, incluindo uma primeira tentativa que falhou por caminho
 relativo (`cp` corrido de `~`, não do repo) e teve de se repetir com caminho absoluto. Para a
-sessão que escrever a 0023 (item 86): é migração, corpo de produção, ensaio em transacção
+sessão que escrever a 0024 (item 86): é migração, corpo de produção, ensaio em transacção
 revertida com os valores inválidos de hoje, **mostrar o ficheiro ao Pedro antes de aplicar**.
