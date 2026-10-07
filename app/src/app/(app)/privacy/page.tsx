@@ -102,7 +102,6 @@ export default async function PrivacyPage() {
           What this system doesn&apos;t do yet — stated plainly
         </h2>
         <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-fg-soft">
-          <li>There is no self-service &quot;export my data&quot; button yet.</li>
           <li>
             The audit trail&apos;s 5-year retention above is a decision, not yet a running
             mechanism — today the table keeps every entry without a time limit.

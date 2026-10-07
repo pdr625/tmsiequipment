@@ -2676,6 +2676,79 @@ def block_remove_user(claims, mutate=""):
           "UI, audit e privacy alinhados")
 
 
+def block_my_data(claims, mutate=""):
+    """AB — migração 0026 (item 46): tmsi.my_data() entrega os dados de QUEM CHAMA e nada de terceiros. Prova-se papel a papel com sessões
+    simuladas, e que nenhum email de outra pessoa vai parar ao ficheiro (nem para o admin, que editou perfis de colegas). `mutate`
+    só serve às provas de falha."""
+    import json as _json
+    import pathlib as _pl
+    raiz = _pl.Path(__file__).resolve().parent.parent
+    pre = (mutate + "\n") if mutate else ""
+    sell = {}
+    for role in ("sales", "agent"):
+        f = psql_rows(f"select user_id from tmsi.user_roles where role = '{role}' limit 1;")
+        sell[role] = f[0][0] if f else None
+    adm = psql_rows("select user_id from tmsi.user_roles where role = 'admin' limit 1;")[0][0]
+    quem = {"admin": adm, "finance": claims["finance"], "product_manager": claims["product_manager"], "logistics": claims["logistics"],
+            "branch_manager": claims["branch_manager"], **{k: v for k, v in sell.items() if v}}
+    def pedir(uid):
+        rc, out, err = psql("begin;\n" + pre +
+            f"do $$ begin perform set_config('request.jwt.claims', '{{\"sub\":\"{uid}\",\"role\":\"authenticated\"}}', true); end $$;\n"
+            "set local role authenticated;\nselect tmsi.my_data();\nreset role;\nrollback;")
+        try:
+            return _json.loads(out.splitlines()[-1]), out
+        except Exception:
+            return None, err
+    maus = []
+    vazados = []
+    for papel, uid in quem.items():
+        j, txt = pedir(uid)
+        if j is None:
+            maus.append(f"{papel}: sem JSON ({txt[:50]})")
+            continue
+        n_roles = psql_rows(f"select count(*) from tmsi.user_roles where user_id = '{uid}';")[0][0]
+        n_acts = psql_rows(f"select least(count(*), 50000) from tmsi.audit_log where actor = '{uid}';")[0][0]
+        n_chg = psql_rows("select count(*) from tmsi.audit_log where table_name in ('profiles','user_roles') "
+                          f"and (old_row ->> 'user_id' = '{uid}' or new_row ->> 'user_id' = '{uid}');")[0][0]
+        if j.get("user_id") != uid or (j.get("profile") or {}).get("user_id") != uid:
+            maus.append(f"{papel}: perfil/identidade errados")
+        if str(len(j["roles"])) != n_roles or str(len(j["actions_you_performed"])) != n_acts or str(len(j["changes_to_your_account"])) != n_chg:
+            maus.append(f"{papel}: roles {len(j['roles'])}/{n_roles} ações {len(j['actions_you_performed'])}/{n_acts} alterações {len(j['changes_to_your_account'])}/{n_chg}")
+        outros = [r[0] for r in psql_rows(f"select email from tmsi.profiles where user_id <> '{uid}' and email is not null;")]
+        vazados += [f"{papel}→{e}" for e in outros if e in txt]
+    check(f"AB: my_data() devolve ao {len(quem)} papéis exactamente o seu perfil, os seus papéis, as suas ações e as alterações à sua conta",
+          not maus and len(quem) >= 6, "; ".join(maus) or f"{len(quem)} papéis coerentes com a BD")
+    check("AB: nenhum email de OUTRA pessoa vai parar ao ficheiro (nem ao admin, que editou perfis de colegas)", not vazados, "; ".join(vazados[:3]) or "0 emails de terceiros")
+    j, _t = pedir(claims["finance"])
+    quem_alterou = {c.get("by") for c in (j or {}).get("changes_to_your_account", [])}
+    check("AB: quem alterou a conta aparece como «you» ou «another user», nunca como identidade de outra pessoa (e há alterações a verificar)",
+          j is not None and bool(quem_alterou) and quem_alterou <= {"you", "another user"}, f"{quem_alterou}")
+    check("AB: o ficheiro declara o que NÃO inclui (sessões, logs, cópias de segurança, password)",
+          j is not None and len(j.get("not_included", [])) >= 4, f"{len((j or {}).get('not_included', []))} itens")
+    sem, _t2 = pedir("00000000-0000-4000-8000-0000000000aa")
+    check("AB: uma identidade sem perfil nem papéis recebe um ficheiro vazio mas válido (sem erro, sem dados de ninguém)",
+          sem is not None and sem.get("profile") is None and sem["roles"] == [] and sem["actions_you_performed"] == [], "perfil nulo, listas vazias")
+    rc, out, err = psql("begin;\n" + pre + "select tmsi.my_data();\nrollback;")
+    check("AB: sem sessão (auth.uid() nulo) my_data() recusa", rc != 0 and "Not authenticated" in err, err[:60] or "aceite")
+    rc_a, out_a, _e = psql("begin;\n" + pre + "select has_function_privilege('anon','tmsi.my_data()','execute')::text || ',' || has_function_privilege('authenticated','tmsi.my_data()','execute')::text;\nrollback;")
+    check("AB: anon não executa my_data(); authenticated sim", out_a.split()[-1] == "false,true" if out_a.split() else False, out_a[-20:])
+    rota = (raiz / "app" / "src" / "app" / "(app)" / "account" / "export" / "route.ts").read_text()
+    check("AB: a rota /account/export não recebe parâmetro de «de quem» e responde 401 sem sessão, sem cache",
+          "GET()" in rota and "searchParams" not in rota and "request" not in rota.split("export async function GET")[1].split("{")[0]
+          and "status: 401" in rota and "no-store" in rota and "rpc('my_data')" in rota, "GET sem parâmetros, 401, no-store")
+    nav = (raiz / "app" / "src" / "lib" / "nav.ts").read_text()
+    priv = (raiz / "app" / "src" / "app" / "(app)" / "privacy" / "page.tsx").read_text()
+    check("AB: o menu Account tem «Download my data» e a /privacy já não diz que não há exportação",
+          "/account/data" in nav and "export my data" not in priv, "nav e privacy alinhados")
+    for caminho in ("/account/export", "/account/data"):
+        try:
+            resp = _no_redirect_opener.open(f"{BASE}{caminho}", timeout=15)
+            st, loc = resp.status, resp.headers.get("Location")
+        except urllib.error.HTTPError as e:
+            st, loc = e.code, e.headers.get("Location")
+        check(f"AB: {caminho} sem sessão vai para /login, nunca serve dados", st in (302, 307) and loc == "/login", f"http_{st} {loc}")
+
+
 def block_theme():
     """TT — tema (2026-10-04). Três coisas que se estragam em silêncio:
     (1) uma cor fixa (`bg-gray-100`, `text-red-700`, `bg-white`…) escrita à mão
@@ -3155,6 +3228,7 @@ def main():
         block_channel_margin_delta(claims)
         block_settings_validation(claims)
         block_remove_user(claims)
+        block_my_data(claims)
         block_home_menu()
         block_theme()
         block_print_options()

@@ -47,6 +47,7 @@ export function navFor(me: Me): NavSection[] {
 
   const account: NavItem[] = [
     { href: '/account/password', label: 'Change password' },
+    { href: '/account/data', label: 'Download my data' },
     { href: '/privacy', label: 'Data processing notice' },
   ];
 
