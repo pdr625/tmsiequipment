@@ -3,7 +3,9 @@
 Documento vivo do estado real da infra deste projecto. Sem segredos — só *onde* eles vivem.
 Actualizado por toda a sessão que altere o estado do TMSI (ver secção 6).
 
-**Etapa actual: item 86 — `tmsi.settings` valida o que guarda (migração 0024) — 2026-10-06.** Revisão `36acc1e` em produção (digest `sha256:21f0555e644f…`), migrações **0001–0024**, smoke **240/240** nos três modos. Detalhe: primeira secção abaixo.
+**Etapa actual: fecho dos itens 91, 93, 45, 46 e 49 (um de cada vez) — 2026-10-07.** Revisão `06f7917` em produção (digest `sha256:51c9b48a9313…`), migrações **0001–0027**, smoke **277/277** nos três modos. Detalhe: primeiras secções abaixo.
+
+**Etapa anterior:** **item 86 — `tmsi.settings` valida o que guarda (migração 0024) — 2026-10-06.** Revisão `36acc1e` em produção (digest `sha256:21f0555e644f…`), migrações **0001–0024**, smoke **240/240** nos três modos. Detalhe: primeira secção abaixo.
 
 **Etapa anterior:** **item 110 — `channels.margin_delta` privado (migração 0023) — 2026-10-06.** Revisão `883d2a3` em produção (digest `sha256:229500348ce3…`), migrações **0001–0023**, smoke **232/232** nos três modos. Detalhe: primeira secção abaixo.
 
@@ -85,6 +87,28 @@ porque `products_visible()` olhava só para `sold_in`, que **exclui a origem por
 67→67, zero em `review`, e os papéis de custos com impressão digital **idêntica** — activar não
 mudou um preço. Smoke **102 → 104**; execução n.º 5 do protocolo, a primeira sobre dados reais
 activos. Detalhe: secções abaixo.
+
+## Sessão 07/10 — itens 91, 93, 45, 46, 49, um de cada vez (2026-10-06/07)
+
+**Pedido do Pedro:** «avança com o item 91, 93, 45, 46 e 49 … uma tarefa de cada vez, fechando a tarefa antes de avançar». Cada uma teve o seu commit, CI verde, deploy por digest e smoke ×3 antes da seguinte.
+Os três últimos (45, 46, 49) eram de desenho (o backlog dizia «não desenhado»): **perguntei ao Pedro**, que escolheu as opções recomendadas.
+
+| Item | O que ficou | Revisão | Smoke |
+|---|---|---|---|
+| **91** | coluna `Overridden` de `/products/[id]` só para quem lê custos (premissa verificada ao vivo: o motor devolve `overrides = NULL` a vendas/agentes) | `28f34de` | 243 |
+| **93** | `fx_source` mostra-se `SAP`, sem aspas, em `/config` (decidido pela chave no servidor) | `a2573da` | 245 |
+| **45** | apagar/anonimizar utilizador — migração **0025** | `e5366e3` | 257 |
+| **46** | «Download my data» (JSON) — migração **0026** | `82a8de1` | 268 |
+| **49** | retenção de 5 anos do `audit_log` — migração **0027**, manual | `06f7917` | 277 |
+
+**45 (0025):** `removal_blockers()` → apagar a conta no GoTrue (email, hash e sessões desaparecem; `profiles`/`user_roles` em cascata) → `redact_removed_user()` redige nome/email nas 32 linhas de `profiles` do `audit_log` (o `row_pk` passa a ser o UUID) e regista em `tmsi.removed_users`.
+Só admin; recusa se a conta ainda existe; idempotente; o `audit_log` mantém o UUID do autor; o `/audit` diz «Removed user». Na UI: «Remove account…» com confirmação por email escrito. **Não coberto, e dito na `/privacy`:** dumps anteriores (30 dias) e logs de acesso do servidor.
+**Desvio da formulação escolhida:** não fica um perfil «Removed user» (o perfil cai com a conta, por `CASCADE`); o rótulo vem de `removed_users`. **Nunca corrido contra o GoTrue real** — só a BD, com utilizador sintético em transacção revertida.
+**46 (0026):** `tmsi.my_data()` só olha para `auth.uid()`; não vaza o `row_pk` de perfis alheios nem a identidade de quem alterou a conta; declara no ficheiro o que não inclui.
+**49 (0027):** `purge_audit_log(p_dry_run default true)`, só admin, prazo **fixo dentro da função** (sem parâmetro de data), rasto em `tmsi.audit_purges`; `status.json` publica `tmsi_audit_oldest_age_d` e `tmsi_audit_eligible`; procedimento em `docs/AUDIT-RETENTION.md`. Nada é elegível antes de **2031-09-03**.
+**Backups de cada migração:** `tmsi-pre-0025-20261007-143416`, `-0026-20261007-144453`, `-0027-20261007-145635`. **Rollback de imagem:** `sha256:db9a8981dfe5…`.
+**Deslizes meus, apanhados antes de sair:** (1) uma asserção de privilégios que lia a base real em vez de aplicar a mutação (45) — escapou à 1.ª prova de mutações; o mesmo tipo de erro tinha ocorrido nos itens 110 e 86; (2) uma regra de «último admin» que era código morto (quem chama é admin e não pode ser o alvo) — retirada; (3) uma asserção vazia no 46 (o admin não tem alterações à conta) — passou a finance, com o conjunto obrigatoriamente não vazio; (4) a mutação do `not_included` estava mal feita (acrescentava em vez de retirar).
+**Não visto no browser** (só HTTP/SQL/testes): todos os cinco. Ver `HANDOVER.md` §1.
 
 ## Sessão 06/10 (15.ª) — item 86: `tmsi.settings` deixa de aceitar valores inválidos (2026-10-06)
 

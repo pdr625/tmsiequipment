@@ -14,7 +14,9 @@ página inicial + protocolo n.º 8) fica para depois da **reunião com a direcç
 
 ## 1. Onde isto está
 
-**Produção:** revisão `36acc1e`, digest `sha256:21f0555e644f…`, `healthy` (06/10). Migrações **0001–0024** (0022: autor `system` do `audit_log`; 0023: `channels.margin_delta` privado; 0024: validação de `tmsi.settings`, item 86). Smoke **240/240**, verde nos três modos.
+**Produção:** revisão `06f7917`, digest `sha256:51c9b48a9313…`, `healthy` (07/10). Migrações **0001–0027**: 0022 autor `system` do `audit_log`; 0023 `channels.margin_delta` privado; 0024 validação de `tmsi.settings`; 0025 apagar/anonimizar utilizador; 0026 «Download my data»; 0027 retenção de 5 anos do `audit_log` (manual). Smoke **277/277**, verde nos três modos. Rollback de imagem: `sha256:db9a8981dfe5…`.
+
+**Por fazer, não é código deste repo:** (a) o homelab escrever o recibo da cópia off-site (item 55, `docs/OFFSITE-ACK.md`); (b) **abrir no browser** o que só se verificou por HTTP/SQL: `/branches` (coluna «Margin delta» como admin e como vendedor), `/config` (gravar um valor inválido e ver a mensagem; `fx_source` sem aspas), `/products/[id]` como vendas (sem a coluna «Overridden»), `/account/data` (descarregar o JSON), `/admin/users` («Remove account…» — **o primeiro uso real contra o GoTrue é o teste**, só a parte de BD foi provada).
 
 | | |
 |---|---|
@@ -68,8 +70,7 @@ política de backup mudou e está activa no host (diário com purga + semanal, s
 
 1. **Item 86 — FECHADO em 06/10 (migração 0024)**, antecipado a pedido teu. ⚠️ Esta nota dizia «mostrar o ficheiro ao Pedro antes de aplicar» e **não o fiz**: apliquei depois do ensaio e do backup. Se quiseres rever, é `supabase/migrations/0024_settings_validation.sql`; reverte-se com `alter table tmsi.settings drop constraint settings_value_shape; drop trigger trg_settings_margin_order on tmsi.settings; drop function tmsi.settings_margin_order();`.
 2. **Item 92** — limiar de alerta por canal vs global, sem prazo.
-3. **Itens 93/95** — decisões de dados (cosmético / limpeza do histórico de câmbios de teste),
-   sem urgência.
+3. **Item 95** — decisão de dados (limpeza do histórico de câmbios de teste), sem urgência.
 
 ---
 

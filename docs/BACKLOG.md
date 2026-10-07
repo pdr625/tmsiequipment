@@ -30,12 +30,12 @@ desenho, não resolvido).
 
 ## Triagem do backlog — 2026-10-05
 
-Das **40** entradas sem marca de fecho, **15 já estão fechadas ou decididas** (9 na triagem, mais o 57, o 94, o 83, o 63, o 110 e o 86 fechados no mesmo dia) (marcadas abaixo, com a evidência de cada uma, verificada
-ao vivo na BD ou no código — não por memória) e **26 continuam abertas** (o 63 e o 110 fechados). Das 26, **17 precisam de uma decisão tua**, **6 são trabalho
+Das **40** entradas sem marca de fecho, **20 já estão fechadas ou decididas** (9 na triagem, mais, de 05 a 07/10, o 57, 94, 83, 63, 110, 86, 91, 93, 45, 46 e 49) (marcadas abaixo, com a evidência de cada uma, verificada
+ao vivo na BD ou no código — não por memória) e **21 continuam abertas**. Das 21, **17 precisam de uma decisão tua**, **1 é trabalho
 de código** e **3 só se fecham com a tua medição ou o teu browser**. A extracção automática do backlog **não é fiável** (marcava como
 abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um item sem verificar o estado real.
 
-**Fechados / decididos / superados (15):** 8, 13, 56, 57, 59, 60, 61, 62, 63, 64, 74, 83, 86, 94, 110 — ver a nota no início de cada um.
+**Fechados / decididos / superados (20):** 8, 13, 45, 46, 49, 56, 57, 59, 60, 61, 62, 63, 64, 74, 83, 86, 91, 93, 94, 110 — ver a nota no início de cada um.
 
 **Abertos — decisão tua, sem código (17):**
 - Política e negócio: **50** (`branch_manager` aprova configuração global?), **82** (`finance` escreve limiares de margem sem proposta), **27** (regra
@@ -45,9 +45,7 @@ abertas as fugas 59/60/64, corrigidas na 0016/0017): nunca fechar nem abrir um i
   **107** (categorias duplicadas), **108** (3 produtos sem categoria).
 - Fronteira de segurança: **109** (Server Actions a delegar em `perms.ts`).
 
-**Abertos — trabalho de código (6):** **91** e **93** (cosméticos,
-bloco C), **55** (a perna off-site não aparece na monitorização; só se mede a idade do dump local), **45**, **46**, **49** (apagar/anonimizar, exportar os
-próprios dados e reter 5 anos — a `/privacy` ainda diz que não existem).
+**Abertos — trabalho de código (1):** **55** (a perna off-site: o lado do VPS está feito; falta o homelab escrever o recibo — `docs/OFFSITE-ACK.md`).
 
 **Abertos — só se fecham contigo (3):** **73** (medir os pedidos por página em runtime com `scripts/contar-pedidos.sh`; `/prices` está em 9), **103** (`viewer` sem utilizador),
 **105** (afinar a impressão depois de veres o PDF).
