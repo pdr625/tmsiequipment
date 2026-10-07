@@ -99,12 +99,13 @@ export default async function PrivacyPage() {
         </ul>
 
         <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-fg-muted">
-          What this system doesn&apos;t do yet — stated plainly
+          What this system doesn&apos;t do automatically — stated plainly
         </h2>
         <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-fg-soft">
           <li>
-            The audit trail&apos;s 5-year retention above is a decision, not yet a running
-            mechanism — today the table keeps every entry without a time limit.
+            The audit trail&apos;s 5-year retention is carried out by an administrator running a
+            purge, not automatically. The oldest entry dates from 3 September 2026, so none is
+            due before September 2031. Every purge leaves a record of when, by whom and how many.
           </li>
         </ul>
       </div>

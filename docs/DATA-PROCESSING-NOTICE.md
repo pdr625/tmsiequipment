@@ -21,11 +21,7 @@ app deixar o piloto — é a resposta para a fase actual, decidida por quem hoje
 facto pela infraestrutura.
 
 **Prazo de conservação do `tmsi.audit_log` (o registo de quem alterou o quê, e quando):**
-**5 anos** a partir da data de cada entrada. **Isto é o prazo decidido, não o que está
-implementado hoje** — a tabela é `append-only` desde a primeira migração, sem mecanismo
-nenhum de purga; hoje cresce sem limite. A implementação de um apagamento automático aos 5
-anos fica registada como item de backlog próprio (`docs/BACKLOG.md` item 49), não é trabalho
-desta sessão.
+**5 anos** a partir da data de cada entrada. **Implementado em 2026-10-07 (item 49, migração 0027) como mecanismo manual, não automático:** `tmsi.purge_audit_log()`, só `admin`, **por omissão só simula** (conta), apaga com `purge_audit_log(false)`. O prazo está **fixo dentro da função, sem parâmetro de data**, para não se poder apagar mais recente. Cada purga real deixa uma linha em `tmsi.audit_purges` (quem, quando, até que data, quantas), que a purga não apaga. A entrada mais antiga é de 2026-09-03, por isso **nada é elegível antes de 2031-09-03**; o `status.json` do VPS publica a idade da entrada mais antiga e quantas já passaram o prazo (`tmsi_audit_oldest_age_d`, `tmsi_audit_eligible`). Não há arquivo frio: o que se apaga, apaga-se.
 
 ## 2. Que dados pessoais este sistema guarda, e onde
 
@@ -97,7 +93,7 @@ nome/email errado, ou pedir para deixares de ter uma conta.
   provado numa execução real do serviço de backup, não só no ficheiro do serviço.
 
 **Registados, por corrigir (sem urgência de fronteira):**
-- `tmsi.audit_log` sem retenção implementada (secção 1, item 49 a criar).
+- ~~`tmsi.audit_log` sem retenção implementada~~ — mecanismo manual implementado em 2026-10-07 (secção 1); a primeira purga possível é em 2031-09.
 - ~~Sem mecanismo de apagamento de utilizador (item 45)~~ — resolvido em 2026-10-07 (secção 4).
 - ~~Sem exportação dos próprios dados (item 46)~~ — resolvido em 2026-10-07 (secção 4).
 

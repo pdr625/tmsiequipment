@@ -2749,6 +2749,74 @@ def block_my_data(claims, mutate=""):
         check(f"AB: {caminho} sem sessão vai para /login, nunca serve dados", st in (302, 307) and loc == "/login", f"http_{st} {loc}")
 
 
+def block_audit_retention(claims, mutate=""):
+    """AC — migração 0027 (item 49): purge_audit_log() apaga SÓ o que tem mais de 5 anos, só admin, só a pedido, e deixa rasto.
+    Cenário numa transacção SEMPRE revertida, com linhas sintéticas em redor da fronteira (a produção não tem nenhuma elegível até 2031).
+    `mutate` só serve às provas de falha (e ao ensaio da migração antes de ser aplicada)."""
+    import pathlib as _pl
+    raiz = _pl.Path(__file__).resolve().parent.parent
+    adm = psql_rows("select user_id from tmsi.user_roles where role = 'admin' limit 1;")[0][0]
+    fin = claims["finance"]
+    def como(uid):
+        return ("do $$ begin perform set_config('request.jwt.claims', "
+                f"'{{\"sub\":\"{uid}\",\"role\":\"authenticated\"}}', true); end $$;\nset local role authenticated;\n")
+    ins = lambda tag, intervalo: (f"insert into tmsi.audit_log (at, actor, table_name, row_pk, action) "
+                                 f"values (now() - interval '{intervalo}', tmsi.system_actor(), 'smoke_ret', '{tag}', 'INSERT');\n")
+    script = (
+        "begin;\n" + (mutate + "\n" if mutate else "") +
+        # velhas (elegíveis): 6 anos, 5 anos + 1 dia, 5 anos + 1 minuto. Novas (NÃO elegíveis): 5 anos − 1 minuto, 5 anos − 1 dia, 4 anos, hoje.
+        ins("old6y", "6 years") + ins("old5y1d", "5 years 1 day") + ins("old5y1m", "5 years 1 minute") +
+        ins("new5y-1m", "4 years 11 months 30 days 23 hours 59 minutes") + ins("new5y-1d", "4 years 11 months 29 days") + ins("new4y", "4 years") + ins("now", "0 seconds") +
+        "select 'total_antes|' || count(*) from tmsi.audit_log;\n"
+        "select 'smoke_antes|' || count(*) from tmsi.audit_log where table_name = 'smoke_ret';\n" +
+        como(fin) +
+        "do $$ begin perform tmsi.purge_audit_log(); perform set_config('smoke.fin', 'aceite', true); exception when others then perform set_config('smoke.fin', 'recusado', true); end $$;\n"
+        "select 'finance|' || current_setting('smoke.fin');\nreset role;\n" +
+        como(adm) +
+        "select 'simula|' || (tmsi.purge_audit_log())::text;\n"
+        "select 'simula_false|' || (tmsi.purge_audit_log(true))::text;\nreset role;\n"
+        "select 'smoke_apos_simula|' || count(*) from tmsi.audit_log where table_name = 'smoke_ret';\n" +
+        como(adm) +
+        "select 'real|' || (tmsi.purge_audit_log(false))::text;\nreset role;\n"
+        "select 'restam|' || string_agg(row_pk, ',' order by row_pk) from tmsi.audit_log where table_name = 'smoke_ret';\n"
+        "select 'total_depois|' || count(*) from tmsi.audit_log where table_name <> 'audit_purges';\n"
+        "select 'rasto|' || count(*) || '/' || coalesce(bool_and(run_by = '" + adm + "'), false)::text || '/' || coalesce(max(rows_deleted), 0) from tmsi.audit_purges;\n" +
+        como(adm) +
+        "select 'segunda|' || (tmsi.purge_audit_log(false) ->> 'deleted');\nreset role;\n"
+        "select 'rasto_apos_2|' || count(*) from tmsi.audit_purges;\n" +
+        como(fin) + "select 'fin_le_rasto|' || count(*) from tmsi.audit_purges;\nreset role;\n" +
+        "rollback;")
+    rc, out, err = psql(script)
+    d = {}
+    for l in out.splitlines():
+        if "|" in l:
+            k, v = l.split("|", 1)
+            d[k] = v
+    import json as _j
+    sim = _j.loads(d["simula"]) if "simula" in d else {}
+    real = _j.loads(d["real"]) if "real" in d else {}
+    check("AC: finance não pode purgar (nem simular)", d.get("finance") == "recusado", f"{d.get('finance')} {err[:60] if not d else ''}")
+    check("AC: por omissão só simula: conta 3 elegíveis, apaga 0, e a assinatura sem argumento é a simulação",
+          sim.get("dry_run") is True and sim.get("eligible") == 3 and sim.get("deleted") == 0 and d.get("smoke_apos_simula") == "7"
+          and _j.loads(d.get("simula_false", "{}")).get("eligible") == 3, f"{sim} / depois={d.get('smoke_apos_simula')}")
+    check("AC: a purga real apaga exactamente as 3 entradas com mais de 5 anos e deixa as 4 mais recentes (fronteira incluída)",
+          real.get("deleted") == 3 and d.get("restam") == "new4y,new5y-1d,new5y-1m,now", f"{real.get('deleted')} / restam={d.get('restam')}")
+    check("AC: não toca em mais nada: o resto do audit_log fica igual, menos as 3 linhas apagadas",
+          d.get("total_antes") is not None and int(d["total_antes"]) - 3 == int(d.get("total_depois", -9)), f"{d.get('total_antes')} → {d.get('total_depois')}")
+    check("AC: a purga deixa rasto (1 linha: quem, quantas) que a própria purga não apaga", d.get("rasto") == "1/true/3", f"{d.get('rasto')}")
+    check("AC: uma 2.ª purga não apaga nada e não acrescenta rasto vazio", d.get("segunda") == "0" and d.get("rasto_apos_2") == "1", f"{d.get('segunda')} / {d.get('rasto_apos_2')}")
+    check("AC: quem lê o audit lê o rasto das purgas", d.get("fin_le_rasto") == "1", f"{d.get('fin_le_rasto')}")
+    rc_a, out_a, _e = psql("begin;\n" + (mutate + "\n" if mutate else "") +
+                           "select (select count(*)::text from pg_proc where proname = 'purge_audit_log') || ',' || "
+                           "has_function_privilege('anon','tmsi.purge_audit_log(boolean)','execute')::text || ',' || "
+                           "has_table_privilege('authenticated','tmsi.audit_purges','insert')::text || ',' || "
+                           "has_table_privilege('authenticated','tmsi.audit_purges','delete')::text;\nrollback;")
+    acl = out_a.split()[-1].split(",") if rc_a == 0 and out_a.split() else ["erro"]
+    check("AC: uma só assinatura (sem parâmetro de data), anon não executa, ninguém escreve em audit_purges", acl == ["1", "false", "false", "false"], f"{acl}")
+    prod = psql_rows("select count(*) filter (where at < now() - interval '5 years')::text from tmsi.audit_log;")[0][0]
+    check("AC: hoje a produção não tem nenhuma entrada elegível (a mais antiga é de 2026-09-03; a primeira será em 2031-09-03)", prod == "0", f"elegíveis={prod}")
+
+
 def block_theme():
     """TT — tema (2026-10-04). Três coisas que se estragam em silêncio:
     (1) uma cor fixa (`bg-gray-100`, `text-red-700`, `bg-white`…) escrita à mão
@@ -3229,6 +3297,7 @@ def main():
         block_settings_validation(claims)
         block_remove_user(claims)
         block_my_data(claims)
+        block_audit_retention(claims)
         block_home_menu()
         block_theme()
         block_print_options()
