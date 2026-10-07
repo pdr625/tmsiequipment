@@ -72,7 +72,7 @@ export default async function AuditPage({
   if (from) query = query.gte('at', from);
   if (to) query = query.lte('at', to);
 
-  const [{ data: entries, error }, { data: profiles }] = await Promise.all([
+  const [{ data: entries, error }, { data: profiles }, { data: removedRows }] = await Promise.all([
     query
       .order('at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1)
@@ -82,9 +82,12 @@ export default async function AuditPage({
     // (profiles_self) — actor emails resolve for whoever the caller can
     // legitimately see, raw UUID shown otherwise. Never a role check here.
     supabase.schema('tmsi').from('profiles').select('user_id, email').overrideTypes<Profile[], { merge: false }>(),
+    // item 45 (0025): utilizadores removidos — o UUID fica no audit, o nome não; legível a quem lê o audit
+    supabase.schema('tmsi').from('removed_users').select('user_id').overrideTypes<{ user_id: string }[], { merge: false }>(),
   ]);
+  const removed = new Set((removedRows ?? []).map((r) => r.user_id));
 
-  const actorEmail = (id: string | null) => actorLabel(id, (uid) => profiles?.find((p) => p.user_id === uid)?.email ?? undefined);
+  const actorEmail = (id: string | null) => actorLabel(id, (uid) => profiles?.find((p) => p.user_id === uid)?.email ?? undefined, removed);
 
   const qs = (overrides: Record<string, string | undefined>) => {
     const params = new URLSearchParams();

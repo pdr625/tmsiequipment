@@ -9,7 +9,7 @@ import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { getMe } from '@/lib/me';
 import { isAdmin } from '@/lib/perms';
-import { InviteForm, AddRoleForm, RemoveRoleButton, BanToggleButton, ResetPasswordForm } from './client-forms';
+import { InviteForm, AddRoleForm, RemoveRoleButton, BanToggleButton, ResetPasswordForm, RemoveUserForm } from './client-forms';
 
 type Profile = { user_id: string; email: string | null; full_name: string | null };
 type UserRole = { id: number; user_id: string; role: string; branch_id: string | null; channel_id: string | null };
@@ -131,6 +131,8 @@ export default async function AdminUsersPage() {
               <AddRoleForm userId={p.user_id} branches={branches ?? []} channels={channels ?? []} />
 
               <ResetPasswordForm userId={p.user_id} />
+
+              <RemoveUserForm userId={p.user_id} email={p.email ?? p.user_id} />
             </div>
           );
         })}

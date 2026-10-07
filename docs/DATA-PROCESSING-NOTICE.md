@@ -73,9 +73,11 @@ nome/email errado, ou pedir para deixares de ter uma conta.
   quê — apagá-lo destruiria essa prova para todos, não só para quem pediu).
 
 **O que o sistema ainda não faz — dito sem rodeios, não escondido:**
-- **Apagar ou anonimizar uma conta por completo** — não existe. Um pedido de apagamento
-  seria hoje feito manualmente, directo à base de dados, fora de qualquer ecrã da app.
-  Registado como `docs/BACKLOG.md` item 45.
+- ~~Apagar ou anonimizar uma conta por completo~~ — **existe desde 2026-10-07 (item 45, migração 0025).** O `admin` usa «Remove account…» em `/admin/users`
+  (confirmação escrevendo o email; irreversível): a conta é apagada no GoTrue (email, hash e sessões desaparecem, o perfil e os papéis caem em cascata) e o
+  nome e o email que ficaram no `audit_log` (32 linhas de `profiles`, medido) são redigidos. **O `audit_log` mantém o UUID do autor** — a prova de quem fez o quê —
+  que sem perfil já não é ligável a uma pessoa; o `/audit` mostra «Removed user». O que **não** é coberto: o dump nocturno e as cópias off-site
+  anteriores à remoção continuam a conter a pessoa até saírem da retenção (30 dias), e os registos de acesso do servidor (IP) seguem a sua própria retenção.
 - **Entregar a uma pessoa, em ficheiro, todos os dados que o sistema tem sobre ela** — não
   existe um botão "os meus dados". Registado como item 46.
 
@@ -94,7 +96,7 @@ nome/email errado, ou pedir para deixares de ter uma conta.
 
 **Registados, por corrigir (sem urgência de fronteira):**
 - `tmsi.audit_log` sem retenção implementada (secção 1, item 49 a criar).
-- Sem mecanismo de apagamento de utilizador (item 45).
+- ~~Sem mecanismo de apagamento de utilizador (item 45)~~ — resolvido em 2026-10-07 (secção 4).
 - Sem exportação dos próprios dados (item 46).
 
 Nenhum destes é tratado como incidente de segurança — nenhum esteve acessível a alguém sem

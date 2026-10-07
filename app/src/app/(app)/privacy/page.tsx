@@ -42,7 +42,7 @@ export default async function PrivacyPage() {
         <ul className="mb-4 list-disc space-y-2 pl-5 text-sm text-fg-soft">
           <li>
             <strong>Name and email</strong> — to identify who is signed in and what their role
-            is authorised to see. Kept indefinitely; no deletion mechanism exists yet.
+            is authorised to see. Kept while the account exists; an administrator can permanently remove an account on request. Nightly backups taken before a removal still hold the person until they expire (30 days).
           </li>
           <li>
             <strong>Password</strong> — stored only as a hash, never in plain text. Nobody can
@@ -102,7 +102,6 @@ export default async function PrivacyPage() {
           What this system doesn&apos;t do yet — stated plainly
         </h2>
         <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-fg-soft">
-          <li>There is no way to fully delete or anonymise an account yet.</li>
           <li>There is no self-service &quot;export my data&quot; button yet.</li>
           <li>
             The audit trail&apos;s 5-year retention above is a decision, not yet a running

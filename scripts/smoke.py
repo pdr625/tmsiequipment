@@ -2579,6 +2579,103 @@ def _q(x):
     return "'" + x.replace("'", "''") + "'"
 
 
+def block_remove_user(claims, mutate=""):
+    """ZZ — migração 0025 (item 45): remover um utilizador. Cenário completo numa transacção SEMPRE revertida, com um utilizador sintético
+    (zero resíduo): pré-condições, recusa se a conta ainda existe, só admin, redacção do nome/email no audit_log mantendo o UUID,
+    idempotência, o registo sem dados pessoais, e que o audit de OUTRAS pessoas fica intacto. `mutate` só serve às provas de falha."""
+    import uuid as _uuid
+    import pathlib as _pl
+    raiz = _pl.Path(__file__).resolve().parent.parent
+    u = str(_uuid.uuid4())
+    em = f"smoke.remocao.{u[:8]}@example.test"
+    nome = f"Smoke Remocao {u[:8]}"
+    adm = psql_rows("select user_id from tmsi.user_roles where role = 'admin' limit 1;")[0][0]
+    fin = claims["finance"]
+    def como(uid):
+        return ("do $$ begin perform set_config('request.jwt.claims', "
+                f"'{{\"sub\":\"{uid}\",\"role\":\"authenticated\"}}', true); end $$;\nset local role authenticated;\n")
+    pii = f"coalesce(old_row::text,'') || coalesce(new_row::text,'') || row_pk"
+    outros_antes = "(select count(*) from tmsi.audit_log where table_name = 'profiles' and (old_row ->> 'user_id' <> '%s' or new_row ->> 'user_id' <> '%s'))" % (u, u)
+    script = (
+        "begin;\n" + (mutate + "\n" if mutate else "") +
+        f"insert into auth.users (id, email, aud, role) values ('{u}', '{em}', 'authenticated', 'authenticated');\n" +
+        como(adm) +
+        f"insert into tmsi.profiles (user_id, full_name, email) values ('{u}', '{nome}', '{em}');\n"
+        f"update tmsi.profiles set full_name = '{nome} 2' where user_id = '{u}';\n"
+        f"insert into tmsi.user_roles (user_id, role) values ('{u}', 'viewer');\nreset role;\n"
+        f"select 'outros|' || {outros_antes};\n"
+        f"select 'pii_antes|' || count(*) from tmsi.audit_log where {pii} like '%{em}%';\n" +
+        como(adm) +
+        f"select 'bloq_normal|' || coalesce(tmsi.removal_blockers('{u}'), 'NULL');\n"
+        f"select 'bloq_self|' || coalesce(tmsi.removal_blockers('{adm}'), 'NULL');\n"
+        f"select 'bloq_desc|' || coalesce(tmsi.removal_blockers('{_uuid.uuid4()}'), 'NULL');\n"
+        f"do $$ begin perform tmsi.redact_removed_user('{u}'); perform set_config('smoke.viva', 'aceite', true);"
+        f" exception when others then perform set_config('smoke.viva', 'recusado', true); end $$;\n"
+        "select 'viva|' || current_setting('smoke.viva');\nreset role;\n"
+        f"delete from auth.users where id = '{u}';\n"
+        f"select 'cascade|' || (select count(*) from tmsi.profiles where user_id = '{u}') || '/' || (select count(*) from tmsi.user_roles where user_id = '{u}');\n"
+        f"select 'pii_depois_delete|' || count(*) from tmsi.audit_log where {pii} like '%{em}%';\n" +
+        como(fin) +
+        f"do $$ begin perform tmsi.redact_removed_user('{u}'); perform set_config('smoke.fin', 'aceite', true);"
+        f" exception when others then perform set_config('smoke.fin', 'recusado', true); end $$;\n"
+        f"select 'finance|' || current_setting('smoke.fin');\n"
+        "reset role;\n" +
+        como(adm) +
+        f"select 'redigidas|' || tmsi.redact_removed_user('{u}');\n"
+        f"select 'segunda|' || tmsi.redact_removed_user('{u}');\nreset role;\n"
+        f"select 'pii_depois|' || count(*) from tmsi.audit_log where {pii} like '%{em}%' or {pii} like '%{nome}%';\n"
+        f"select 'uuid_fica|' || (count(*) > 0)::text from tmsi.audit_log where table_name = 'profiles' and row_pk = '{u}';\n"
+        f"select 'tomb|' || count(*) || '/' || bool_and(removed_by = '{adm}')::text from tmsi.removed_users where user_id = '{u}';\n"
+        f"select 'outros_depois|' || {outros_antes};\n" +
+        como(fin) + "select 'fin_le_tomb|' || count(*) from tmsi.removed_users;\nreset role;\n" +
+        "rollback;")
+    rc, out, err = psql(script)
+    d = {}
+    for l in out.splitlines():
+        if "|" in l:
+            k, v = l.split("|", 1)
+            d[k] = v
+    check("ZZ: o admin pode remover um utilizador normal, não a si próprio, e um UUID desconhecido é recusado",
+          d.get("bloq_normal") == "NULL" and d.get("bloq_self") == "You cannot remove your own account" and d.get("bloq_desc") == "Unknown user",
+          f"{d.get('bloq_normal')} / {d.get('bloq_self')} / {d.get('bloq_desc')}")
+    check("ZZ: com a conta ainda viva, a redacção é recusada (nunca se redige o audit de quem existe)", d.get("viva") == "recusado", f"{d.get('viva')}")
+    check("ZZ: apagar a conta leva o perfil e os papéis (CASCADE)", d.get("cascade") == "0/0", f"{d.get('cascade')}")
+    check("ZZ: antes de redigir, o nome/email estão no audit (inclui a linha DELETE do cascade) — o teste não é vazio",
+          int(d.get("pii_antes", 0)) >= 2 and int(d.get("pii_depois_delete", 0)) > int(d.get("pii_antes", 0)),
+          f"antes={d.get('pii_antes')} depois do delete={d.get('pii_depois_delete')}")
+    check("ZZ: só o admin redige (finance é recusado)", d.get("finance") == "recusado", f"{d.get('finance')}")
+    check("ZZ: a redacção apanha todas as linhas e é idempotente (2.ª chamada = 0)",
+          int(d.get("redigidas", -1)) == int(d.get("pii_depois_delete", -2)) and d.get("segunda") == "0",
+          f"redigidas={d.get('redigidas')} segunda={d.get('segunda')}")
+    check("ZZ: depois de redigir não resta nome nem email no audit_log, mas o UUID do autor fica",
+          d.get("pii_depois") == "0" and d.get("uuid_fica") == "true", f"pii={d.get('pii_depois')} uuid={d.get('uuid_fica')}")
+    check("ZZ: o audit de OUTRAS pessoas fica intacto", d.get("outros") is not None and d.get("outros") == d.get("outros_depois"),
+          f"{d.get('outros')} → {d.get('outros_depois')}")
+    check("ZZ: fica um registo da remoção (por quem) e quem lê o audit consegue lê-lo", d.get("tomb") == "1/true" and d.get("fin_le_tomb") is not None
+          and int(d.get("fin_le_tomb", 0)) >= 1, f"tomb={d.get('tomb')} fin_le={d.get('fin_le_tomb')}")
+    rc_a, out_a, _e = psql("begin;\n" + (mutate + "\n" if mutate else "") +
+                           "select has_function_privilege('anon','tmsi.redact_removed_user(uuid)','execute')::text || ',' || "
+                           "has_function_privilege('anon','tmsi.removal_blockers(uuid)','execute')::text || ',' || "
+                           "has_table_privilege('authenticated','tmsi.removed_users','insert')::text || ',' || "
+                           "has_table_privilege('authenticated','tmsi.removed_users','delete')::text;\nrollback;")
+    acl = out_a.split()[-1].split(",") if rc_a == 0 and out_a.split() else ["erro"]
+    check("ZZ: anon não executa as funções e ninguém escreve em removed_users directamente", acl == ["false", "false", "false", "false"], f"{acl}")
+
+    acts = (raiz / "app" / "src" / "app" / "(app)" / "admin" / "users" / "actions.ts").read_text()
+    i = acts.find("export async function removeUser")
+    c = acts[i:]
+    ordem = ["isAdmin()", "confirmationMatches(", "'removal_blockers'", "method: 'DELETE'", "'redact_removed_user'"]
+    pos = [c.find(x) for x in ordem]
+    check("ZZ: removeUser: admin → confirmação → pré-condições → apagar no GoTrue → redigir, por esta ordem",
+          i > 0 and all(p >= 0 for p in pos) and pos == sorted(pos), f"posições={pos}")
+    ui = (raiz / "app" / "src" / "app" / "(app)" / "admin" / "users" / "page.tsx").read_text()
+    aud = (raiz / "app" / "src" / "app" / "(app)" / "audit" / "page.tsx").read_text()
+    priv = (raiz / "app" / "src" / "app" / "(app)" / "privacy" / "page.tsx").read_text()
+    check("ZZ: o ecrã tem o botão, o /audit usa removed_users e a /privacy já não diz que não há como apagar",
+          "<RemoveUserForm" in ui and "removed_users" in aud and "no deletion mechanism" not in priv and "no way to fully delete" not in priv,
+          "UI, audit e privacy alinhados")
+
+
 def block_theme():
     """TT — tema (2026-10-04). Três coisas que se estragam em silêncio:
     (1) uma cor fixa (`bg-gray-100`, `text-red-700`, `bg-white`…) escrita à mão
@@ -3057,6 +3154,7 @@ def main():
         block_route_visibility(claims)
         block_channel_margin_delta(claims)
         block_settings_validation(claims)
+        block_remove_user(claims)
         block_home_menu()
         block_theme()
         block_print_options()

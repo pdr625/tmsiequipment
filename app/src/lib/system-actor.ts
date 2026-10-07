@@ -16,8 +16,14 @@ export const SYSTEM_ACTOR_ID = '00000000-0000-0000-0000-000000000001';
 // O que o /audit mostra no lugar do autor. As linhas ANTERIORES à 0022 têm `actor` nulo e não foram reescritas (um
 // registo de auditoria não se altera em silêncio): mostram-se como «system (legacy)». O resto resolve-se pelo e-mail
 // quando o perfil é visível a quem lê, ou fica o UUID.
-export function actorLabel(actor: string | null, emailOf: (id: string) => string | undefined): string {
+export function actorLabel(
+  actor: string | null,
+  emailOf: (id: string) => string | undefined,
+  removed?: ReadonlySet<string>,
+): string {
   if (actor === null) return 'system (legacy, no identity)';
   if (actor === SYSTEM_ACTOR_ID) return 'system';
+  // item 45: um utilizador removido já não tem perfil — o UUID fica no audit, o nome não
+  if (removed?.has(actor)) return 'Removed user';
   return emailOf(actor) ?? actor;
 }

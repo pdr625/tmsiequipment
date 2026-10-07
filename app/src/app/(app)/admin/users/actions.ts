@@ -12,6 +12,7 @@ import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { isAdmin } from '@/lib/auth-guard';
 import type { ActionState as SharedActionState } from '@/lib/action-state';
+import { confirmationMatches, isUuid } from '@/lib/remove-user';
 
 export type ActionState = SharedActionState;
 export type ResetPasswordState = SharedActionState<{ generatedPassword?: string }>;
@@ -219,4 +220,44 @@ export async function resetPassword(_prevState: ResetPasswordState, formData: Fo
 
   revalidatePath('/admin/users');
   return mode === 'generate' ? { success: true, generatedPassword: password } : { success: true };
+}
+
+// Item 45 (0025): apagar a conta por completo. Ordem: (1) pré-condições na BD, (2) apagar no GoTrue — o email, o hash e as sessões
+// desaparecem de vez, `profiles` e `user_roles` caem por CASCADE —, (3) redigir o nome/email que ficaram no audit_log. O audit_log
+// mantém o UUID do autor (a prova de quem fez o quê); sem perfil, deixa de ser ligável a uma pessoa. Irreversível.
+export async function removeUser(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return { error: 'Forbidden' };
+
+  const userId = String(formData.get('user_id') ?? '');
+  const typed = String(formData.get('confirm_email') ?? '');
+  if (!isUuid(userId)) return { error: 'Invalid user' };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: profile } = await supabase.schema('tmsi').from('profiles').select('email').eq('user_id', userId).maybeSingle<{ email: string | null }>();
+  if (!profile) return { error: 'Unknown user' };
+  if (!confirmationMatches(profile.email, typed)) return { error: 'The email you typed does not match this account — nothing was removed.' };
+
+  const { data: blocker, error: blockerError } = await supabase.schema('tmsi').rpc('removal_blockers', { p_user: userId });
+  if (blockerError) return { error: blockerError.message };
+  if (blocker) return { error: String(blocker) };
+
+  const res = await fetch(`${GOTRUE_INTERNAL_URL}/admin/users/${userId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${process.env.SERVICE_ROLE_KEY}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return { error: body.msg || body.message || `Delete failed (${res.status}) — nothing was removed.` };
+  }
+
+  // A conta já não existe. Se a redacção falhar, é idempotente e repete-se com este UUID (só admin):
+  //   select tmsi.redact_removed_user('<uuid>');
+  const { error: redactError } = await supabase.schema('tmsi').rpc('redact_removed_user', { p_user: userId });
+  if (redactError) {
+    return { error: `The account was deleted, but redacting the audit trail failed (${redactError.message}). Run tmsi.redact_removed_user for ${userId}.` };
+  }
+
+  revalidatePath('/admin/users');
+  revalidatePath('/audit');
+  return { success: true };
 }

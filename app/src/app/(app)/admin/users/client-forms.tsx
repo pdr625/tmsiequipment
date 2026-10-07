@@ -16,6 +16,7 @@ import {
   banUser,
   unbanUser,
   resetPassword,
+  removeUser,
   type ActionState,
   type ResetPasswordState,
 } from './actions';
@@ -215,5 +216,38 @@ export function ResetPasswordForm({ userId }: { userId: string }) {
         </div>
       )}
     </form>
+  );
+}
+
+// Item 45: apagar a conta. Escondido num <details> e confirmado escrevendo o email da conta — é irreversível.
+export function RemoveUserForm({ userId, email }: { userId: string; email: string }) {
+  const [state, formAction, pending] = useActionState<ActionState, FormData>(removeUser, undefined);
+  return (
+    <details className="mt-3 border-t border-line pt-2">
+      <summary className="cursor-pointer text-xs text-danger">Remove account…</summary>
+      <form action={formAction} className="mt-2 space-y-2">
+        <p className="text-xs text-fg-soft">
+          Permanently deletes this login and its name and email, including from the audit trail. The audit trail keeps what was
+          done and when, under an anonymous id. <strong>This cannot be undone.</strong> Type the account&apos;s email to confirm.
+        </p>
+        <input type="hidden" name="user_id" value={userId} />
+        <input
+          name="confirm_email"
+          type="email"
+          autoComplete="off"
+          placeholder={email}
+          aria-label={`Type ${email} to confirm`}
+          className="w-64 rounded-md border border-line-strong px-2 py-1 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={pending}
+          className="ml-2 rounded-md border border-danger px-2 py-1 text-xs font-medium text-danger disabled:opacity-50"
+        >
+          {pending ? '…' : 'Remove permanently'}
+        </button>
+        <ErrorText state={state} />
+      </form>
+    </details>
   );
 }
