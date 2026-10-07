@@ -1158,7 +1158,7 @@ do script:** `sudo systemctl start tmsi-backup.service` → os quatro `ExecStart
 `600` pela sessão a seguir, sem sudo (ficheiro do próprio dono). Escrow cifrado (`.gpg`) já
 estava `600`, confirmado, sem alteração.
 
-**49. Implementar a retenção de 5 anos do `tmsi.audit_log`** — **REGISTADO 2026-09-16**,
+~~**49. Implementar a retenção de 5 anos do `tmsi.audit_log`**~~ ✅ **FECHADO 2026-10-07 — migração 0027 (`06f7917`), como mecanismo manual.** Decisão do Pedro: função com simulação, sem timer (nada é elegível antes de **2031-09-03**: a entrada mais antiga é de 2026-09-03). `tmsi.purge_audit_log(p_dry_run default true)`: só admin; por omissão só conta; o prazo de 5 anos está **fixo dentro da função, sem parâmetro de data** (uma sobrecarga com data faz o smoke falhar); cada purga real deixa uma linha em `tmsi.audit_purges` (quem, quando, até que data, quantas) que a purga não apaga. `vps-stats.sh` publica `tmsi_audit_oldest_age_d` e `tmsi_audit_eligible` no `status.json` (hoje 33 e 0). Procedimento em `docs/AUDIT-RETENTION.md`; `DATA-PROCESSING-NOTICE` e `/privacy` actualizados. Sem arquivo frio: o que se apaga não se recupera (só por um dump de há menos de 30 dias). Smoke 268 → 277 (bloco `AC`), 10 mutações apanhadas. **Nunca correu com dados reais elegíveis:** só com linhas sintéticas em transacção revertida. _(texto original abaixo)_ — — **REGISTADO 2026-09-16**,
 decisão do Pedro no item 42 (`docs/DATA-PROCESSING-NOTICE.md` secção 1): a tabela guarda-se
 hoje sem limite (`append-only` desde a 0001, sem purga nenhuma); o prazo decidido é 5 anos a
 partir da data de cada entrada. Por desenhar: mecanismo de apagamento (uma tarefa periódica?
